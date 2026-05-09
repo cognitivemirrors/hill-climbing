@@ -14,9 +14,18 @@
       -webkit-appearance: none;
       appearance: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Symbol",
-                   "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif;
+                   system-ui, sans-serif;
+      /* v1.47: explicit padding 0 + tabular line-height; iOS Safari was
+         rendering buttons taller than their declared height because of
+         font metrics, producing oval bounding boxes. */
+      padding: 0;
       line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
+    /* Force text-style presentation for any glyph that has both text
+       and emoji variants (v1.47). The variation selector U+FE0E is in
+       the markup, but explicit CSS belt-and-braces helps Safari. */
+    button { font-variant-emoji: text; }
 
     html, body {
       width: 100%; height: 100%; overflow: hidden;
@@ -375,8 +384,19 @@
       border-color: rgba(200, 184, 255, 0.5);
     }
 
-    /* v1.45: hide text-heavy elements; rely on visual cues. */
-    #med-title, #round-info, #state-text, #calib-text { display: none; }
+    /* v1.45: hide text-heavy elements; rely on visual cues.
+       v1.47: state-text re-enabled (without it, phase transitions had no
+       narration and the mobile timer overlapped the action button). */
+    #med-title, #round-info, #calib-text { display: none; }
+
+    /* v1.47: icon-button defensive shape rules. Belt-and-braces against
+       iOS Safari rendering bounding boxes as ovals from font metrics. */
+    #begin-btn, #position-ready-btn, #action-btn,
+    #mute-btn, #reframe-btn, #report-link,
+    #safety-link, #about-link {
+      aspect-ratio: 1 / 1;
+      flex-shrink: 0;
+    }
 
     /* Report-concern button — icon-only, above the mute button */
     #report-link {
@@ -718,7 +738,7 @@
   <!-- ── Start Screen ── -->
   <div id="start-screen">
     <h1>HILL CLIMBING</h1>
-    <button id="begin-btn" aria-label="Begin">▶</button>
+    <button id="begin-btn" aria-label="Begin">▶︎</button>
     <div class="corner-icons">
       <div id="about-link" title="About this practice">?</div>
       <div id="safety-link" title="Safety notice">ⓘ</div>
@@ -802,14 +822,14 @@
 
     <p id="state-text">Settle in…</p>
     <p id="calib-text">calibrating…</p>
-    <button id="action-btn" aria-label="Begin">▶</button>
+    <button id="action-btn" aria-label="Begin">▶︎</button>
     <button id="replay-btn" aria-label="Replay last round" title="Replay last round">↻</button>
 
     <video id="camera-preview" autoplay muted playsinline></video>
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.46</p>
+    <p id="version-label">v1.47</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -991,8 +1011,8 @@ const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
 // 0.65), with the last 5% of score requiring genuine sub-noise stillness,
 // and a clear cliff at high motion.
 const STILL_HARD_ZONE = 0.05;  // motion below this climbs from 0.95 to 1.0
-const STILL_EASY_BAND = 0.60;  // plateau width at 0.95
-const STILL_FALL_BAND = 0.30;  // linear fall from 0.95 to 0
+const STILL_EASY_BAND = 0.75;  // plateau width at 0.95 (v1.47: widened from 0.60)
+const STILL_FALL_BAND = 0.20;  // linear fall from 0.95 to 0  (v1.47: tightened from 0.30)
 
 // Pre-smoothing applied to motion *before* it enters the variance window.
 // Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
@@ -1687,7 +1707,7 @@ function setPhase(next) {
     actionBtn.disabled = false;
   }
   if (next === 'idle') {
-    actionBtn.textContent = '▶';
+    actionBtn.textContent = '▶︎';
     actionBtn.classList.remove('stop');
     actionBtn.classList.add('show');
   } else if (next === 'settling') {
@@ -1754,7 +1774,7 @@ function enterInterlude() {
   ringContainer.classList.add('breathing');
   const prompt = MOVEMENT_PROMPTS[Math.floor(Math.random() * MOVEMENT_PROMPTS.length)];
   stateText.textContent = `${consecutiveWins} in a row. Stand and move — ${prompt}.`;
-  actionBtn.textContent = '▶';
+  actionBtn.textContent = '▶︎';
   actionBtn.classList.remove('stop');
   actionBtn.classList.add('show');
 }
@@ -1821,7 +1841,7 @@ function onWin() {
   else                                          base = `Held. ${WINS_TO_STEP_UP - game.wins} more to step up.`;
   stateText.textContent = base + postRoundReminder(heldSecs);
 
-  actionBtn.textContent = '▶';
+  actionBtn.textContent = '▶︎';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(true);
@@ -1854,7 +1874,7 @@ function onLoss() {
   // Neutral, supportive copy — not failure-coded
   stateText.textContent = `You held ${heldSecs}s of ${fmtSecs(previousDuration)}.`
                         + postRoundReminder(heldSecs);
-  actionBtn.textContent = '▶';
+  actionBtn.textContent = '▶︎';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(false);
@@ -2174,7 +2194,7 @@ function loop() {
       actionBtn.textContent = Math.ceil(remaining);
       actionBtn.disabled = true;
     } else {
-      actionBtn.textContent = '▶';
+      actionBtn.textContent = '▶︎';
       actionBtn.disabled = false;
       breakStart = 0;
     }
@@ -2256,7 +2276,7 @@ beginBtn.addEventListener('click', async () => {
     startScreen.style.display = 'none';
     positioningScreen.classList.add('show');
   } catch (err) {
-    beginBtn.disabled = false; beginBtn.textContent = '▶';
+    beginBtn.disabled = false; beginBtn.textContent = '▶︎';
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
     console.error(err);
   }
@@ -2489,7 +2509,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.46 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.47 · t${TIER}`;
 </script>
 </body>
 </html>
