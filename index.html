@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.38 · hill climbing · tier 0</p>
+    <p id="version-label">v1.39 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2015,19 +2015,24 @@ function loop() {
   pushMotionSample(motion);
   computeMotionStats();
 
-  // v1.38: variance-based scoring replaces the asymmetric EMA. The window
-  // (1 s) provides natural smoothing; the score derives from std-dev of
-  // recent motion. Audio still reacts to instantaneous motion so the
-  // dissonance oscillator gives immediate feedback even though the score
-  // itself integrates over a window.
-  let audioMotion;
+  // v1.38: variance-based score is the underlying signal.
+  // v1.39: asymmetric EMA layered on top to smooth display jumps.
+  // Variance over a 1 s window is itself jittery — outliers entering/
+  // leaving the ring shift std-dev abruptly. The EMA absorbs those
+  // jumps so the displayed score doesn't bounce while the underlying
+  // signal still has the environment-invariant properties of variance.
+  let target, audioMotion;
   if (roundMode === 'smoothness' && (phase === 'active' || phase === 'settling')) {
-    stillness   = smoothnessScore();
-    audioMotion = 1 - stillness;
+    target      = smoothnessScore();
+    audioMotion = 1 - target;
   } else {
-    stillness   = stillnessScore();
+    target      = stillnessScore();
     audioMotion = motion;
   }
+  const fallingAlpha = 0.15;
+  const risingAlpha  = 0.05;
+  const alpha = target < stillness ? fallingAlpha : risingAlpha;
+  stillness   = Math.max(0, Math.min(1, stillness + alpha * (target - stillness)));
 
   // ── Phase machine ──
   if (phase === 'settling') {
@@ -2403,7 +2408,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.38 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.39 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
