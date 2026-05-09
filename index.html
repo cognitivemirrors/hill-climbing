@@ -7,6 +7,17 @@
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* iOS Safari adds default button padding/styling that breaks our
+       icon-circle layout. Reset universally. Use system font on icon
+       buttons so Unicode glyphs render consistently across platforms. */
+    button {
+      -webkit-appearance: none;
+      appearance: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Symbol",
+                   "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif;
+      line-height: 1;
+    }
+
     html, body {
       width: 100%; height: 100%; overflow: hidden;
       background: radial-gradient(ellipse at center, #0f0f2a 0%, #05050f 100%);
@@ -40,11 +51,12 @@
     #begin-btn {
       margin-top: 16px;
       width: 88px; height: 88px;
+      flex: 0 0 auto;
       display: flex; align-items: center; justify-content: center;
       border: 1px solid rgba(200, 184, 255, 0.35);
       border-radius: 50%; background: transparent;
-      color: #c8b8ff; font-family: inherit;
-      font-size: 1.6rem; padding-left: 6px; /* nudge play triangle visually centred */
+      color: #c8b8ff;
+      font-size: 1.5rem;
       cursor: pointer; transition: all 0.4s ease;
     }
     #begin-btn:hover {
@@ -52,7 +64,7 @@
       border-color: rgba(200, 184, 255, 0.65);
       box-shadow: 0 0 40px rgba(160, 120, 255, 0.2);
     }
-    #begin-btn:disabled { opacity: 0.4; cursor: wait; padding-left: 0; }
+    #begin-btn:disabled { opacity: 0.4; cursor: wait; }
 
     /* ── Meditation screen ── */
     #meditation-screen {
@@ -183,23 +195,10 @@
       border-color: rgba(200, 184, 255, 0.35);
     }
 
-    /* Replay-last-round secondary action — icon button, only visible
-       between rounds when a saved trajectory exists. */
-    #replay-btn {
-      margin-top: 14px;
-      width: 36px; height: 36px;
-      display: none; align-items: center; justify-content: center;
-      border-radius: 50%;
-      border: 1px solid rgba(200, 184, 255, 0.18);
-      background: transparent;
-      color: #6858a0; font-size: 1rem;
-      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
-    }
-    #replay-btn.show { display: flex; }
-    #replay-btn:hover {
-      color: #c8b8ff;
-      border-color: rgba(200, 184, 255, 0.5);
-    }
+    /* v1.46: replay button hidden — purpose was unclear, now removed
+       from the UI. JS still records trajectories to localStorage; the
+       button can be re-enabled by removing this rule. */
+    #replay-btn { display: none !important; }
 
     /* Round timer — displays to the right of the ring during active rounds.
        Stillness % stays in the centre as the primary feedback; the timer
@@ -808,9 +807,9 @@
 
     <video id="camera-preview" autoplay muted playsinline></video>
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
-    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">⟲</button>
-    <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">⚠</button>
-    <p id="version-label">v1.45</p>
+    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
+    <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
+    <p id="version-label">v1.46</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -980,23 +979,20 @@ const SMOOTH_WINDOW_FRAMES = 60;
 const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
 const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
 const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
-// Stillness mapping (v1.44): motion + grace zone, NO variance window.
-// User reported v1.43 (variance + grace) was very laggy. Variance over
-// a 1s window inherently lags by up to 1s; pre-smoothing + display EMA
-// stack on top. Cumulative response time was 600 ms–1 s for sustained
-// changes, which felt unresponsive.
+// Stillness mapping (v1.46): three-piece curve.
+// User wants 95% easy to reach but 100% progressively harder.
 //
-// Going back to motion-based scoring but keeping the grace-zone shape.
-// The v1.35 adaptive p10/p90 normalisation already handles environment;
-// grace zone on motion handles the ambient baseline. No variance.
+//   motion ≤ HARD_ZONE (0.05)              → 0.95–1.00 (quadratic climb)
+//   HARD_ZONE < motion ≤ HARD + EASY (0.65) → 0.95 (plateau — comfort zone)
+//   HARD + EASY < motion ≤ +FALL (0.95)    → 0.95 → 0   (linear fall)
+//   motion > 0.95                          → 0
 //
-//   motion ≤ MOTION_GRACE (0.40)      → score = 1.0  (plateau)
-//   MOTION_GRACE < motion ≤ G + FALL  → linear drop from 1 to 0
-//   motion > 0.80                     → score = 0
-//
-// Single-frame response. Display EMA still smooths visible jumps.
-const MOTION_GRACE = 0.40;  // motion up to this reads as full stillness
-const MOTION_FALL  = 0.40;  // motion beyond grace where score reaches 0
+// Result: a comfortable plateau through most of "normal" motion (0.05 to
+// 0.65), with the last 5% of score requiring genuine sub-noise stillness,
+// and a clear cliff at high motion.
+const STILL_HARD_ZONE = 0.05;  // motion below this climbs from 0.95 to 1.0
+const STILL_EASY_BAND = 0.60;  // plateau width at 0.95
+const STILL_FALL_BAND = 0.30;  // linear fall from 0.95 to 0
 
 // Pre-smoothing applied to motion *before* it enters the variance window.
 // Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
@@ -1506,14 +1502,27 @@ function computeMotionStats() {
   lastMotionStdDev = Math.sqrt(variance);
 }
 
-// Stillness score (v1.44): motion + grace zone, no window.
-// motion ≤ MOTION_GRACE → 1.0 (plateau)
-// motion > MOTION_GRACE → linear drop, reaching 0 at GRACE + FALL
-// Single-frame response (no variance window lag); display EMA in the
-// loop still smooths visible jumps.
+// Stillness score (v1.46): three-piece curve.
+//   - Quadratic climb 0.95 → 1.0 in motion [0, HARD_ZONE]
+//   - Plateau at 0.95 across motion [HARD_ZONE, HARD_ZONE + EASY_BAND]
+//   - Linear fall 0.95 → 0 across motion [..., ... + FALL_BAND]
+// Comfortable plateau for normal use; 100% requires genuine sub-noise
+// stillness; clear cliff at high motion.
 function stillnessScore(motionVal) {
-  const above = Math.max(0, motionVal - MOTION_GRACE);
-  return Math.max(0, 1 - above / MOTION_FALL);
+  if (motionVal <= STILL_HARD_ZONE) {
+    const t = motionVal / STILL_HARD_ZONE;
+    return 1.0 - 0.05 * t * t;          // 1.0 → 0.95, quadratic
+  }
+  const plateauEnd = STILL_HARD_ZONE + STILL_EASY_BAND;
+  if (motionVal <= plateauEnd) {
+    return 0.95;                          // comfort plateau
+  }
+  const fallEnd = plateauEnd + STILL_FALL_BAND;
+  if (motionVal <= fallEnd) {
+    const t = (motionVal - plateauEnd) / STILL_FALL_BAND;
+    return 0.95 * (1 - t);                // linear fall to 0
+  }
+  return 0;
 }
 
 function smoothnessScore() {
@@ -2213,7 +2222,7 @@ const positioningVideo  = document.getElementById('positioning-video');
 const positionReadyBtn  = document.getElementById('position-ready-btn');
 
 beginBtn.addEventListener('click', async () => {
-  beginBtn.disabled = true; beginBtn.textContent = '⌛';
+  beginBtn.disabled = true;
 
   // Create AudioEngine NOW, synchronously, in the FIRST user gesture.
   // iOS Safari unlocks audio reliably only on the first gesture; later
@@ -2480,7 +2489,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.45 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.46 · t${TIER}`;
 </script>
 </body>
 </html>
