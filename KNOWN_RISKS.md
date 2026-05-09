@@ -120,6 +120,15 @@ The most likely future entries here would be: a code path that disables the idle
 ### L18. No data export or delete-all-my-data button
 - Privacy. Tier 2+ prerequisite per REQUIREMENTS.md §1.4.
 
+### L19. GitHub Pages legacy build trigger occasionally drops pushes
+- **Confidence:** observed (v1.57 and v1.58 push events both failed to auto-trigger builds; v1.56 was the last commit Pages built before manual intervention)
+- **Where:** the repo is on `build_type: "legacy"` Pages (per `gh api .../pages`), which auto-builds on push to `main`. The trigger isn't 100% reliable — quick successive pushes occasionally land without firing a build, leaving the deployed site behind the repo head.
+- **Impact:** "I pushed" and "the deployed site reflects what I pushed" are not the same statement. Without a check, the agent can confidently report "shipped" while the user is still seeing yesterday's build.
+- **Detection:** `gh api repos/cognitivemirrors/hill-climbing/pages/builds/latest --jq '.commit'` returns the most recent built commit. Compare to local `git rev-parse HEAD`.
+- **Recovery:** `gh api -X POST repos/cognitivemirrors/hill-climbing/pages/builds` queues a manual build; takes ~30–60 s.
+- **Cache caveat:** the Fastly edge in front of Pages has `max-age=600` — even after a successful new build, the user's browser may serve cached HTML for up to 10 minutes. Hard refresh bypasses; otherwise it self-clears.
+- **Workflow upgrade path:** migrating to GitHub Actions Pages (build_type: "workflow") gives explicit, observable build runs and would surface trigger drops as failed/missing runs rather than silent stale-deploys.
+
 ---
 
 ## How to use this list
