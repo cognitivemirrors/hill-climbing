@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.33 · hill climbing · tier 0</p>
+    <p id="version-label">v1.34 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1089,32 +1089,52 @@ class AudioEngine {
   constructor() {
     this.ctx   = new (window.AudioContext || window.webkitAudioContext)();
     this.muted = false;
+    this.started = false;
 
-    // iOS Safari quirk (v1.33 fix): AudioContext often starts in 'suspended'
-    // state even when constructed inside a user gesture. Two things must
-    // happen in the SAME gesture or audio is silent:
-    //   1. explicit ctx.resume()
-    //   2. play at least one buffer-source (even a 1-sample silent buffer)
-    //      to "unlock" the audio routing pipeline.
-    // Without these, oscillators created in _build() may start but produce
-    // no audible output. Reported by user testing v1.32 on phone.
+    // iOS Safari unlock (v1.34: triple-redundant). iOS 17+ enforces
+    // strict gesture rules: AudioContext must be unlocked in the FIRST
+    // user gesture (now moved to Begin click), and even then sometimes
+    // requires both Web Audio and HTML5 Audio paths to be exercised.
     this.ctx.resume();
-    const unlockBuf = this.ctx.createBuffer(1, 1, 22050);
-    const unlockSrc = this.ctx.createBufferSource();
-    unlockSrc.buffer = unlockBuf;
-    unlockSrc.connect(this.ctx.destination);
-    unlockSrc.start(0);
+    const wbBuf = this.ctx.createBuffer(1, 1, 22050);
+    const wbSrc = this.ctx.createBufferSource();
+    wbSrc.buffer = wbBuf;
+    wbSrc.connect(this.ctx.destination);
+    wbSrc.start(0);
+    // HTML5 Audio path — a silent WAV played via the standard Audio
+    // element sometimes succeeds where Web Audio alone is blocked,
+    // and unlocks audio routing through the loudspeaker rather than
+    // the receiver speaker (an iOS issue with active video streams).
+    try {
+      const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+      a.play().catch(() => {});
+    } catch {}
 
     this._build();
+  }
+
+  // Called from positionReadyBtn click — fades audio in when the user
+  // actually starts practising. Separated from constructor so the engine
+  // can be pre-warmed on the Begin click (first gesture) and stay silent
+  // through camera permission and positioning.
+  start() {
+    if (this.started) return;
+    this.started = true;
+    const t = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(t);
+    this.master.gain.setValueAtTime(0, t);
+    this.master.gain.linearRampToValueAtTime(MASTER_VOLUME, t + 2.5);
   }
 
   _build() {
     const ctx = this.ctx;
 
     this.master = ctx.createGain();
-    // Start silent and fade in over 2.5s — avoids loud audio surprises.
-    this.master.gain.setValueAtTime(0, ctx.currentTime);
-    this.master.gain.linearRampToValueAtTime(MASTER_VOLUME, ctx.currentTime + 2.5);
+    // Stay silent until start() is called from the I'm-ready click —
+    // this lets the engine be constructed (and audio unlocked on iOS) on
+    // the Begin click without making sound during camera permission and
+    // positioning.
+    this.master.gain.value = 0;
     this.master.connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
@@ -2031,6 +2051,13 @@ const positionReadyBtn  = document.getElementById('position-ready-btn');
 
 beginBtn.addEventListener('click', async () => {
   beginBtn.disabled = true; beginBtn.textContent = 'Opening camera…';
+
+  // Create AudioEngine NOW, synchronously, in the FIRST user gesture.
+  // iOS Safari unlocks audio reliably only on the first gesture; later
+  // gestures (after async getUserMedia) can be treated as untrusted.
+  // Engine stays silent until start() is called from positionReadyBtn.
+  if (!audioEngine) audioEngine = new AudioEngine();
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
@@ -2064,9 +2091,12 @@ beginBtn.addEventListener('click', async () => {
 });
 
 positionReadyBtn.addEventListener('click', () => {
-  // Audio engine starts here (after a fresh user gesture) so the fade-in
-  // begins as the meditation screen appears, not during framing.
-  if (!audioEngine) audioEngine = new AudioEngine();
+  // AudioEngine was created on the Begin click (first gesture, for iOS
+  // unlock); now we resume the context (defensive — in case it suspended
+  // during the camera prompt) and fade audio in.
+  if (!audioEngine) audioEngine = new AudioEngine(); // fallback if Begin path skipped
+  audioEngine.ctx.resume();
+  audioEngine.start();
   positioningScreen.classList.remove('show');
   meditScreen.style.display = 'flex';
   updateRoundInfo();
@@ -2283,7 +2313,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.33 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.34 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
