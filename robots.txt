@@ -1,0 +1,4 @@
+# Hill Climbing is currently a personal-testing deployment.
+# Discourage indexing until the project is ready for broader exposure.
+User-agent: *
+Disallow: /
