@@ -876,7 +876,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">📷︎</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.56</p>
+    <p id="version-label">v1.57</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2382,21 +2382,54 @@ const positioningScreen = document.getElementById('positioning-screen');
 const positioningVideo  = document.getElementById('positioning-video');
 const positionReadyBtn  = document.getElementById('position-ready-btn');
 
+// v1.57: positioning screen removed from the initial flow. Begin → camera
+// permission → straight into meditation. The user can re-enter positioning
+// any time by clicking the camera glyph (reframe-btn). enterMeditation() is
+// the shared transition called by both the Begin path (initial entry) and
+// the position-ready path (return from manual reframing).
+function enterMeditation() {
+  positioningScreen.classList.remove('show');
+  meditScreen.style.display = 'flex';
+  updateRoundInfo();
+  setPhase('idle');
+  // Personalised greeting: first-time, returning today, or returning across days.
+  if (game.totalWins === 0) {
+    stateText.textContent = `Welcome. Your first round: fill the bucket within ${fmtSecs(game.timeLimit)}.`;
+  } else if (game.todayWins > 0) {
+    stateText.textContent = `Welcome back. Round ${game.round}.`;
+  } else {
+    stateText.textContent = `Welcome back. ${game.totalWins} held all-time. Round ${game.round}.`;
+  }
+  // Loop starts exactly once across the app's lifetime. Re-framing doesn't
+  // restart it — that would queue a second requestAnimationFrame and cause
+  // the loop body to run twice per frame.
+  if (!loopRunning) {
+    loopRunning = true;
+    setTimeout(loop, 600);
+  }
+}
+
 beginBtn.addEventListener('click', async () => {
   beginBtn.disabled = true;
 
-  // Create AudioEngine NOW, synchronously, in the FIRST user gesture.
-  // iOS Safari unlocks audio reliably only on the first gesture; later
-  // gestures (after async getUserMedia) can be treated as untrusted.
-  // Engine stays silent until start() is called from positionReadyBtn.
+  // iOS audio unlock — AudioEngine constructor and ctx.resume() must both
+  // execute inside this user gesture, synchronously, before any await.
+  // Otherwise iOS Safari treats post-async code as "untrusted" and the
+  // audio context never starts producing sound. start() (which ramps the
+  // master gain from 0 → MASTER_VOLUME over 2.5 s) is deferred to after
+  // the camera is ready, so the gain ramp doesn't run during the camera
+  // permission prompt — would otherwise mean a 2.5 s fade-in to a
+  // permission dialog the user hasn't accepted yet.
   if (!audioEngine) audioEngine = new AudioEngine();
+  audioEngine.ctx.resume();
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
     });
-    // Both videos share the same MediaStream — positioning shows the large
-    // framing preview, cameraPreview becomes the small corner thumbnail later.
+    // Both videos share the same MediaStream. positioningVideo is hidden by
+    // default (positioning screen only appears via reframe-btn now); having
+    // its srcObject set means the video is ready when reframe is clicked.
     positioningVideo.srcObject = stream;
     cameraPreview.srcObject    = stream;
 
@@ -2410,12 +2443,17 @@ beginBtn.addEventListener('click', async () => {
       actionBtn.classList.remove('show');
     });
 
+    // Wait for the detection-source video (cameraPreview) to have frames
+    // before starting the loop — otherwise the first few frames of motion
+    // detection read readyState < 2 and return 0.
     await new Promise(res => {
-      if (positioningVideo.readyState >= 2) res();
-      else positioningVideo.onloadedmetadata = res;
+      if (cameraPreview.readyState >= 2) res();
+      else cameraPreview.onloadedmetadata = res;
     });
+
+    audioEngine.start(); // begin gain ramp now that we're entering practice
     startScreen.style.display = 'none';
-    positioningScreen.classList.add('show');
+    enterMeditation();
   } catch (err) {
     beginBtn.disabled = false; beginBtn.textContent = '▶︎';
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
@@ -2424,34 +2462,23 @@ beginBtn.addEventListener('click', async () => {
 });
 
 positionReadyBtn.addEventListener('click', () => {
-  // AudioEngine was created on the Begin click (first gesture, for iOS
-  // unlock); now we resume the context (defensive — in case it suspended
-  // during the camera prompt) and fade audio in.
-  if (!audioEngine) audioEngine = new AudioEngine(); // fallback if Begin path skipped
-  audioEngine.ctx.resume();
-  audioEngine.start();
-  positioningScreen.classList.remove('show');
-  meditScreen.style.display = 'flex';
-  updateRoundInfo();
-  setPhase('idle');
-  // Personalised greeting: first-time, returning today, or returning across days.
-  if (game.totalWins === 0) {
-    stateText.textContent = `Welcome. Your first round: fill the bucket within ${fmtSecs(game.timeLimit)}.`;
-  } else if (game.todayWins > 0) {
-    stateText.textContent = `Welcome back. Round ${game.round}.`;
+  // Audio is already running by the time the user can reach this button —
+  // the Begin path called start() before showing meditation, and reframe-btn
+  // never tears that down. Defensive resume() in case iOS suspended the
+  // context while positioning was open. Fallback engine creation handles the
+  // (now-edge-case) path where this is somehow the first gesture.
+  if (!audioEngine) {
+    audioEngine = new AudioEngine();
+    audioEngine.ctx.resume();
+    audioEngine.start();
   } else {
-    stateText.textContent = `Welcome back. ${game.totalWins} held all-time. Round ${game.round}.`;
+    audioEngine.ctx.resume();
   }
-  // Loop is started exactly once across the app's lifetime. Re-framing
-  // doesn't restart it — that would queue a second requestAnimationFrame
-  // and cause the loop body to run twice per frame.
-  if (!loopRunning) {
-    loopRunning = true;
-    setTimeout(loop, 600);
-  }
+  enterMeditation();
 });
 
 // Re-frame: returns the user to the positioning screen mid-session.
+// Also the only way into positioning now that the initial flow skips it.
 // Aborts any in-progress round neutrally first.
 const reframeBtn = document.getElementById('reframe-btn');
 reframeBtn.addEventListener('click', () => {
@@ -2651,7 +2678,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.56 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.57 · t${TIER}`;
 </script>
 </body>
 </html>
