@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.40 · hill climbing · tier 0</p>
+    <p id="version-label">v1.41 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -955,6 +955,13 @@ const STILL_VAR_NORM       = 0.30;  // stillness: std dev where score = 0
                                     //  and bright environments easily
                                     //  exceeded 0.15, dragging score to 0)
 
+// Pre-smoothing applied to motion *before* it enters the variance window.
+// Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
+// so variance reflects sustained motion changes rather than per-frame noise.
+// Body motion is slower (1–3 Hz) than tremor (5–10 Hz); a ~5-frame time
+// constant filters the fast stuff while preserving the slow.
+const MOTION_PRESMOOTH_ALPHA = 0.20;
+
 // ─────────────────────────────────────────────
 // Safety constants — keep practice within healthy bounds
 // ─────────────────────────────────────────────
@@ -1072,9 +1079,12 @@ let savedStateText  = '';
 
 // Motion ring-buffer for variance-based scoring (1 s of frames at ~60 fps).
 // Both stillness and smoothness scoring derive from this same window.
+// v1.41: motion is pre-smoothed via EMA before entering the window, so
+// variance reflects sustained changes rather than per-frame jitter.
 const motionWindow = new Float32Array(SMOOTH_WINDOW_FRAMES);
 let mwHead = 0, mwCount = 0;
 let lastMotionMean = 0, lastMotionStdDev = 0; // refreshed each frame
+let smoothedMotion = 0;                       // EMA-smoothed motion
 
 // Session-only state (resets on reload, not persisted)
 let sessionActiveSecs = 0;        // cumulative time in settling+active this session
@@ -1424,7 +1434,10 @@ function detectMotion() {
 // continuous motion scores well.
 // ─────────────────────────────────────────────
 function pushMotionSample(m) {
-  motionWindow[mwHead] = m;
+  // EMA-smooth before storing so the variance metric reflects sustained
+  // motion rather than per-frame jitter from camera/hand noise.
+  smoothedMotion += MOTION_PRESMOOTH_ALPHA * (m - smoothedMotion);
+  motionWindow[mwHead] = smoothedMotion;
   mwHead  = (mwHead + 1) % SMOOTH_WINDOW_FRAMES;
   mwCount = Math.min(mwCount + 1, SMOOTH_WINDOW_FRAMES);
 }
@@ -2418,7 +2431,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.40 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.41 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
