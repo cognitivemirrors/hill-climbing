@@ -140,14 +140,21 @@
     }
 
     #score-number {
-      font-size: 4rem; line-height: 1;
-      color: #d8d0f8; font-weight: normal;
+      font-size: 4.5rem; line-height: 1;
+      color: #e0d8ff; font-weight: 300;
+      letter-spacing: -0.01em;
       transition: color 0.8s ease;
     }
 
+    /* v1.58: percent sign sits closer to the number and inherits a softer
+       version of the number's tone — reads as part of the value rather
+       than a separate label below. */
     #score-pct {
-      font-size: 0.85rem; color: #5a4a82;
-      letter-spacing: 0.3em; margin-top: 4px;
+      font-size: 0.7rem;
+      color: #6858a0;
+      letter-spacing: 0.4em;
+      margin-top: 2px;
+      opacity: 0.85;
     }
 
     #state-text {
@@ -214,30 +221,26 @@
 
     /* Round timer — displays to the right of the ring during active rounds.
        Stillness % stays in the centre as the primary feedback; the timer
-       sits beside it as a glanceable secondary reading. */
+       sits beside it as a glanceable secondary reading.
+       v1.58: dropped the "remaining" pseudo-element label. The number on
+       its own (with its monospace tabular-num feel) reads as a countdown
+       in context — the label was shouting where a glance would do. */
     #round-timer {
       position: absolute;
       left: calc(100% + 28px);
       top: 50%;
       transform: translateY(-50%);
-      font-size: 1.5rem;
-      color: #a890d0;
-      letter-spacing: 0.08em;
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: #8878b8;
+      letter-spacing: 0.05em;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
       display: none;
       pointer-events: none;
+      opacity: 0.75;
     }
     #round-timer.show { display: block; }
-    #round-timer::before {
-      content: 'remaining';
-      display: block;
-      font-size: 0.55rem;
-      letter-spacing: 0.3em;
-      color: #5a4a82;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
 
     /* Threshold marker (tick on the ring at 60%) */
     #threshold-mark {
@@ -569,22 +572,27 @@
        Safari was rendering this as oval despite aspect-ratio + explicit
        width/height. Traditional `display: inline-block` + `line-height
        = inner-height` is the most rock-solid square-button pattern. */
-    /* v1.56: anchored to the bottom-right corner now that the camera
-       preview thumbnail is gone (mirrors mute-btn on the bottom-left). */
+    /* v1.56: anchored to the bottom-right corner.
+       v1.58: switched from emoji glyph (📷) to inline SVG. iOS Safari
+       refuses the text-style variation selector for the camera codepoint
+       and renders it in colour despite font-variant-emoji:text. Inline
+       SVG with stroke=currentColor avoids the entire emoji-presentation
+       mess and themes correctly with hover. Centring switches to flex
+       for SVG content (the v1.48 line-height pattern is for text glyphs;
+       SVG doesn't have the iOS oval-rendering issue text does). */
     #reframe-btn {
       position: fixed; bottom: 24px; right: 24px;
       width: 32px; height: 32px;
       min-width: 32px; max-width: 32px;
       min-height: 32px; max-height: 32px;
-      display: inline-block;
-      text-align: center;
-      line-height: 30px; /* 32 - 2px border */
+      display: flex; align-items: center; justify-content: center;
       border-radius: 999px;
       border: 1px solid rgba(200, 184, 255, 0.18);
       background: transparent;
-      color: #6858a0; font-size: 16px;
+      color: #6858a0;
       cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
+    #reframe-btn svg { width: 16px; height: 16px; display: block; }
     #reframe-btn:hover {
       color: #c8b8ff;
       border-color: rgba(200, 184, 255, 0.5);
@@ -646,17 +654,16 @@
       }
       #round-timer {
         left: 50%;
-        top: calc(100% + 10px);
+        top: calc(100% + 14px);
         transform: translateX(-50%);
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         text-align: center;
       }
-      #round-timer::before { font-size: 0.5rem; }
       #state-text {
         max-width: 92vw;
         padding: 0 14px;
         font-size: 0.85rem;
-        margin-top: 48px; /* clear the timer that now sits below the ring */
+        margin-top: 44px; /* clear the timer that now sits below the ring */
       }
       #start-screen h1 {
         font-size: 2.1rem;
@@ -874,9 +881,9 @@
 
     <video id="camera-preview" autoplay muted playsinline></video>
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
-    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">📷︎</button>
+    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.57</p>
+    <p id="version-label">v1.58</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1812,12 +1819,15 @@ function setPhase(next) {
     actionBtn.textContent = '■';
     actionBtn.classList.add('stop', 'show');
     if (roundMode === 'smoothness') {
-      stateText.textContent = `Begin slow, continuous motion to start the clock · Esc to stop`;
+      stateText.textContent = `Begin slow, continuous motion`;
     } else {
       // v1.52: round starts when the accumulator would begin filling — the
       // moment stillness crosses the neutral point. No specific percent to
       // cross; the live stillness signal communicates readiness.
-      stateText.textContent = `Be still to begin · Esc to stop`;
+      // v1.58: dropped "· Esc to stop" — the visible stop button is the
+      // primary affordance; the keyboard hint was clutter on every screen
+      // and meaningless on mobile.
+      stateText.textContent = `Be still to begin`;
     }
     settlingStart = performance.now();
     // Begin a fresh recording — earlier samples (settling lead-in) are part
@@ -1829,8 +1839,8 @@ function setPhase(next) {
     actionBtn.textContent = '■';
     actionBtn.classList.add('stop', 'show');
     stateText.textContent = roundMode === 'smoothness'
-      ? 'Move smoothly… · Esc to stop'
-      : 'Fill the bucket… · Esc to stop';
+      ? 'Move smoothly…'
+      : 'Hold steady…';
     roundStart = performance.now();
     accumulator = 0; // fresh round, empty bucket
     // v1.38: motion window NOT reset between phases. Variance-based
@@ -2678,7 +2688,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.57 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.58 · t${TIER}`;
 </script>
 </body>
 </html>
