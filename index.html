@@ -368,14 +368,22 @@
     /* Start-screen secondary icons */
     .corner-icons {
       position: fixed; bottom: 24px; right: 24px;
-      display: flex; gap: 16px;
+      display: inline-block;
     }
+    .corner-icons > div { margin-left: 8px; }
+    .corner-icons > div:first-child { margin-left: 0; }
+    /* v1.48: line-height centring + explicit min/max + border-radius 999px
+       for reliable circle on iOS Safari. */
     #safety-link, #about-link {
+      display: inline-block;
       width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 50%;
+      min-width: 32px; max-width: 32px;
+      min-height: 32px; max-height: 32px;
+      text-align: center;
+      line-height: 30px;
+      border-radius: 999px;
       border: 1px solid rgba(200, 184, 255, 0.18);
-      color: #6858a0; font-size: 0.9rem;
+      color: #6858a0; font-size: 14px;
       cursor: pointer; user-select: none;
       transition: color 0.3s ease, border-color 0.3s ease;
     }
@@ -398,19 +406,23 @@
       flex-shrink: 0;
     }
 
-    /* Report-concern button — icon-only, above the mute button */
+    /* Report-concern button — icon-only, above the mute button.
+       v1.48: line-height centering for reliable circle rendering on iOS. */
     #report-link {
       position: fixed; bottom: 76px; left: 24px;
       width: 32px; height: 32px;
+      min-width: 32px; max-width: 32px;
+      min-height: 32px; max-height: 32px;
       display: none;
-      align-items: center; justify-content: center;
-      border-radius: 50%;
+      text-align: center;
+      line-height: 30px;
+      border-radius: 999px;
       border: 1px solid rgba(200, 184, 255, 0.18);
       background: transparent;
-      color: #6858a0; font-size: 1rem; line-height: 1;
+      color: #6858a0; font-size: 16px; font-weight: bold;
       cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
-    #report-link.show { display: flex; }
+    #report-link.show { display: inline-block; }
     #report-link:hover {
       color: #b09898;
       border-color: rgba(180, 152, 152, 0.5);
@@ -524,27 +536,40 @@
       transform: scaleX(-1); /* mirror */
     }
 
-    /* ── Mute button ── */
+    /* ── Mute button ── (v1.48: line-height centring for iOS) */
     #mute-btn {
       position: fixed; bottom: 24px; left: 24px;
-      width: 40px; height: 40px; border-radius: 50%;
+      width: 40px; height: 40px;
+      min-width: 40px; max-width: 40px;
+      min-height: 40px; max-height: 40px;
+      display: inline-block;
+      text-align: center;
+      line-height: 38px;
+      border-radius: 999px;
       border: 1px solid rgba(200, 184, 255, 0.2);
       background: transparent; cursor: pointer;
-      color: #6858a0; font-size: 1.1rem;
-      display: flex; align-items: center; justify-content: center;
+      color: #6858a0; font-size: 18px;
       transition: all 0.3s ease;
     }
     #mute-btn:hover { border-color: rgba(200, 184, 255, 0.5); color: #c8b8ff; }
 
-    /* Re-frame button — icon-only, sits above the camera preview */
+    /* Re-frame button — icon-only, sits above the camera preview.
+       v1.48: switched from flex centering to line-height centering. iOS
+       Safari was rendering this as oval despite aspect-ratio + explicit
+       width/height. Traditional `display: inline-block` + `line-height
+       = inner-height` is the most rock-solid square-button pattern. */
     #reframe-btn {
       position: fixed; bottom: 110px; right: 24px;
       width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 50%;
+      min-width: 32px; max-width: 32px;
+      min-height: 32px; max-height: 32px;
+      display: inline-block;
+      text-align: center;
+      line-height: 30px; /* 32 - 2px border */
+      border-radius: 999px;
       border: 1px solid rgba(200, 184, 255, 0.18);
       background: transparent;
-      color: #6858a0; font-size: 1rem; line-height: 1;
+      color: #6858a0; font-size: 16px;
       cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
     #reframe-btn:hover {
@@ -829,7 +854,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.47</p>
+    <p id="version-label">v1.48</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2509,7 +2534,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.47 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.48 · t${TIER}`;
 </script>
 </body>
 </html>
