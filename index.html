@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.35 · hill climbing · tier 0</p>
+    <p id="version-label">v1.36 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -855,6 +855,24 @@ const SAFETY = {
   geoCrisisLookup:    TIER >= 3,
   dailySessionCap:    TIER >= 3,
   cooldownBetween:    TIER >= 3,
+};
+
+// ─────────────────────────────────────────────
+// Feature toggles — non-safety UX flags
+// ─────────────────────────────────────────────
+// SAFETY (above) gates risk-related behaviour by tier. FEATURES is the
+// equivalent for non-safety UX flags — things that are on/off for taste,
+// dev convenience, or experimentation rather than for user welfare.
+//
+// Each flag should have a comment explaining why it's currently set
+// the way it is and what its default ought to be.
+const FEATURES = {
+  // Multi-page guided introduction shown on first run. Re-openable via
+  // the "about this practice" link on the start screen regardless of
+  // this flag (so users can always read it). Currently OFF to remove
+  // friction during dev iteration; default ought to be true for any
+  // public-facing tier.
+  showOnboardingOnFirstRun: false,
 };
 
 // ─────────────────────────────────────────────
@@ -2280,8 +2298,12 @@ aboutLink.addEventListener('click', () => {
   obIdx = 0; renderOnboarding(); onboardingModal.classList.add('show');
 });
 
-// Show on first run, regardless of tier (this is universal orientation)
-if (!localStorage.getItem('hill-climbing-introduced-v1')) {
+// Show on first run, regardless of tier (this is universal orientation).
+// Gated by FEATURES.showOnboardingOnFirstRun so dev iteration can skip
+// the intro. The "about this practice" link still opens the modal
+// manually regardless.
+if (FEATURES.showOnboardingOnFirstRun
+    && !localStorage.getItem('hill-climbing-introduced-v1')) {
   renderOnboarding();
   onboardingModal.classList.add('show');
 }
@@ -2328,7 +2350,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.35 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.36 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
