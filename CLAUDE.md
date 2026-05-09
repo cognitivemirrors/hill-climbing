@@ -2,17 +2,19 @@
 
 **For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Then ask the user §6's confirmation question before making any change.
 
-This is a working solo-developer project. The user is building a stillness-meditation web app. The session that produced most of the current state ended at version `v1.25 · hill climbing · tier 0`. This handoff was written from that session.
+This is a working solo-developer project. The user is building a stillness-meditation web app. The git baseline is `v1.32`; this handoff has been kept current through to that version.
 
 ---
 
 ## 1. Project state
 
 - **Single-file HTML web app** at `/Users/kevinchan/stillness/index.html`. No build system, no dependencies, no backend. Open the file in a browser to run.
-- **Current version:** v1.25. Tier 0 (solo developer).
+- **Current version:** v1.32. Tier 0 (solo developer).
+- **Git is initialised** at v1.32 baseline. Each version bump should be its own commit + tag. See §4 for workflow.
 - **The app:** measures user stillness via webcam motion detection, plays synthesised sound that responds to stillness, and runs a 2-up/1-down staircase game that adapts both round duration and stillness threshold to keep the user near a ~71% success rate.
 - **Two round modes** alternate: "stillness" rounds (the default) and "smoothness" rounds (after every motion interlude — the user maintains slow continuous motion instead of stillness).
 - **TIER constant** at the top of the JS gates safety features: 0 (solo dev), 1 (friends & family), 2 (open beta), 3 (public). Higher tiers activate more safety scaffolding; user is at 0 for now.
+- **Audio paradigm at v1.32:** at peak stillness the harmonic drone fades to silence and is replaced by occasional pentatonic bell strikes (the "temple atmosphere" model). The user explicitly likes the bell character; the sustained drone at high volume was reported as fatiguing across multiple iterations.
 
 ---
 
@@ -77,7 +79,7 @@ The user has been thoughtful and explicit about what matters. Carry these forwar
 
 Before making any change, ask:
 
-> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. Before I do anything, can you confirm: (a) are we still at TIER 0; (b) is the highest-leverage next item still S1 (replay clears cooldown) or S4 (sticky reminder flags); and (c) any context the prior session missed?"
+> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The repo's at v1.32 baseline (`git log` should show that). Before I do anything, can you confirm: (a) are we still at TIER 0; (b) is the highest-leverage next item still S1 (replay clears cooldown) or S4 (sticky reminder flags); and (c) any context the prior session missed?"
 
 Wait for the answer. Then proceed.
 
@@ -94,6 +96,10 @@ These came up in conversation and informed code, but the reasoning isn't fully c
 - **The 5-minute idle-pause is a coarse heuristic.** The user accepted it as the trance-prevention safeguard at Tier 0; at higher tiers, more sophisticated detection is on the roadmap.
 - **Smoothness rounds and stillness rounds share `game.threshold`.** This is intentional but flagged as L14 in KNOWN_RISKS — at very high thresholds, smoothness rounds become hard.
 - **The error boundary in v1.25 was the highest-leverage safety fix** because it protects every other safety mechanism from silent failure via JS errors in the loop. Subsumes the loopRunning recovery item.
+- **The audio went through a multi-iteration paradigm shift (v1.26 → v1.32).** The user said the high-stillness sound was unpleasant across multiple iterations of incremental volume reduction. After exhausting "tune the same knobs" (peaks, curves, plateau, fade-out windows), the design moved to a paradigm where peak stillness has *no sustained drone* — just occasional pentatonic bell strikes. Trigger frequencies, scale, volume, and interval are all configurable. The user explicitly likes the bell character; sustained sine-tone drones do not work for them.
+- **Detection sensitivity tightened in v1.28.** `MOTION_SCALE: 0.03 → 0.018`. User said it was too easy to settle into a high stillness score. Combined with the rise-alpha-decays-with-stillness change, climbing past 90% now takes real sustained stillness rather than a few seconds.
+- **The reward at peak stillness is space, not sound.** This is the v1.30/v1.32 design philosophy. The "rich" zone is around 75–82% (where the harmonic stack peaks); 100% is sparser. Approaching is rewarded, arriving is gentle.
+- **Mobile responsive in v1.29.** Single breakpoint at 640px. Round-info wraps; ring shrinks to 240px; timer moves below ring; corner buttons tighten. Not a full mobile-first redesign; it's a "doesn't break" pass.
 
 ---
 
@@ -108,12 +114,13 @@ These shaped the project's direction. If a future user wants to revisit any of t
 
 ---
 
-## 9. Active open questions (live as of v1.25)
+## 9. Active open questions (live as of v1.32)
 
 - **S1 (replay clears cooldown)** and **S4 (sticky reminder flags)** are the next safety items to fix. Either is a reasonable choice; user hasn't picked yet.
 - **The 12 [DECISION] markers in CONSTRAINTS.md** have proposed defaults in REQUIREMENTS.md §7 but await explicit founder ratification. Don't unilaterally treat them as resolved.
 - **Aesthetic polish via design tokens** was discussed but not started. Backlog has it as a high-value future task.
-- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first.
+- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet.
+- **Audio tuning of v1.32 is fresh.** The user approved the temple-atmosphere paradigm but it's only had one feedback cycle. Be ready for further tuning of: ambient bell interval (currently 6–14s), volume (currently 35%), pentatonic scale, and the fade-out range for anchor layers (currently 0.85–1.0).
 
 ---
 
@@ -133,10 +140,11 @@ For the benefit of the next instance, knowing what to be cautious about:
 
 Before relying on anything in this file, verify:
 
-1. The version label in `index.html` matches what this doc claims (v1.25 at write time).
-2. The five files listed in §2 still exist with the same purposes.
+1. The version label in `index.html` matches what this doc claims (v1.32 at write time).
+2. The files listed in §2 still exist with the same purposes.
 3. The TIER constant at the top of the JS is still `0`.
 4. None of the §9 open questions has been answered without this doc being updated.
+5. `git log` shows the v1.32 baseline commit is still the earliest in the history.
 
 If any of those are out of date, treat this file as stale and ask the user to update or re-handoff.
 

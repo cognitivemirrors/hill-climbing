@@ -69,14 +69,20 @@ Numbers that need empirical adjustment based on actual practice.
 - [?] Smoothness max std-dev `0.12` — same
 - [?] `MIN_BREAK_SECS = 10` — might want proportional to round duration (e.g. `max(10, 0.15 × duration)`)
 - [?] `FAIL_GRACE_SECS = 0.5` — does this feel forgiving enough on a long round?
-- [?] `STILLNESS_THRESHOLD = 0.60` — try 0.55 or 0.65 and feel the difference
-- [?] `MOTION_SCALE = 0.03` — sensitivity ceiling for the threshold-based detector
-- [?] `PIXEL_THRESHOLD = 8` — luma-diff floor that counts as "moved"
-- [?] Sub-bass at 110 Hz — likely inaudible on laptop speakers; consider dropping or making conditional
-- [?] Dissonance max detune of 90 cents — might be unpleasant at peak motion
-- [?] Initial round duration of 30 s — too long for first-time users? Try 20 s
-- [?] Step-up of +15 s — too aggressive? Maybe scale: +10 s below 60 s, +20 s above
+- [?] `INITIAL_THRESHOLD = 0.60` — initial value of `game.threshold`. The threshold is now adaptive (v1.22) and staircases ±0.02 per win/loss step; this is just the starting point. Try 0.55 or 0.65 and feel the difference for new users.
+- [?] `THRESHOLD_STEP = 0.02` — bigger steps adapt faster but feel jumpier; smaller steps are smoother but slower to find the user's edge.
+- [?] `MOTION_SCALE = 0.018` — tightened from 0.03 in v1.28. Detection-sensitivity ceiling. If false positives appear (camera noise reads as motion), nudge upward.
+- [?] `PIXEL_THRESHOLD = 8` — luma-diff floor that counts as "moved" per pixel. Lower = more sensitive (more false positives from noise).
+- [?] Anchor-layer fade-out range `0.85–1.0` — currently sub-bass and fundamental fade between these in v1.32. Widening (e.g. 0.80–1.0) makes the silent zone start earlier; narrowing (0.92–1.0) keeps the drone present longer.
+- [?] Ambient bell interval `6000–14000ms` — feels right at first listen but unverified over longer sessions. Could be too sparse (eerie silence) or too dense (chime spam) at extremes.
+- [?] Ambient bell volume `0.35` — relative to milestone bells (1.0). If they feel too quiet vs. milestones, raise toward 0.5.
+- [?] Ambient bell scale (currently A · C · E · G · A · C · E across two octaves). Try a different scale (Eastern pentatonic, Pythagorean) for different mood.
+- [?] Initial round duration of 30 s — too long for first-time users? Try 20 s.
+- [?] Step-up of +15 s — too aggressive? Maybe scale: +10 s below 60 s, +20 s above.
 - [?] Audio fade-in of 2.5 s — too long? Too short?
+- [?] Idle-pause `IDLE_PAUSE_SECS = 300` (5 min). Trance-prevention timing. Coarse heuristic; flagged in KNOWN_RISKS S6.
+- [?] Settling timeout `SETTLING_TIMEOUT = 90` — too short for users with anxiety who take longer to settle?
+- [?] `BREAK_AFTER_WINS = 3` — interlude every 3 wins. Could try 2 (more frequent breaks) or 4 (less interrupted flow).
 
 ---
 
@@ -170,6 +176,20 @@ Items captured via the in-app `this didn't feel right` link. Pull from `localSto
 
 Items completed in recent versions, kept for context. Archive to a CHANGELOG when this gets noisy.
 
+- [x] v1.32 — Temple-atmosphere paradigm: harmonic drone fades at peak stillness; ambient pentatonic bell strikes at 6–14s intervals replace the sustained sound. Dissonance floor reduced to 0.01.
+- [x] v1.31 — More milestone bells in high range (added 97% → 792 Hz, 99% → 864 Hz). Five total milestones now.
+- [x] v1.30 — Per-layer fade-in / fade-out windows along the stillness axis. Anchor layers (sub-bass + fundamental) replaced point-density at peak with sparse two-tone texture.
+- [x] v1.29 — Mobile responsive layout (single 640px breakpoint).
+- [x] v1.28 — Detection sensitivity (`MOTION_SCALE` 0.03 → 0.018), rise-alpha decays with stillness (climb hardens past 90%), audio gain curve plateaus at eff=0.75.
+- [x] v1.27 — Dissonance gain scales with motion (silent at unison, louder when moving).
+- [x] v1.26 — Audio pleasantness pass: reduced sub-bass and upper-fifth peaks, dissonance max detune 90→55 cents, low-pass filter on dissonance.
+- [x] v1.25 — Error boundary around the loop (S3 fix). Try/catch/finally protects every other safety mechanism from silent failure.
+- [x] v1.24 — Onboarding clarity pass: factual corrections, removed unverified "3–5%" stat, dual-mode score language, dynamic welcome text.
+- [x] v1.23 — Six-page onboarding modal on first run; about-this-practice link to re-open.
+- [x] v1.22 — Threshold staircase (in addition to duration). Both knobs adapt 2-up/1-down. Dynamic threshold tick on the ring.
+- [x] v1.21 — Idle-pause trance prevention (5 min in idle/won/lost dims ring + mutes audio; tap to resume).
+- [x] v1.20 — Stillness % stays in centre during active rounds; countdown moves to side timer beside the ring.
+- [x] v1.19 — Renamed Hill Combing → Hill Climbing throughout user-facing text. localStorage keys preserved for state continuity.
 - [x] v1.18 — Report link visible at all tiers (capture always on; backend POST tier-gated)
 - [x] v1.17 — Modal CSS bug fix (report modal hidden by default; Cancel works)
 - [x] v1.16 — Audio trajectory save & replay

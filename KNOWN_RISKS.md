@@ -96,14 +96,14 @@ The most likely future entries here would be: a code path that disables the idle
 ### L10. `postRoundReminder` returns strings with leading space
 - Style fragility.
 
-### L11. `loopRunning` is one-way — no recovery if the loop dies
-- Resilience. (Subset of S3 once a try/catch is added; could resolve together.)
+### L11. `loopRunning` is one-way — no recovery if the loop dies  ✅ verified fixed in v1.25 (subsumed by S3)
+- Resilience. The S3 try/catch/finally wrapper means the loop body errors no longer prevent the next frame from scheduling, so even if the loop "dies" inside the body, `rAF` keeps firing. The original `loopRunning` flag is now belt-and-braces; the safety property holds without it.
 
 ### L12. No accessibility considerations
 - Welfare for users with visual/motor impairments. Tier 2+ prerequisite.
 
-### L13. Mobile / narrow-viewport layout breakage
-- UX. Tier 2+ prerequisite if going public.
+### L13. Mobile / narrow-viewport layout breakage  🟡 partially addressed in v1.29
+- UX. Single 640px breakpoint added in v1.29: round-info wraps, ring shrinks to 240px, timer moves below the ring, corner buttons tighten. Verified visually for typical phone widths. Not yet tested below ~360px (very small phones), and not a full mobile-first redesign — Tier 2+ public launch would still need a more thorough pass.
 
 ### L14. Smoothness rounds use the same threshold as stillness rounds
 - Tuning question. As threshold rises, smoothness becomes very hard.
