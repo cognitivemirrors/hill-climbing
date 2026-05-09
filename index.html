@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.37 · hill climbing · tier 0</p>
+    <p id="version-label">v1.38 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -929,19 +929,25 @@ const AMBIENT_BELL_VOL       = 0.35;
 const AMBIENT_BELL_SCALE     = [432, 528, 648, 792, 864, 1056, 1296];
 
 // ─────────────────────────────────────────────
-// Smoothness-round constants
+// Variance-based scoring (v1.38)
 // ─────────────────────────────────────────────
-// After every interlude, the next round is a smoothness round: the user
-// must maintain smooth, slow, sustained motion (kinhin / tai-chi style)
-// rather than stillness. Score is high when:
-//   - mean motion sits in the target range (intentional, not random)
-//   - variance is low (continuous, not jerky)
-// Window length is 1 s of frames so very brief twitches don't tank
-// the score, but a 200 ms sharp motion still shows up clearly.
+// Both stillness and smoothness rounds derive their score from rolling
+// statistics of motion over a 1 s window. The insight: absolute motion
+// level depends on environment (lighting, held phone, camera quality)
+// but variance is far more environment-invariant. A held-phone user
+// has consistent tremor → stable variance baseline; their body motion
+// adds variance on top. A dark-room user has tiny tremor → tiny baseline.
+// In both cases, "becoming more still" reduces variance similarly, so
+// the user's contribution to the score is environment-comparable.
+//
+// Stillness rounds: pure variance metric. Higher score = more stable
+// motion regardless of level.
+// Smoothness rounds: variance + amplitude band check (existing behaviour).
 const SMOOTH_WINDOW_FRAMES = 60;
-const SMOOTH_TARGET_MIN    = 0.15;  // below = "still" (not enough motion)
-const SMOOTH_TARGET_MAX    = 0.55;  // above = "flailing"
-const SMOOTH_MAX_STDDEV    = 0.12;  // above = "jerky"
+const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
+const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
+const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
+const STILL_VAR_NORM       = 0.15;  // stillness: std dev where score = 0
 
 // ─────────────────────────────────────────────
 // Safety constants — keep practice within healthy bounds
@@ -1058,9 +1064,11 @@ let phaseEntryTime  = 0;
 let idlePaused      = false;
 let savedStateText  = '';
 
-// Motion ring-buffer for smoothness scoring (1 s of frames at ~60 fps)
+// Motion ring-buffer for variance-based scoring (1 s of frames at ~60 fps).
+// Both stillness and smoothness scoring derive from this same window.
 const motionWindow = new Float32Array(SMOOTH_WINDOW_FRAMES);
 let mwHead = 0, mwCount = 0;
+let lastMotionMean = 0, lastMotionStdDev = 0; // refreshed each frame
 
 // Session-only state (resets on reload, not persisted)
 let sessionActiveSecs = 0;        // cumulative time in settling+active this session
@@ -1413,29 +1421,48 @@ function pushMotionSample(m) {
   mwCount = Math.min(mwCount + 1, SMOOTH_WINDOW_FRAMES);
 }
 
-function smoothnessScore() {
-  if (mwCount < 30) return 0; // need ≥0.5 s of data
-
+// Shared mean/std-dev computation over the motion window. Called once
+// per frame; both score functions read from the cached values.
+function computeMotionStats() {
+  if (mwCount < 30) {
+    lastMotionMean = 0;
+    lastMotionStdDev = 0;
+    return;
+  }
   let mean = 0;
   for (let i = 0; i < mwCount; i++) mean += motionWindow[i];
   mean /= mwCount;
-
   let variance = 0;
   for (let i = 0; i < mwCount; i++) {
     const d = motionWindow[i] - mean;
     variance += d * d;
   }
   variance /= mwCount;
-  const stdDev = Math.sqrt(variance);
+  lastMotionMean   = mean;
+  lastMotionStdDev = Math.sqrt(variance);
+}
+
+// Stillness score: pure variance-based. Higher = more stable motion
+// regardless of absolute level. The level itself is environment-
+// dependent (held-phone tremor, bright-room contrast, dark-room noise);
+// the user's contribution to "becoming more still" is reduction in
+// variance, which is comparable across environments.
+function stillnessScore() {
+  if (mwCount < 30) return 0;
+  return Math.max(0, Math.min(1, 1 - lastMotionStdDev / STILL_VAR_NORM));
+}
+
+function smoothnessScore() {
+  if (mwCount < 30) return 0; // need ≥0.5 s of data
 
   // In-range factor: 1 inside the target band, ramping to 0 outside
   let inRange;
-  if (mean < SMOOTH_TARGET_MIN)      inRange = mean / SMOOTH_TARGET_MIN;
-  else if (mean <= SMOOTH_TARGET_MAX) inRange = 1;
-  else                                inRange = Math.max(0, 1 - (mean - SMOOTH_TARGET_MAX) / (1 - SMOOTH_TARGET_MAX));
+  if (lastMotionMean < SMOOTH_TARGET_MIN)      inRange = lastMotionMean / SMOOTH_TARGET_MIN;
+  else if (lastMotionMean <= SMOOTH_TARGET_MAX) inRange = 1;
+  else                                          inRange = Math.max(0, 1 - (lastMotionMean - SMOOTH_TARGET_MAX) / (1 - SMOOTH_TARGET_MAX));
 
   // Stability factor: 1 when variance is low, 0 above SMOOTH_MAX_STDDEV
-  const stable = Math.max(0, 1 - stdDev / SMOOTH_MAX_STDDEV);
+  const stable = Math.max(0, 1 - lastMotionStdDev / SMOOTH_MAX_STDDEV);
 
   return inRange * stable;
 }
@@ -1612,9 +1639,11 @@ function setPhase(next) {
       : 'Hold… · Esc to stop';
     roundStart = performance.now();
     belowSince = 0;
-    // Fresh motion window per round so the previous round's tail doesn't
-    // bias the smoothness score in the first second of this one.
-    mwHead = 0; mwCount = 0;
+    // v1.38: motion window NOT reset between phases. Variance-based
+    // scoring needs continuity — settling samples are part of the
+    // build-up to active. Resetting here would force the score to 0
+    // for the first 0.5 s of every round (until window refilled),
+    // which would trip the failure-grace timer immediately.
     if (audioEngine) audioEngine.triggerStart();
   } else if (next === 'won') {
     actionBtn.classList.remove('stop');
@@ -1984,29 +2013,21 @@ function loop() {
 
   const motion = detectMotion();
   pushMotionSample(motion);
+  computeMotionStats();
 
-  // Mode-aware target: stillness = 1 - motion; smoothness = scored band.
-  // audioMotion drives the dissonance oscillator — high in both modes when
-  // the user is "doing it wrong" (moving in stillness, or jerky/still in
-  // smoothness), so the audio engine doesn't need to know about mode.
-  let target, audioMotion;
+  // v1.38: variance-based scoring replaces the asymmetric EMA. The window
+  // (1 s) provides natural smoothing; the score derives from std-dev of
+  // recent motion. Audio still reacts to instantaneous motion so the
+  // dissonance oscillator gives immediate feedback even though the score
+  // itself integrates over a window.
+  let audioMotion;
   if (roundMode === 'smoothness' && (phase === 'active' || phase === 'settling')) {
-    const score = smoothnessScore();
-    target = score;
-    audioMotion = 1 - score;
+    stillness   = smoothnessScore();
+    audioMotion = 1 - stillness;
   } else {
-    target = 1 - motion;
+    stillness   = stillnessScore();
     audioMotion = motion;
   }
-
-  // Asymmetric EMA. Falling alpha is constant — any motion drops the
-  // score fast. Rising alpha decays with current stillness so climbing
-  // toward 100% gets meaningfully harder near the top — micro-stillness
-  // alone won't push past 90% the way it used to.
-  const fallingAlpha = 0.20;
-  const risingAlpha  = 0.025 * (1 - 0.7 * stillness);
-  const alpha = target < stillness ? fallingAlpha : risingAlpha;
-  stillness   = Math.max(0, Math.min(1, stillness + alpha * (target - stillness)));
 
   // ── Phase machine ──
   if (phase === 'settling') {
@@ -2382,7 +2403,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.37 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.38 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
