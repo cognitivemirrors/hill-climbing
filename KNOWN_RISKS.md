@@ -1,0 +1,133 @@
+# Hill Climbing — Known Risks Inventory
+
+**Ranking principle: user safety is the primary axis.** Items are sorted by potential impact on user welfare. Gameplay integrity, scoring accuracy, and code quality are *only* HIGH/MEDIUM if they materially defeat or could defeat a safety mechanism. Otherwise they drop to LOW regardless of how much they break.
+
+This is a deliberate re-prioritisation. An earlier version of this file used "defeats a feature or safety claim" as the HIGH bar, which was the wrong standard.
+
+Categories:
+- **Severity** — high (could directly harm user welfare), medium (defeats or could defeat a safety mechanism), low (functional, code, gameplay, or UX issues with no safety impact).
+- **Confidence** — confirmed (mechanism analysis suffices), likely (I'd bet money), suspected (worth verifying).
+
+Update this file as items are verified, fixed, or proven false.
+
+---
+
+## HIGH (could directly harm user welfare)
+
+*(none currently identified at Tier 0)*
+
+The most likely future entries here would be: a code path that disables the idle-pause without the user noticing, a case where the report-a-concern flow silently fails, or a regression in the failure-grace logic that punishes users for unavoidable motion.
+
+---
+
+## MEDIUM (defeats or could defeat a safety mechanism)
+
+### S1. Replay clears the cooldown timer, allowing the minimum-break safety to be skipped
+- **Confidence:** confirmed (noted in v1.16 ship notes; not fixed)
+- **Where:** `startReplay()` sets `breakStart = 0`. Replaying during the 10-second post-round cooldown effectively skips the rest of the break.
+- **Safety impact:** the cooldown exists to prevent rapid-fire grinding. Bypassing it enables compulsive-use patterns. Action requires user intent (clicking replay), but the safety property of "always 10s minimum between rounds" is broken.
+- **Fix:** track and restore `breakStart` across replay; or pause its countdown during replay.
+
+### S2. Mute toggle during idle-pause partially defeats trance prevention
+- **Confidence:** suspected
+- **Where:** when paused, `master.gain` is at 0. If the user un-mutes during pause, `setMuted(false)` raises gain to `MASTER_VOLUME`, defeating the audio-mute side of the trance-prevention pause. The visual ring stays dimmed, so the most hypnotic element is still suppressed — but the drone audio resumes.
+- **Safety impact:** the 5-minute idle-pause is the app's primary mechanism against sustained-observation trance states. Having it bypassable by an accidental mute toggle is a real defect in a primary safety mechanism.
+- **Fix:** track auto-mute separately from user mute; suppress mute toggle while idle-paused, or have idle-pause hold gain at 0 regardless of user-mute state.
+
+### S3. No error boundary — a JS error could silently disable time-based safety checks  ✅ verified fixed in v1.25
+- **Confidence:** confirmed
+- **Where:** the loop runs all checks (idle-pause, settling timeout, cooldown countdown, recording, etc.) inside a single `requestAnimationFrame` body. A throw in any of them stops `rAF` and the entire loop dies. None of the safety mechanisms recover.
+- **Safety impact:** if a safety check itself throws (or any code before it), all time-based safeguards stop firing — silently. The user wouldn't know the trance-pause won't fire, that the round timer won't expire, that adverse-event capture is broken, etc.
+- **Fix applied (v1.25):** loop body wrapped in `try { ... } catch { ... } finally { rAF }`. The `finally` block guarantees the next frame is scheduled regardless of throws. Errors are logged. After 5 consecutive errors, a user-visible "Something went wrong. Please refresh." message is surfaced and the audio fades out, so the user is not left practising on a silently-broken safety surface. Error counter resets on each clean frame so transient throws don't lock the user out. Subsumes L11 (loopRunning recovery).
+
+### S4. Sticky safety reminders — posture / session-cap fire at most once per page load
+- **Confidence:** confirmed
+- **Where:** `postureReminded` and `sessionCapReminded` are set true on first fire and never reset. They reset only on page reload.
+- **Safety impact:** a user who practises for 3+ hours in a single page-load session sees the cap reminder once at minute 30 and never again. Posture reminder same: fires at minute 5 and never again. Both are advisory rather than blocking, but they're the only nudges toward postural and total-time hygiene at Tier 0.
+- **Fix:** reset on a meaningful boundary — date rollover, after a long break (e.g., 2+ hours of inactivity), or replace single-fire flags with cooldown-style "fire again after N minutes."
+
+### S5. Adverse-event reports stored locally with no surfaced review path
+- **Confidence:** confirmed (process gap, not code bug)
+- **Where:** the `this didn't feel right` link writes to `localStorage.hill-combing-reports`. There is no in-app way to view stored reports. The operator must open DevTools → Application → Local Storage to read them.
+- **Safety impact:** if the user submits a concern and the operator forgets to check DevTools, the report goes unread. The capture half of the safety loop works; the response half is informal and easy to skip.
+- **Fix:** at minimum, surface a "view reports" link visible to the operator (could be hidden behind the same `d` debug toggle or its own keyboard shortcut). At Tier ≥ 2: backend submission + a real triage queue per `REQUIREMENTS.md §3.2`.
+
+### S6. The 5-minute idle-pause is a coarse time-based heuristic
+- **Confidence:** confirmed (design limitation)
+- **Where:** `IDLE_PAUSE_SECS = 300`. The pause fires after 5 minutes of being in idle/won/lost regardless of what the user is actually doing — could be reading the modal, away from the device, in a deep absorption state, or just paused for tea.
+- **Safety impact:** trance-prevention works on a wall-clock timer with no signal of user state. If 5 minutes is too long for someone vulnerable to dissociation, the safeguard fires too late. If it's too short for healthy use, it interrupts a normal pause.
+- **Fix:** Tier ≥ 2 — consider per-user tunability based on pre-screening; integrate face-detection signals if camera is active. Tier 0: accept the heuristic but verify 5 min is the right number empirically.
+
+---
+
+## LOW (gameplay, scoring, UX, or code-quality issues — no safety impact)
+
+### L1. Tab-switching can complete a round without the user being still
+- **Confidence:** confirmed
+- **Was:** previously labelled HIGH. Re-categorised: this is a gameplay-integrity issue, not a safety issue. A user who exploits this gets inflated stats; nobody is harmed.
+- **Where:** `requestAnimationFrame` pauses on tab hide. On return, `performance.now() - roundStart` exceeds the duration target and the round is marked won.
+- **Impact:** corrupts staircase calibration upward; misleading stats. No physical/psychological harm.
+- **Fix (if motivated):** detect dt anomaly and abort, or listen for `visibilitychange` and abort active rounds.
+
+### L2. `setPhase` reassignment via wrapper
+- Code quality. Works in non-strict mode. Replace with direct `updateReplayButton()` call inside `setPhase`.
+
+### L3. Camera disconnect leaves the loop running
+- Loop reads `readyState < 2` → motion 0 → stillness rises to 100% → audio gets louder. Confusing, not harmful.
+
+### L4. Idle-pause may fire when the onboarding modal is re-opened mid-session
+- Modal content gets overlaid by "Long pause detected." Cosmetic.
+
+### L5. Motion window for smoothness scoring not reset between settling and active
+- First second of an active smoothness round may use stale frames. Scoring accuracy issue. No safety impact.
+
+### L6. Threshold-mark coordinates untested at extreme threshold values
+- Math works in tested range (0.50–0.95). Visual QA only.
+
+### L7. Trajectory recording includes settling lead-in
+- Design choice, not bug. Replay starts with the climb to threshold.
+
+### L8. Dead code: `cappedOut` variable in `onWin`; unused `scoreDisplay` reference
+- Cleanup.
+
+### L9. Inconsistent localStorage key prefixes (`hill-combing-*` legacy, `hill-climbing-*` current)
+- Documented in REQUIREMENTS.md §1.1. Cosmetic.
+
+### L10. `postRoundReminder` returns strings with leading space
+- Style fragility.
+
+### L11. `loopRunning` is one-way — no recovery if the loop dies
+- Resilience. (Subset of S3 once a try/catch is added; could resolve together.)
+
+### L12. No accessibility considerations
+- Welfare for users with visual/motor impairments. Tier 2+ prerequisite.
+
+### L13. Mobile / narrow-viewport layout breakage
+- UX. Tier 2+ prerequisite if going public.
+
+### L14. Smoothness rounds use the same threshold as stillness rounds
+- Tuning question. As threshold rises, smoothness becomes very hard.
+
+### L15. Onboarding Skip button on the last page is functionally redundant with Begin
+- Cosmetic.
+
+### L16. Frame ring buffer corruption after long tab-hide (chained from L1)
+- Self-corrects within ~10 frames.
+
+### L17. Audio context resume after long backgrounding untested
+- Browsers may auto-suspend `AudioContext`. Engine has resume guard but not verified.
+
+### L18. No data export or delete-all-my-data button
+- Privacy. Tier 2+ prerequisite per REQUIREMENTS.md §1.4.
+
+---
+
+## How to use this list
+
+1. **Fix safety items first.** S1–S6 are the only items the user-welfare argument requires us to address. Everything else can wait.
+2. **Re-evaluate when the tier changes.** What's a LOW issue at Tier 0 may become MEDIUM or HIGH at Tier 2 (e.g., L12 accessibility, L13 mobile, L18 data export all become real safety/welfare concerns at scale).
+3. **Each fix gets a verification step.** Especially for the safety items — the whole point of fixing them is to *know* they're fixed.
+4. **Update this file as items resolve.** Mark items `✅ verified fixed in vX.Y` and date them.
+5. **New risks discovered while fixing one item belong here too.** Don't lose them in commit messages.
+
+**Recommended first action:** S3 (no error boundary) is the highest-leverage safety fix — adding a try/catch around the loop body protects every other safety mechanism from silent failure. Roughly 10 lines of code, shields S1, S2, S4, and the entire time-based safeguard suite.

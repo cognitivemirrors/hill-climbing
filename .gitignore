@@ -1,0 +1,16 @@
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor noise
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local ad-hoc notes
+NOTES.local.md
+*.local.md
+
+# Generated screenshots / recordings (if added later)
+screenshots/local/
