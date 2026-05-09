@@ -38,11 +38,13 @@
     }
 
     #begin-btn {
-      margin-top: 8px; padding: 14px 52px;
+      margin-top: 16px;
+      width: 88px; height: 88px;
+      display: flex; align-items: center; justify-content: center;
       border: 1px solid rgba(200, 184, 255, 0.35);
-      border-radius: 40px; background: transparent;
+      border-radius: 50%; background: transparent;
       color: #c8b8ff; font-family: inherit;
-      font-size: 0.95rem; letter-spacing: 0.25em;
+      font-size: 1.6rem; padding-left: 6px; /* nudge play triangle visually centred */
       cursor: pointer; transition: all 0.4s ease;
     }
     #begin-btn:hover {
@@ -50,6 +52,7 @@
       border-color: rgba(200, 184, 255, 0.65);
       box-shadow: 0 0 40px rgba(160, 120, 255, 0.2);
     }
+    #begin-btn:disabled { opacity: 0.4; cursor: wait; padding-left: 0; }
 
     /* ── Meditation screen ── */
     #meditation-screen {
@@ -156,11 +159,13 @@
     #round-info span b { color: #a090d0; font-weight: normal; margin-left: 6px; }
 
     #action-btn {
-      margin-top: 18px; padding: 10px 38px;
+      margin-top: 24px;
+      width: 64px; height: 64px;
+      display: flex; align-items: center; justify-content: center;
       border: 1px solid rgba(200, 184, 255, 0.35);
-      border-radius: 40px; background: transparent;
+      border-radius: 50%; background: transparent;
       color: #c8b8ff; font-family: inherit;
-      font-size: 0.85rem; letter-spacing: 0.25em;
+      font-size: 1.2rem;
       cursor: pointer; transition: all 0.4s ease;
       visibility: hidden;
     }
@@ -178,18 +183,23 @@
       border-color: rgba(200, 184, 255, 0.35);
     }
 
-    /* Replay-last-round secondary action — visible only when a saved
-       trajectory exists and we're between rounds. */
+    /* Replay-last-round secondary action — icon button, only visible
+       between rounds when a saved trajectory exists. */
     #replay-btn {
       margin-top: 14px;
-      background: transparent; border: none;
-      font-family: inherit; font-size: 0.7rem;
-      color: #5a4a82; letter-spacing: 0.2em;
-      cursor: pointer; transition: color 0.3s;
-      display: none;
+      width: 36px; height: 36px;
+      display: none; align-items: center; justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(200, 184, 255, 0.18);
+      background: transparent;
+      color: #6858a0; font-size: 1rem;
+      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
-    #replay-btn.show { display: inline-block; }
-    #replay-btn:hover { color: #c8b8ff; }
+    #replay-btn.show { display: flex; }
+    #replay-btn:hover {
+      color: #c8b8ff;
+      border-color: rgba(200, 184, 255, 0.5);
+    }
 
     /* Round timer — displays to the right of the ring during active rounds.
        Stillness % stays in the centre as the primary feedback; the timer
@@ -347,28 +357,45 @@
       border-color: rgba(200, 184, 255, 0.7);
     }
 
-    /* Start-screen secondary links */
+    /* Start-screen secondary icons */
+    .corner-icons {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; gap: 16px;
+    }
     #safety-link, #about-link {
-      margin-top: 12px; font-size: 0.7rem;
-      color: #4a3a72; letter-spacing: 0.15em;
-      cursor: pointer; text-decoration: underline;
-      text-underline-offset: 4px;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(200, 184, 255, 0.18);
+      color: #6858a0; font-size: 0.9rem;
+      cursor: pointer; user-select: none;
+      transition: color 0.3s ease, border-color 0.3s ease;
     }
-    #about-link { margin-top: 4px; }
-    #safety-link:hover, #about-link:hover { color: #8878aa; }
+    #safety-link:hover, #about-link:hover {
+      color: #c8b8ff;
+      border-color: rgba(200, 184, 255, 0.5);
+    }
 
-    /* "this didn't feel right" report link (Tier 2+) */
+    /* v1.45: hide text-heavy elements; rely on visual cues. */
+    #med-title, #round-info, #state-text, #calib-text { display: none; }
+
+    /* Report-concern button — icon-only, above the mute button */
     #report-link {
-      position: fixed; bottom: 80px; left: 24px;
-      width: 130px; padding: 6px 0;
-      background: transparent; border: none;
-      font-family: inherit; font-size: 0.65rem;
-      color: #4a3a72; letter-spacing: 0.18em;
-      cursor: pointer; transition: color 0.3s;
-      text-align: left; display: none;
+      position: fixed; bottom: 76px; left: 24px;
+      width: 32px; height: 32px;
+      display: none;
+      align-items: center; justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(200, 184, 255, 0.18);
+      background: transparent;
+      color: #6858a0; font-size: 1rem; line-height: 1;
+      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
-    #report-link.show { display: inline-block; }
-    #report-link:hover { color: #b09898; }
+    #report-link.show { display: flex; }
+    #report-link:hover {
+      color: #b09898;
+      border-color: rgba(180, 152, 152, 0.5);
+    }
 
     /* Report-a-concern modal */
     .safety-content textarea {
@@ -443,11 +470,12 @@
       max-width: 440px;
     }
     #position-ready-btn {
-      padding: 12px 38px;
+      width: 64px; height: 64px;
+      display: flex; align-items: center; justify-content: center;
       border: 1px solid rgba(200, 184, 255, 0.4);
-      border-radius: 40px; background: transparent;
+      border-radius: 50%; background: transparent;
       color: #c8b8ff; font-family: inherit;
-      font-size: 0.85rem; letter-spacing: 0.25em;
+      font-size: 1.4rem;
       cursor: pointer; transition: all 0.4s ease;
     }
     #position-ready-btn:hover {
@@ -489,17 +517,21 @@
     }
     #mute-btn:hover { border-color: rgba(200, 184, 255, 0.5); color: #c8b8ff; }
 
-    /* Re-frame link — return to the positioning screen at any time */
+    /* Re-frame button — icon-only, sits above the camera preview */
     #reframe-btn {
       position: fixed; bottom: 110px; right: 24px;
-      width: 110px; padding: 6px 0;
-      background: transparent; border: none;
-      font-family: inherit; font-size: 0.65rem;
-      color: #4a3a72; letter-spacing: 0.18em;
-      cursor: pointer; transition: color 0.3s;
-      text-align: center;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      border: 1px solid rgba(200, 184, 255, 0.18);
+      background: transparent;
+      color: #6858a0; font-size: 1rem; line-height: 1;
+      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
     }
-    #reframe-btn:hover { color: #8878aa; }
+    #reframe-btn:hover {
+      color: #c8b8ff;
+      border-color: rgba(200, 184, 255, 0.5);
+    }
 
     /* ── Particles ── */
     .particle {
@@ -687,18 +719,15 @@
   <!-- ── Start Screen ── -->
   <div id="start-screen">
     <h1>HILL CLIMBING</h1>
-    <p>
-      A stillness practice that learns with you.<br>
-      Rounds start at 30 seconds and grow with each win, up to a 5-minute cap.
-    </p>
-    <button id="begin-btn">Begin</button>
-    <div id="safety-link">view safety notice</div>
-    <div id="about-link">about this practice</div>
+    <button id="begin-btn" aria-label="Begin">▶</button>
+    <div class="corner-icons">
+      <div id="about-link" title="About this practice">?</div>
+      <div id="safety-link" title="Safety notice">ⓘ</div>
+    </div>
   </div>
 
   <!-- ── Positioning Screen — shown after camera permission, before the round flow ── -->
   <div id="positioning-screen">
-    <h2>Frame Yourself</h2>
     <div id="position-frame">
       <video id="positioning-video" autoplay muted playsinline></video>
       <svg id="position-guide" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet">
@@ -712,11 +741,7 @@
               stroke-width="2" stroke-dasharray="5 7"/>
       </svg>
     </div>
-    <p>
-      Centre your head and shoulders within the guide.<br>
-      Even, front-facing light works best. Keep the background still.
-    </p>
-    <button id="position-ready-btn">I'm ready</button>
+    <button id="position-ready-btn" aria-label="Ready">✓</button>
   </div>
 
   <!-- ── Meditation Screen ── -->
@@ -732,6 +757,9 @@
       <span>Best<b id="ri-best">0s</b></span>
       <span>Today<b id="ri-today">0s</b></span>
     </div>
+    <!-- v1.45 hides med-title and round-info via CSS; the score, ring,
+         and threshold tick communicate state visually. JS still updates
+         these elements for any future reveal. -->
 
     <div id="ring-container">
       <svg id="stillness-svg" viewBox="0 0 220 220">
@@ -775,14 +803,14 @@
 
     <p id="state-text">Settle in…</p>
     <p id="calib-text">calibrating…</p>
-    <button id="action-btn">Begin Round</button>
-    <button id="replay-btn">↻ replay last round</button>
+    <button id="action-btn" aria-label="Begin">▶</button>
+    <button id="replay-btn" aria-label="Replay last round" title="Replay last round">↻</button>
 
     <video id="camera-preview" autoplay muted playsinline></video>
-    <button id="mute-btn" title="Toggle sound">♪</button>
-    <button id="reframe-btn" title="Reposition camera">re-frame</button>
-    <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.44 · hill climbing · tier 0</p>
+    <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
+    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">⟲</button>
+    <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">⚠</button>
+    <p id="version-label">v1.45</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1650,11 +1678,11 @@ function setPhase(next) {
     actionBtn.disabled = false;
   }
   if (next === 'idle') {
-    actionBtn.textContent = 'Begin Round';
+    actionBtn.textContent = '▶';
     actionBtn.classList.remove('stop');
     actionBtn.classList.add('show');
   } else if (next === 'settling') {
-    actionBtn.textContent = 'Stop';
+    actionBtn.textContent = '■';
     actionBtn.classList.add('stop', 'show');
     if (roundMode === 'smoothness') {
       stateText.textContent = `Begin slow, continuous motion to start the clock · Esc to stop`;
@@ -1668,7 +1696,7 @@ function setPhase(next) {
     lastRecordTime = 0;
     recordingSamples = [];
   } else if (next === 'active') {
-    actionBtn.textContent = 'Stop';
+    actionBtn.textContent = '■';
     actionBtn.classList.add('stop', 'show');
     stateText.textContent = roundMode === 'smoothness'
       ? 'Move smoothly… · Esc to stop'
@@ -1717,7 +1745,7 @@ function enterInterlude() {
   ringContainer.classList.add('breathing');
   const prompt = MOVEMENT_PROMPTS[Math.floor(Math.random() * MOVEMENT_PROMPTS.length)];
   stateText.textContent = `${consecutiveWins} in a row. Stand and move — ${prompt}.`;
-  actionBtn.textContent = "I'm back";
+  actionBtn.textContent = '▶';
   actionBtn.classList.remove('stop');
   actionBtn.classList.add('show');
 }
@@ -1784,7 +1812,7 @@ function onWin() {
   else                                          base = `Held. ${WINS_TO_STEP_UP - game.wins} more to step up.`;
   stateText.textContent = base + postRoundReminder(heldSecs);
 
-  actionBtn.textContent = 'Continue';
+  actionBtn.textContent = '▶';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(true);
@@ -1817,7 +1845,7 @@ function onLoss() {
   // Neutral, supportive copy — not failure-coded
   stateText.textContent = `You held ${heldSecs}s of ${fmtSecs(previousDuration)}.`
                         + postRoundReminder(heldSecs);
-  actionBtn.textContent = 'Continue';
+  actionBtn.textContent = '▶';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(false);
@@ -1871,7 +1899,7 @@ function startReplay() {
     mode: traj.mode,
   };
   phase = 'replay';
-  actionBtn.textContent = 'End replay';
+  actionBtn.textContent = '■';
   actionBtn.disabled = false;
   actionBtn.classList.remove('stop');
   actionBtn.classList.add('show');
@@ -2134,10 +2162,10 @@ function loop() {
   if (breakStart > 0 && (phase === 'won' || phase === 'lost')) {
     const remaining = MIN_BREAK_SECS - (performance.now() - breakStart) / 1000;
     if (remaining > 0) {
-      actionBtn.textContent = `Continue in ${Math.ceil(remaining)}s`;
+      actionBtn.textContent = Math.ceil(remaining);
       actionBtn.disabled = true;
     } else {
-      actionBtn.textContent = 'Continue';
+      actionBtn.textContent = '▶';
       actionBtn.disabled = false;
       breakStart = 0;
     }
@@ -2185,7 +2213,7 @@ const positioningVideo  = document.getElementById('positioning-video');
 const positionReadyBtn  = document.getElementById('position-ready-btn');
 
 beginBtn.addEventListener('click', async () => {
-  beginBtn.disabled = true; beginBtn.textContent = 'Opening camera…';
+  beginBtn.disabled = true; beginBtn.textContent = '⌛';
 
   // Create AudioEngine NOW, synchronously, in the FIRST user gesture.
   // iOS Safari unlocks audio reliably only on the first gesture; later
@@ -2219,7 +2247,7 @@ beginBtn.addEventListener('click', async () => {
     startScreen.style.display = 'none';
     positioningScreen.classList.add('show');
   } catch (err) {
-    beginBtn.disabled = false; beginBtn.textContent = 'Begin';
+    beginBtn.disabled = false; beginBtn.textContent = '▶';
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
     console.error(err);
   }
@@ -2452,7 +2480,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.44 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.45 · t${TIER}`;
 </script>
 </body>
 </html>
