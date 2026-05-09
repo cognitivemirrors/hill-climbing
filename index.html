@@ -782,7 +782,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.43 · hill climbing · tier 0</p>
+    <p id="version-label">v1.44 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -952,17 +952,23 @@ const SMOOTH_WINDOW_FRAMES = 60;
 const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
 const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
 const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
-// Stillness mapping (v1.43): grace + linear fall.
-// User reported v1.40/v1.41 still felt too linear: a moderate std (around
-// 0.20 in bright held-phone) was dragging the score to ~0.33 even when
-// not making dramatic movements. Switching to a piecewise shape:
-//   - std ≤ STILL_GRACE              → score = 1.0 (flat plateau)
-//   - STILL_GRACE < std ≤ G + FALL   → linear drop from 1 to 0
-//   - std > STILL_GRACE + STILL_FALL → score = 0
-// "Fine until you're not fine." Tolerates the user's environmental motion
-// baseline; dramatic movements still drop the score clearly below threshold.
-const STILL_GRACE = 0.25;  // std up to this reads as full stillness
-const STILL_FALL  = 0.15;  // std beyond grace where score reaches 0
+// Stillness mapping (v1.44): motion + grace zone, NO variance window.
+// User reported v1.43 (variance + grace) was very laggy. Variance over
+// a 1s window inherently lags by up to 1s; pre-smoothing + display EMA
+// stack on top. Cumulative response time was 600 ms–1 s for sustained
+// changes, which felt unresponsive.
+//
+// Going back to motion-based scoring but keeping the grace-zone shape.
+// The v1.35 adaptive p10/p90 normalisation already handles environment;
+// grace zone on motion handles the ambient baseline. No variance.
+//
+//   motion ≤ MOTION_GRACE (0.40)      → score = 1.0  (plateau)
+//   MOTION_GRACE < motion ≤ G + FALL  → linear drop from 1 to 0
+//   motion > 0.80                     → score = 0
+//
+// Single-frame response. Display EMA still smooths visible jumps.
+const MOTION_GRACE = 0.40;  // motion up to this reads as full stillness
+const MOTION_FALL  = 0.40;  // motion beyond grace where score reaches 0
 
 // Pre-smoothing applied to motion *before* it enters the variance window.
 // Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
@@ -1472,14 +1478,14 @@ function computeMotionStats() {
   lastMotionStdDev = Math.sqrt(variance);
 }
 
-// Stillness score: variance-based with grace zone.
-// std ≤ STILL_GRACE → 1.0 (plateau — tolerates ambient environmental motion)
-// std > STILL_GRACE → linear drop, reaching 0 at STILL_GRACE + STILL_FALL
-// Less linear, more "fine until you're not fine."
-function stillnessScore() {
-  if (mwCount < 30) return 0;
-  const above = Math.max(0, lastMotionStdDev - STILL_GRACE);
-  return Math.max(0, 1 - above / STILL_FALL);
+// Stillness score (v1.44): motion + grace zone, no window.
+// motion ≤ MOTION_GRACE → 1.0 (plateau)
+// motion > MOTION_GRACE → linear drop, reaching 0 at GRACE + FALL
+// Single-frame response (no variance window lag); display EMA in the
+// loop still smooths visible jumps.
+function stillnessScore(motionVal) {
+  const above = Math.max(0, motionVal - MOTION_GRACE);
+  return Math.max(0, 1 - above / MOTION_FALL);
 }
 
 function smoothnessScore() {
@@ -2051,21 +2057,21 @@ function loop() {
   pushMotionSample(motion);
   computeMotionStats();
 
-  // v1.38: variance-based score is the underlying signal.
-  // v1.39: asymmetric EMA layered on top to smooth display jumps.
-  // Variance over a 1 s window is itself jittery — outliers entering/
-  // leaving the ring shift std-dev abruptly. The EMA absorbs those
-  // jumps so the displayed score doesn't bounce while the underlying
-  // signal still has the environment-invariant properties of variance.
+  // v1.44: motion + grace zone for stillness (no variance lag).
+  // Smoothness rounds keep their existing variance-based scoring since
+  // they specifically need to detect "smooth slow motion" which requires
+  // looking at the motion distribution.
   let target, audioMotion;
   if (roundMode === 'smoothness' && (phase === 'active' || phase === 'settling')) {
     target      = smoothnessScore();
     audioMotion = 1 - target;
   } else {
-    target      = stillnessScore();
+    target      = stillnessScore(motion);
     audioMotion = motion;
   }
-  const fallingAlpha = 0.15;
+  // Asymmetric EMA. Faster falling alpha for responsive drop on motion;
+  // slow rising alpha so high stillness has to be earned, not drifted into.
+  const fallingAlpha = 0.25;
   const risingAlpha  = 0.05;
   const alpha = target < stillness ? fallingAlpha : risingAlpha;
   stillness   = Math.max(0, Math.min(1, stillness + alpha * (target - stillness)));
@@ -2446,7 +2452,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.43 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.44 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
