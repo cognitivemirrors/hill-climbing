@@ -779,13 +779,15 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.39 · hill climbing · tier 0</p>
+    <p id="version-label">v1.40 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
       ceil   <b id="d-ceil">—</b><br>
       thr    <b id="d-thr">—</b><br>
       motion <b id="d-motion">—</b><br>
+      mean   <b id="d-mean">—</b><br>
+      std    <b id="d-std">—</b><br>
       still  <b id="d-still">—</b><br>
       fps    <b id="d-fps">—</b>
     </div>
@@ -947,7 +949,11 @@ const SMOOTH_WINDOW_FRAMES = 60;
 const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
 const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
 const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
-const STILL_VAR_NORM       = 0.15;  // stillness: std dev where score = 0
+const STILL_VAR_NORM       = 0.30;  // stillness: std dev where score = 0
+                                    // (v1.40: was 0.15; too aggressive —
+                                    //  real motion std-devs in held-phone
+                                    //  and bright environments easily
+                                    //  exceeded 0.15, dragging score to 0)
 
 // ─────────────────────────────────────────────
 // Safety constants — keep practice within healthy bounds
@@ -1099,6 +1105,8 @@ const dFloor  = document.getElementById('d-floor');
 const dCeil   = document.getElementById('d-ceil');
 const dThr    = document.getElementById('d-thr');
 const dMotion = document.getElementById('d-motion');
+const dMean   = document.getElementById('d-mean');
+const dStd    = document.getElementById('d-std');
 const dStill  = document.getElementById('d-still');
 const dFps    = document.getElementById('d-fps');
 
@@ -2109,6 +2117,8 @@ function loop() {
   dCeil.textContent   = motionCeiling.toFixed(4);
   dThr.textContent    = lastEffectiveThreshold.toFixed(1);
   dMotion.textContent = motion.toFixed(3);
+  dMean.textContent   = lastMotionMean.toFixed(3);
+  dStd.textContent    = lastMotionStdDev.toFixed(3);
   dStill.textContent  = stillness.toFixed(3);
   dFps.textContent    = frameTimes.length;
 
@@ -2408,7 +2418,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.39 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.40 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
