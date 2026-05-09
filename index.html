@@ -141,6 +141,9 @@
       transform: translateX(-50%);
       font-size: 0.65rem; color: #2a1a4a;
       letter-spacing: 0.2em;
+      cursor: pointer;
+      padding: 6px 12px; /* larger tap target */
+      user-select: none;
     }
 
     /* ── Game UI ── */
@@ -779,7 +782,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.41 · hill climbing · tier 0</p>
+    <p id="version-label">v1.42 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1970,6 +1973,12 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Tap the version label to toggle the debug overlay (mobile-friendly
+// equivalent of the 'd' key, since phones have no keyboard handy).
+document.getElementById('version-label').addEventListener('click', () => {
+  document.getElementById('debug').classList.toggle('show');
+});
+
 // ─────────────────────────────────────────────
 // Main Loop
 //
@@ -2431,7 +2440,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.41 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.42 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
