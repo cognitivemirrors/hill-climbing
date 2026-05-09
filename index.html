@@ -782,7 +782,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.42 · hill climbing · tier 0</p>
+    <p id="version-label">v1.43 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -952,11 +952,17 @@ const SMOOTH_WINDOW_FRAMES = 60;
 const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
 const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
 const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
-const STILL_VAR_NORM       = 0.30;  // stillness: std dev where score = 0
-                                    // (v1.40: was 0.15; too aggressive —
-                                    //  real motion std-devs in held-phone
-                                    //  and bright environments easily
-                                    //  exceeded 0.15, dragging score to 0)
+// Stillness mapping (v1.43): grace + linear fall.
+// User reported v1.40/v1.41 still felt too linear: a moderate std (around
+// 0.20 in bright held-phone) was dragging the score to ~0.33 even when
+// not making dramatic movements. Switching to a piecewise shape:
+//   - std ≤ STILL_GRACE              → score = 1.0 (flat plateau)
+//   - STILL_GRACE < std ≤ G + FALL   → linear drop from 1 to 0
+//   - std > STILL_GRACE + STILL_FALL → score = 0
+// "Fine until you're not fine." Tolerates the user's environmental motion
+// baseline; dramatic movements still drop the score clearly below threshold.
+const STILL_GRACE = 0.25;  // std up to this reads as full stillness
+const STILL_FALL  = 0.15;  // std beyond grace where score reaches 0
 
 // Pre-smoothing applied to motion *before* it enters the variance window.
 // Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
@@ -1466,14 +1472,14 @@ function computeMotionStats() {
   lastMotionStdDev = Math.sqrt(variance);
 }
 
-// Stillness score: pure variance-based. Higher = more stable motion
-// regardless of absolute level. The level itself is environment-
-// dependent (held-phone tremor, bright-room contrast, dark-room noise);
-// the user's contribution to "becoming more still" is reduction in
-// variance, which is comparable across environments.
+// Stillness score: variance-based with grace zone.
+// std ≤ STILL_GRACE → 1.0 (plateau — tolerates ambient environmental motion)
+// std > STILL_GRACE → linear drop, reaching 0 at STILL_GRACE + STILL_FALL
+// Less linear, more "fine until you're not fine."
 function stillnessScore() {
   if (mwCount < 30) return 0;
-  return Math.max(0, Math.min(1, 1 - lastMotionStdDev / STILL_VAR_NORM));
+  const above = Math.max(0, lastMotionStdDev - STILL_GRACE);
+  return Math.max(0, 1 - above / STILL_FALL);
 }
 
 function smoothnessScore() {
@@ -2440,7 +2446,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.42 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.43 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
