@@ -56,6 +56,7 @@ These are how the user has consistently operated. Default to these unless told o
 - **The IDE / preview panel auto-publishes after each edit, with a hook reminder to mention it.** When you edit `index.html`, the system reminder says "is now visible in the preview panel" — your response should briefly acknowledge that.
 - **The `TodoWrite` tool reminder appears periodically.** It's a gentle nudge — ignore unless tracking work would actually help. Never mention the reminder itself to the user.
 - **No documentation files unless asked.** Markdown files like CONSTRAINTS.md, REQUIREMENTS.md, BACKLOG.md, KNOWN_RISKS.md, and this CLAUDE.md were each created at explicit user request. Don't proliferate docs unprompted.
+- **Git workflow.** The repo was initialised at v1.32 (baseline commit `4683660`). Convention going forward: every version bump = one commit + one tag. Commit subject uses the same format as the version label: `vX.Y · brief summary`. Use a HEREDOC for the body and include the `Co-Authored-By: Claude Sonnet 4.6` trailer. Revert is `git checkout vX.Y` followed by reload. Never `git push` or run destructive operations (`reset --hard`, force push, branch deletion) without explicit user instruction. Commits should match the per-iteration cadence — small enough that each one is reviewable, big enough that each represents a real unit of change.
 
 ---
 
