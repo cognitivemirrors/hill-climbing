@@ -779,7 +779,7 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.32 · hill climbing · tier 0</p>
+    <p id="version-label">v1.33 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1089,6 +1089,22 @@ class AudioEngine {
   constructor() {
     this.ctx   = new (window.AudioContext || window.webkitAudioContext)();
     this.muted = false;
+
+    // iOS Safari quirk (v1.33 fix): AudioContext often starts in 'suspended'
+    // state even when constructed inside a user gesture. Two things must
+    // happen in the SAME gesture or audio is silent:
+    //   1. explicit ctx.resume()
+    //   2. play at least one buffer-source (even a 1-sample silent buffer)
+    //      to "unlock" the audio routing pipeline.
+    // Without these, oscillators created in _build() may start but produce
+    // no audible output. Reported by user testing v1.32 on phone.
+    this.ctx.resume();
+    const unlockBuf = this.ctx.createBuffer(1, 1, 22050);
+    const unlockSrc = this.ctx.createBufferSource();
+    unlockSrc.buffer = unlockBuf;
+    unlockSrc.connect(this.ctx.destination);
+    unlockSrc.start(0);
+
     this._build();
   }
 
@@ -2267,7 +2283,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.32 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.33 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
