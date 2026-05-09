@@ -592,8 +592,14 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
+      /* v1.49: removed translateY. Any ancestor with a transform becomes
+         the containing block for position:fixed descendants — so during
+         the animation, the start-screen's corner icons (#about-link,
+         #safety-link) were attached to the start-screen instead of the
+         viewport, then "dropped" to the corner once the animation ended.
+         Opacity-only fade preserves the visual without the side effect. */
+      from { opacity: 0; }
+      to   { opacity: 1; }
     }
 
     @keyframes glowPulse {
@@ -854,7 +860,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.48</p>
+    <p id="version-label">v1.49</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2534,7 +2540,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.48 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.49 · t${TIER}`;
 </script>
 </body>
 </html>
