@@ -865,7 +865,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.53</p>
+    <p id="version-label">v1.54</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -981,16 +981,22 @@ const FEATURES = {
 // requiredRate, so requiredRate is the average net stillness needed to
 // finish on time (e.g. 0.20 means avg stillness of 0.7 across the round).
 const NEUTRAL_POINT       = 0.5;  // stillness level at which fill rate is zero
-// v1.53: progress-modulated sensitivity. The fill/drain rate is multiplied
-// by `1 + SENS_SPAN * (progress - 0.5)` where progress = accumulator/capacity.
-// At progress=0 the multiplier is `1 - SENS_SPAN/2`; at progress=1 it is
-// `1 + SENS_SPAN/2`. SPAN=0 disables the modulation (uniform sensitivity);
-// SPAN=1.0 means rate ranges 0.5× → 1.5× from start to end. Effect: early
-// in the round, drift and twitches barely move the bucket — gentle entry.
-// Late in the round, every frame matters — the last 20% is delicate.
-// Calibration: this slows the time-to-fill at constant stillness by a few
-// percent (≈10% at SPAN=1.0), drifting the staircase slightly easier;
-// 2-up/1-down adapts to compensate within a few rounds.
+// v1.54: progress-modulated sensitivity. Sensitivity ramps DOWN with
+// progress — the gauge moves quickly early (fast fill, fast drain) and
+// slowly late (the last slice takes patience). Multiplier:
+// `1 + SENS_SPAN * (0.5 - progress)`. At progress=0: `1 + SENS_SPAN/2`;
+// at progress=1: `1 - SENS_SPAN/2`. SPAN=1.0 means rate ranges 1.5× → 0.5×.
+//
+// History:
+//   v1.53 had the opposite sign — sensitivity grew with progress, which
+//   made the gauge fill faster near the top. User feedback: that felt
+//   wrong; the late-round should feel deliberate, not accelerating.
+//   v1.54 inverts the ramp.
+//
+// Symmetric: applies to fill and drain. So at high progress, both
+// directions are damped — small motion barely sets you back, but
+// stillness also takes longer to advance the last slice. The "delicate
+// climb to the summit" feel.
 const SENS_SPAN           = 1.0;
 const INITIAL_REQUIRED_RATE = 0.20; // need avg stillness ≈ 0.70 to win
 const RATE_STEP           = 0.02; // ±2 percentage points per step
@@ -2187,14 +2193,14 @@ function loop() {
     // v1.52: derive accumulator at replay time so the ring fills the same
     // way it did live. Samples are at 10 Hz; integrate using the inter-
     // sample interval so the accumulator is independent of frame rate.
-    // v1.53: progress-modulated sensitivity is applied here too so
-    // playback feels identical to the live round.
+    // v1.54: progress-modulated sensitivity (ramps down with progress)
+    // applied here too so playback feels identical to the live round.
     const sampleT = sample.t;
     const sampleDt = Math.max(0, sampleT - replayState.lastSampleTime);
     replayState.lastSampleTime = sampleT;
     const replayProgress = replayState.capacity > 0
       ? replayState.accumulator / replayState.capacity : 0;
-    const replaySens = 1 + SENS_SPAN * (replayProgress - 0.5);
+    const replaySens = 1 + SENS_SPAN * (0.5 - replayProgress);
     replayState.accumulator = Math.max(0, Math.min(replayState.capacity,
       replayState.accumulator + sampleDt * (stillness - NEUTRAL_POINT) * replaySens));
     if (audioEngine) audioEngine.update(stillness, sample.m);
@@ -2269,11 +2275,11 @@ function loop() {
     // v1.52: gradient accumulator. Every frame contributes proportionally
     // to (stillness - NEUTRAL_POINT). Above neutral fills, below drains.
     // No threshold cliff, no failure-grace window — drain is the grace.
-    // v1.53: sensitivity ramps with progress (less sensitive early, more
-    // sensitive late). Symmetric — applies to both fill and drain.
+    // v1.54: sensitivity ramps DOWN with progress — fast early, slow late.
+    // Symmetric — applies to both fill and drain.
     const cap = currentCapacity();
     const progress = cap > 0 ? accumulator / cap : 0;
-    const sens = 1 + SENS_SPAN * (progress - 0.5);
+    const sens = 1 + SENS_SPAN * (0.5 - progress);
     accumulator = Math.max(0, Math.min(cap,
       accumulator + dt * (stillness - NEUTRAL_POINT) * sens));
 
@@ -2634,7 +2640,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.53 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.54 · t${TIER}`;
 </script>
 </body>
 </html>
