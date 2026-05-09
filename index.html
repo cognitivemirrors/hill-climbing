@@ -779,11 +779,12 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.36 · hill climbing · tier 0</p>
+    <p id="version-label">v1.37 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
       ceil   <b id="d-ceil">—</b><br>
+      thr    <b id="d-thr">—</b><br>
       motion <b id="d-motion">—</b><br>
       still  <b id="d-still">—</b><br>
       fps    <b id="d-fps">—</b>
@@ -996,6 +997,14 @@ let   fbIdx    = 0;
 const noiseArr = new Float32Array(240);
 let nHead = 0, nCount = 0, nTick = 0, noiseFloor = 0, motionCeiling = 0;
 
+// Rolling average of per-pixel luma diffs — used for adaptive
+// PIXEL_THRESHOLD (v1.37). Brighter scenes produce larger absolute
+// per-pixel deltas for the same body motion, so a fixed threshold is
+// biased toward bright environments. Scaling proportionally equalises
+// the "fraction of pixels that moved" signal across lighting.
+let avgLumaDiff = 0;             // rolling average; updated each frame
+let lastEffectiveThreshold = PIXEL_THRESHOLD; // for debug overlay
+
 // "Today" key — local-time date string. Stats roll over when this changes.
 function todayKey() {
   const d = new Date();
@@ -1080,6 +1089,7 @@ const muteBtn        = document.getElementById('mute-btn');
 const dRaw    = document.getElementById('d-raw');
 const dFloor  = document.getElementById('d-floor');
 const dCeil   = document.getElementById('d-ceil');
+const dThr    = document.getElementById('d-thr');
 const dMotion = document.getElementById('d-motion');
 const dStill  = document.getElementById('d-still');
 const dFps    = document.getElementById('d-fps');
@@ -1338,16 +1348,37 @@ function detectMotion() {
   // This is much more sensitive than averaging — a small region of
   // genuine movement (a finger twitch, a head tilt) creates a clear
   // count, while uniform sensor noise rarely crosses the threshold.
+  // Adaptive per-pixel threshold (v1.37). Effective threshold scales with
+  // the rolling average of per-pixel luma diffs, bounded to [PIXEL_THRESHOLD/2,
+  // PIXEL_THRESHOLD*4]. In bright scenes typical deltas are larger → threshold
+  // rises → fewer pixels qualify as moved → score doesn't tank just because
+  // the camera sees more contrast. In dark scenes typical deltas are smaller
+  // → threshold falls → real motion still registers. Result: same body
+  // motion produces a more comparable raw signal across lighting.
+  const effectiveThreshold = avgLumaDiff > 0
+    ? Math.max(PIXEL_THRESHOLD * 0.5,
+               Math.min(PIXEL_THRESHOLD * 4, 4 * avgLumaDiff))
+    : PIXEL_THRESHOLD;
+  lastEffectiveThreshold = effectiveThreshold;
+
   let changed = 0;
+  let totalLumaDiff = 0;
   const nPixels = current.length / 4;
   for (let i = 0; i < current.length; i += 4) {
     const lumaDiff = 0.299 * Math.abs(current[i]   - past[i])
                    + 0.587 * Math.abs(current[i+1] - past[i+1])
                    + 0.114 * Math.abs(current[i+2] - past[i+2]);
-    if (lumaDiff > PIXEL_THRESHOLD) changed++;
+    if (lumaDiff > effectiveThreshold) changed++;
+    totalLumaDiff += lumaDiff;
   }
   const raw = changed / nPixels; // fraction of pixels that "moved"
   lastRaw = raw;
+
+  // Update rolling avg luma diff (1% step per frame ≈ 1.7 s time constant).
+  // Slow enough that brief body motion doesn't shift the threshold; fast
+  // enough that lighting changes propagate within a few seconds.
+  const frameAvg = totalLumaDiff / nPixels;
+  avgLumaDiff += 0.01 * (frameAvg - avgLumaDiff);
 
   // Rolling motion-distribution stats: p10 noise floor + p90 ceiling.
   noiseArr[nHead] = raw;
@@ -2050,6 +2081,7 @@ function loop() {
   dRaw.textContent    = lastRaw.toFixed(4);
   dFloor.textContent  = noiseFloor.toFixed(4);
   dCeil.textContent   = motionCeiling.toFixed(4);
+  dThr.textContent    = lastEffectiveThreshold.toFixed(1);
   dMotion.textContent = motion.toFixed(3);
   dStill.textContent  = stillness.toFixed(3);
   dFps.textContent    = frameTimes.length;
@@ -2350,7 +2382,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.36 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.37 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
