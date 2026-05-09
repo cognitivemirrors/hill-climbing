@@ -61,12 +61,21 @@ These are how the user has consistently operated. Default to these unless told o
 - **No documentation files unless asked.** Markdown files like CONSTRAINTS.md, REQUIREMENTS.md, BACKLOG.md, KNOWN_RISKS.md, and this CLAUDE.md were each created at explicit user request. Don't proliferate docs unprompted.
 - **CONSTRAINTS.md and REQUIREMENTS.md amendments need explicit user confirmation.** These docs bind. BACKLOG.md, KNOWN_RISKS.md, and this CLAUDE.md can grow freely; the binding docs need a specific user ask before changes. The precedence ordering (CONSTRAINTS > REQUIREMENTS > BACKLOG > KNOWN_RISKS) is the trigger: anything in the top two requires confirmation, anything in the bottom two can be edited as work proceeds.
 - **Reuse existing infrastructure before building new.** When extending the app, ask *"can the existing code be extended to handle this?"* before writing new structure. Default to extension; build new only when conflation would actually hurt readability or correctness. The bias toward new is one of my consistent failure modes — example: when adding ambient bells in v1.32, I considered both a new scheduler and extending the milestone-bell code; the new scheduler happened to be the right call but the deliberation should be the default, not the exception.
-- **Git workflow.** The repo was initialised at v1.32 (baseline commit `4683660`) and is hosted at `github.com/cognitivemirrors/hill-climbing`, deploying to GitHub Pages at `https://cognitivemirrors.github.io/hill-climbing/` on every push to `main` (~1–2 minute redeploy). Convention going forward:
-  - Every version bump = one commit + one tag. Commit subject uses the same format as the version label: `vX.Y · brief summary`. Use a HEREDOC for the body and include the `Co-Authored-By: Claude Sonnet 4.6` trailer.
+- **Git workflow — "shipped" means pushed.** The repo was initialised at v1.32 (baseline commit `4683660`) and is hosted at `github.com/cognitivemirrors/hill-climbing`, deploying to GitHub Pages at `https://cognitivemirrors.github.io/hill-climbing/` on every push to `main` (~1–2 minute redeploy). **A local edit is not a ship.** When you say "shipped vX.Y" in chat, that claim must be backed by a commit + tag + push, otherwise the user is testing one thing and your statement claims another. This drifted in the v1.50–v1.53 cycle (four version bumps, zero commits) and required a retroactive consolidated commit. Don't repeat it.
+
+  **Per-version checklist (run end-to-end before saying "shipped"):**
+  1. Bump both version locations in `index.html` (the `#version-label` HTML literal and the `document.getElementById(...).textContent` line).
+  2. Add a `Done` entry to BACKLOG.md (top of the list, terse).
+  3. `git add` the files; `git commit -m "vX.Y · brief summary"` with a HEREDOC body and `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` trailer.
+  4. `git tag -a vX.Y -m "..."` — annotated, not lightweight.
+  5. `git push --follow-tags origin main`.
+  6. In your reply to the user, say "Pushed v1.X to main, tagged. GitHub Pages will redeploy in ~1–2 min." — not "shipped" without that confirmation.
+
+  **One commit per version is the cadence.** If you're iterating quickly and tempted to batch, resist; a paradigm-shift session that produces 3+ versions and one fat commit erases the per-version revert path the tagging convention was built to give. Pause to commit *between* versions, not at the end.
+
   - **Tag push gotcha:** `git tag vX.Y` creates a *lightweight* tag, which `git push --follow-tags` does **not** push. Either use annotated tags (`git tag -a vX.Y -m "..."`) so `--follow-tags` works, or explicitly run `git push origin vX.Y` after each tag. Lightweight tags created locally without explicit push will not exist on the remote.
   - Revert path: `git checkout vX.Y` for local; `git revert HEAD --no-edit && git push` for the deployed version (avoid force-push to main).
   - Never run destructive operations (`reset --hard`, force push, branch deletion) without explicit user instruction.
-  - Commits should match the per-iteration cadence — small enough that each one is reviewable, big enough that each represents a real unit of change.
 
 ---
 
