@@ -7,26 +7,6 @@
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* iOS Safari adds default button padding/styling that breaks our
-       icon-circle layout. Reset universally. Use system font on icon
-       buttons so Unicode glyphs render consistently across platforms. */
-    button {
-      -webkit-appearance: none;
-      appearance: none;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Symbol",
-                   system-ui, sans-serif;
-      /* v1.47: explicit padding 0 + tabular line-height; iOS Safari was
-         rendering buttons taller than their declared height because of
-         font metrics, producing oval bounding boxes. */
-      padding: 0;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    /* Force text-style presentation for any glyph that has both text
-       and emoji variants (v1.47). The variation selector U+FE0E is in
-       the markup, but explicit CSS belt-and-braces helps Safari. */
-    button { font-variant-emoji: text; }
-
     html, body {
       width: 100%; height: 100%; overflow: hidden;
       background: radial-gradient(ellipse at center, #0f0f2a 0%, #05050f 100%);
@@ -58,14 +38,11 @@
     }
 
     #begin-btn {
-      margin-top: 16px;
-      width: 88px; height: 88px;
-      flex: 0 0 auto;
-      display: flex; align-items: center; justify-content: center;
+      margin-top: 8px; padding: 14px 52px;
       border: 1px solid rgba(200, 184, 255, 0.35);
-      border-radius: 50%; background: transparent;
-      color: #c8b8ff;
-      font-size: 1.5rem;
+      border-radius: 40px; background: transparent;
+      color: #c8b8ff; font-family: inherit;
+      font-size: 0.95rem; letter-spacing: 0.25em;
       cursor: pointer; transition: all 0.4s ease;
     }
     #begin-btn:hover {
@@ -73,7 +50,6 @@
       border-color: rgba(200, 184, 255, 0.65);
       box-shadow: 0 0 40px rgba(160, 120, 255, 0.2);
     }
-    #begin-btn:disabled { opacity: 0.4; cursor: wait; }
 
     /* ── Meditation screen ── */
     #meditation-screen {
@@ -165,9 +141,6 @@
       transform: translateX(-50%);
       font-size: 0.65rem; color: #2a1a4a;
       letter-spacing: 0.2em;
-      cursor: pointer;
-      padding: 6px 12px; /* larger tap target */
-      user-select: none;
     }
 
     /* ── Game UI ── */
@@ -180,13 +153,11 @@
     #round-info span b { color: #a090d0; font-weight: normal; margin-left: 6px; }
 
     #action-btn {
-      margin-top: 24px;
-      width: 64px; height: 64px;
-      display: flex; align-items: center; justify-content: center;
+      margin-top: 18px; padding: 10px 38px;
       border: 1px solid rgba(200, 184, 255, 0.35);
-      border-radius: 50%; background: transparent;
+      border-radius: 40px; background: transparent;
       color: #c8b8ff; font-family: inherit;
-      font-size: 1.2rem;
+      font-size: 0.85rem; letter-spacing: 0.25em;
       cursor: pointer; transition: all 0.4s ease;
       visibility: hidden;
     }
@@ -204,10 +175,18 @@
       border-color: rgba(200, 184, 255, 0.35);
     }
 
-    /* v1.46: replay button hidden — purpose was unclear, now removed
-       from the UI. JS still records trajectories to localStorage; the
-       button can be re-enabled by removing this rule. */
-    #replay-btn { display: none !important; }
+    /* Replay-last-round secondary action — visible only when a saved
+       trajectory exists and we're between rounds. */
+    #replay-btn {
+      margin-top: 14px;
+      background: transparent; border: none;
+      font-family: inherit; font-size: 0.7rem;
+      color: #5a4a82; letter-spacing: 0.2em;
+      cursor: pointer; transition: color 0.3s;
+      display: none;
+    }
+    #replay-btn.show { display: inline-block; }
+    #replay-btn:hover { color: #c8b8ff; }
 
     /* Round timer — displays to the right of the ring during active rounds.
        Stillness % stays in the centre as the primary feedback; the timer
@@ -365,56 +344,28 @@
       border-color: rgba(200, 184, 255, 0.7);
     }
 
-    /* Start-screen secondary icons */
-    .corner-icons {
-      position: fixed; bottom: 24px; right: 24px;
-      display: flex; gap: 16px;
-    }
+    /* Start-screen secondary links */
     #safety-link, #about-link {
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 50%;
-      border: 1px solid rgba(200, 184, 255, 0.18);
-      color: #6858a0; font-size: 0.9rem;
-      cursor: pointer; user-select: none;
-      transition: color 0.3s ease, border-color 0.3s ease;
+      margin-top: 12px; font-size: 0.7rem;
+      color: #4a3a72; letter-spacing: 0.15em;
+      cursor: pointer; text-decoration: underline;
+      text-underline-offset: 4px;
     }
-    #safety-link:hover, #about-link:hover {
-      color: #c8b8ff;
-      border-color: rgba(200, 184, 255, 0.5);
-    }
+    #about-link { margin-top: 4px; }
+    #safety-link:hover, #about-link:hover { color: #8878aa; }
 
-    /* v1.45: hide text-heavy elements; rely on visual cues.
-       v1.47: state-text re-enabled (without it, phase transitions had no
-       narration and the mobile timer overlapped the action button). */
-    #med-title, #round-info, #calib-text { display: none; }
-
-    /* v1.47: icon-button defensive shape rules. Belt-and-braces against
-       iOS Safari rendering bounding boxes as ovals from font metrics. */
-    #begin-btn, #position-ready-btn, #action-btn,
-    #mute-btn, #reframe-btn, #report-link,
-    #safety-link, #about-link {
-      aspect-ratio: 1 / 1;
-      flex-shrink: 0;
-    }
-
-    /* Report-concern button — icon-only, above the mute button */
+    /* "this didn't feel right" report link (Tier 2+) */
     #report-link {
-      position: fixed; bottom: 76px; left: 24px;
-      width: 32px; height: 32px;
-      display: none;
-      align-items: center; justify-content: center;
-      border-radius: 50%;
-      border: 1px solid rgba(200, 184, 255, 0.18);
-      background: transparent;
-      color: #6858a0; font-size: 1rem; line-height: 1;
-      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
+      position: fixed; bottom: 80px; left: 24px;
+      width: 130px; padding: 6px 0;
+      background: transparent; border: none;
+      font-family: inherit; font-size: 0.65rem;
+      color: #4a3a72; letter-spacing: 0.18em;
+      cursor: pointer; transition: color 0.3s;
+      text-align: left; display: none;
     }
-    #report-link.show { display: flex; }
-    #report-link:hover {
-      color: #b09898;
-      border-color: rgba(180, 152, 152, 0.5);
-    }
+    #report-link.show { display: inline-block; }
+    #report-link:hover { color: #b09898; }
 
     /* Report-a-concern modal */
     .safety-content textarea {
@@ -489,12 +440,11 @@
       max-width: 440px;
     }
     #position-ready-btn {
-      width: 64px; height: 64px;
-      display: flex; align-items: center; justify-content: center;
+      padding: 12px 38px;
       border: 1px solid rgba(200, 184, 255, 0.4);
-      border-radius: 50%; background: transparent;
+      border-radius: 40px; background: transparent;
       color: #c8b8ff; font-family: inherit;
-      font-size: 1.4rem;
+      font-size: 0.85rem; letter-spacing: 0.25em;
       cursor: pointer; transition: all 0.4s ease;
     }
     #position-ready-btn:hover {
@@ -536,21 +486,17 @@
     }
     #mute-btn:hover { border-color: rgba(200, 184, 255, 0.5); color: #c8b8ff; }
 
-    /* Re-frame button — icon-only, sits above the camera preview */
+    /* Re-frame link — return to the positioning screen at any time */
     #reframe-btn {
       position: fixed; bottom: 110px; right: 24px;
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 50%;
-      border: 1px solid rgba(200, 184, 255, 0.18);
-      background: transparent;
-      color: #6858a0; font-size: 1rem; line-height: 1;
-      cursor: pointer; transition: color 0.3s ease, border-color 0.3s ease;
+      width: 110px; padding: 6px 0;
+      background: transparent; border: none;
+      font-family: inherit; font-size: 0.65rem;
+      color: #4a3a72; letter-spacing: 0.18em;
+      cursor: pointer; transition: color 0.3s;
+      text-align: center;
     }
-    #reframe-btn:hover {
-      color: #c8b8ff;
-      border-color: rgba(200, 184, 255, 0.5);
-    }
+    #reframe-btn:hover { color: #8878aa; }
 
     /* ── Particles ── */
     .particle {
@@ -738,15 +684,18 @@
   <!-- ── Start Screen ── -->
   <div id="start-screen">
     <h1>HILL CLIMBING</h1>
-    <button id="begin-btn" aria-label="Begin">▶︎</button>
-    <div class="corner-icons">
-      <div id="about-link" title="About this practice">?</div>
-      <div id="safety-link" title="Safety notice">ⓘ</div>
-    </div>
+    <p>
+      A stillness practice that learns with you.<br>
+      Rounds start at 30 seconds and grow with each win, up to a 5-minute cap.
+    </p>
+    <button id="begin-btn">Begin</button>
+    <div id="safety-link">view safety notice</div>
+    <div id="about-link">about this practice</div>
   </div>
 
   <!-- ── Positioning Screen — shown after camera permission, before the round flow ── -->
   <div id="positioning-screen">
+    <h2>Frame Yourself</h2>
     <div id="position-frame">
       <video id="positioning-video" autoplay muted playsinline></video>
       <svg id="position-guide" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid meet">
@@ -760,7 +709,11 @@
               stroke-width="2" stroke-dasharray="5 7"/>
       </svg>
     </div>
-    <button id="position-ready-btn" aria-label="Ready">✓</button>
+    <p>
+      Centre your head and shoulders within the guide.<br>
+      Even, front-facing light works best. Keep the background still.
+    </p>
+    <button id="position-ready-btn">I'm ready</button>
   </div>
 
   <!-- ── Meditation Screen ── -->
@@ -776,9 +729,6 @@
       <span>Best<b id="ri-best">0s</b></span>
       <span>Today<b id="ri-today">0s</b></span>
     </div>
-    <!-- v1.45 hides med-title and round-info via CSS; the score, ring,
-         and threshold tick communicate state visually. JS still updates
-         these elements for any future reveal. -->
 
     <div id="ring-container">
       <svg id="stillness-svg" viewBox="0 0 220 220">
@@ -822,22 +772,18 @@
 
     <p id="state-text">Settle in…</p>
     <p id="calib-text">calibrating…</p>
-    <button id="action-btn" aria-label="Begin">▶︎</button>
-    <button id="replay-btn" aria-label="Replay last round" title="Replay last round">↻</button>
+    <button id="action-btn">Begin Round</button>
+    <button id="replay-btn">↻ replay last round</button>
 
     <video id="camera-preview" autoplay muted playsinline></video>
-    <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
-    <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
-    <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.47</p>
+    <button id="mute-btn" title="Toggle sound">♪</button>
+    <button id="reframe-btn" title="Reposition camera">re-frame</button>
+    <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
+    <p id="version-label">v1.32 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
-      ceil   <b id="d-ceil">—</b><br>
-      thr    <b id="d-thr">—</b><br>
       motion <b id="d-motion">—</b><br>
-      mean   <b id="d-mean">—</b><br>
-      std    <b id="d-std">—</b><br>
       still  <b id="d-still">—</b><br>
       fps    <b id="d-fps">—</b>
     </div>
@@ -911,24 +857,6 @@ const SAFETY = {
 };
 
 // ─────────────────────────────────────────────
-// Feature toggles — non-safety UX flags
-// ─────────────────────────────────────────────
-// SAFETY (above) gates risk-related behaviour by tier. FEATURES is the
-// equivalent for non-safety UX flags — things that are on/off for taste,
-// dev convenience, or experimentation rather than for user welfare.
-//
-// Each flag should have a comment explaining why it's currently set
-// the way it is and what its default ought to be.
-const FEATURES = {
-  // Multi-page guided introduction shown on first run. Re-openable via
-  // the "about this practice" link on the start screen regardless of
-  // this flag (so users can always read it). Currently OFF to remove
-  // friction during dev iteration; default ought to be true for any
-  // public-facing tier.
-  showOnboardingOnFirstRun: false,
-};
-
-// ─────────────────────────────────────────────
 // Game constants — 2-up / 1-down staircase on duration AND threshold
 // ─────────────────────────────────────────────
 // Both knobs adapt together: 2 wins step both up, 1 loss steps both down.
@@ -981,45 +909,19 @@ const AMBIENT_BELL_VOL       = 0.35;
 const AMBIENT_BELL_SCALE     = [432, 528, 648, 792, 864, 1056, 1296];
 
 // ─────────────────────────────────────────────
-// Variance-based scoring (v1.38)
+// Smoothness-round constants
 // ─────────────────────────────────────────────
-// Both stillness and smoothness rounds derive their score from rolling
-// statistics of motion over a 1 s window. The insight: absolute motion
-// level depends on environment (lighting, held phone, camera quality)
-// but variance is far more environment-invariant. A held-phone user
-// has consistent tremor → stable variance baseline; their body motion
-// adds variance on top. A dark-room user has tiny tremor → tiny baseline.
-// In both cases, "becoming more still" reduces variance similarly, so
-// the user's contribution to the score is environment-comparable.
-//
-// Stillness rounds: pure variance metric. Higher score = more stable
-// motion regardless of level.
-// Smoothness rounds: variance + amplitude band check (existing behaviour).
+// After every interlude, the next round is a smoothness round: the user
+// must maintain smooth, slow, sustained motion (kinhin / tai-chi style)
+// rather than stillness. Score is high when:
+//   - mean motion sits in the target range (intentional, not random)
+//   - variance is low (continuous, not jerky)
+// Window length is 1 s of frames so very brief twitches don't tank
+// the score, but a 200 ms sharp motion still shows up clearly.
 const SMOOTH_WINDOW_FRAMES = 60;
-const SMOOTH_TARGET_MIN    = 0.15;  // smoothness: below = "still"
-const SMOOTH_TARGET_MAX    = 0.55;  // smoothness: above = "flailing"
-const SMOOTH_MAX_STDDEV    = 0.12;  // smoothness: above = "jerky"
-// Stillness mapping (v1.46): three-piece curve.
-// User wants 95% easy to reach but 100% progressively harder.
-//
-//   motion ≤ HARD_ZONE (0.05)              → 0.95–1.00 (quadratic climb)
-//   HARD_ZONE < motion ≤ HARD + EASY (0.65) → 0.95 (plateau — comfort zone)
-//   HARD + EASY < motion ≤ +FALL (0.95)    → 0.95 → 0   (linear fall)
-//   motion > 0.95                          → 0
-//
-// Result: a comfortable plateau through most of "normal" motion (0.05 to
-// 0.65), with the last 5% of score requiring genuine sub-noise stillness,
-// and a clear cliff at high motion.
-const STILL_HARD_ZONE = 0.05;  // motion below this climbs from 0.95 to 1.0
-const STILL_EASY_BAND = 0.75;  // plateau width at 0.95 (v1.47: widened from 0.60)
-const STILL_FALL_BAND = 0.20;  // linear fall from 0.95 to 0  (v1.47: tightened from 0.30)
-
-// Pre-smoothing applied to motion *before* it enters the variance window.
-// Filters high-frequency jitter (camera noise, sub-pixel hand-tremor flicker)
-// so variance reflects sustained motion changes rather than per-frame noise.
-// Body motion is slower (1–3 Hz) than tremor (5–10 Hz); a ~5-frame time
-// constant filters the fast stuff while preserving the slow.
-const MOTION_PRESMOOTH_ALPHA = 0.20;
+const SMOOTH_TARGET_MIN    = 0.15;  // below = "still" (not enough motion)
+const SMOOTH_TARGET_MAX    = 0.55;  // above = "flailing"
+const SMOOTH_MAX_STDDEV    = 0.12;  // above = "jerky"
 
 // ─────────────────────────────────────────────
 // Safety constants — keep practice within healthy bounds
@@ -1064,24 +966,9 @@ let lastAmbientBell = 0; // ms timestamp of next scheduled ambient bell; 0 = idl
 const frameBuf = [];
 let   fbIdx    = 0;
 
-// Rolling motion-distribution percentiles over a ~4 s window:
-//   - noiseFloor (p10) — what "still" looks like on this camera in this room
-//   - motionCeiling (p90) — what "moving" looks like
-// The score normalises against the observed range, so the same body motion
-// scores comparably across bright/dark rooms, different cameras, and
-// different user motion patterns. MOTION_SCALE acts as a minimum range
-// floor — when the user is consistently still, we don't collapse the
-// range to near-zero (which would amplify any twitch into a crisis).
+// Rolling noise floor: p10 of recent raw values (~4 s window)
 const noiseArr = new Float32Array(240);
-let nHead = 0, nCount = 0, nTick = 0, noiseFloor = 0, motionCeiling = 0;
-
-// Rolling average of per-pixel luma diffs — used for adaptive
-// PIXEL_THRESHOLD (v1.37). Brighter scenes produce larger absolute
-// per-pixel deltas for the same body motion, so a fixed threshold is
-// biased toward bright environments. Scaling proportionally equalises
-// the "fraction of pixels that moved" signal across lighting.
-let avgLumaDiff = 0;             // rolling average; updated each frame
-let lastEffectiveThreshold = PIXEL_THRESHOLD; // for debug overlay
+let nHead = 0, nCount = 0, nTick = 0, noiseFloor = 0;
 
 // "Today" key — local-time date string. Stats roll over when this changes.
 function todayKey() {
@@ -1136,14 +1023,9 @@ let phaseEntryTime  = 0;
 let idlePaused      = false;
 let savedStateText  = '';
 
-// Motion ring-buffer for variance-based scoring (1 s of frames at ~60 fps).
-// Both stillness and smoothness scoring derive from this same window.
-// v1.41: motion is pre-smoothed via EMA before entering the window, so
-// variance reflects sustained changes rather than per-frame jitter.
+// Motion ring-buffer for smoothness scoring (1 s of frames at ~60 fps)
 const motionWindow = new Float32Array(SMOOTH_WINDOW_FRAMES);
 let mwHead = 0, mwCount = 0;
-let lastMotionMean = 0, lastMotionStdDev = 0; // refreshed each frame
-let smoothedMotion = 0;                       // EMA-smoothed motion
 
 // Session-only state (resets on reload, not persisted)
 let sessionActiveSecs = 0;        // cumulative time in settling+active this session
@@ -1171,11 +1053,7 @@ const muteBtn        = document.getElementById('mute-btn');
 
 const dRaw    = document.getElementById('d-raw');
 const dFloor  = document.getElementById('d-floor');
-const dCeil   = document.getElementById('d-ceil');
-const dThr    = document.getElementById('d-thr');
 const dMotion = document.getElementById('d-motion');
-const dMean   = document.getElementById('d-mean');
-const dStd    = document.getElementById('d-std');
 const dStill  = document.getElementById('d-still');
 const dFps    = document.getElementById('d-fps');
 
@@ -1211,52 +1089,16 @@ class AudioEngine {
   constructor() {
     this.ctx   = new (window.AudioContext || window.webkitAudioContext)();
     this.muted = false;
-    this.started = false;
-
-    // iOS Safari unlock (v1.34: triple-redundant). iOS 17+ enforces
-    // strict gesture rules: AudioContext must be unlocked in the FIRST
-    // user gesture (now moved to Begin click), and even then sometimes
-    // requires both Web Audio and HTML5 Audio paths to be exercised.
-    this.ctx.resume();
-    const wbBuf = this.ctx.createBuffer(1, 1, 22050);
-    const wbSrc = this.ctx.createBufferSource();
-    wbSrc.buffer = wbBuf;
-    wbSrc.connect(this.ctx.destination);
-    wbSrc.start(0);
-    // HTML5 Audio path — a silent WAV played via the standard Audio
-    // element sometimes succeeds where Web Audio alone is blocked,
-    // and unlocks audio routing through the loudspeaker rather than
-    // the receiver speaker (an iOS issue with active video streams).
-    try {
-      const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-      a.play().catch(() => {});
-    } catch {}
-
     this._build();
-  }
-
-  // Called from positionReadyBtn click — fades audio in when the user
-  // actually starts practising. Separated from constructor so the engine
-  // can be pre-warmed on the Begin click (first gesture) and stay silent
-  // through camera permission and positioning.
-  start() {
-    if (this.started) return;
-    this.started = true;
-    const t = this.ctx.currentTime;
-    this.master.gain.cancelScheduledValues(t);
-    this.master.gain.setValueAtTime(0, t);
-    this.master.gain.linearRampToValueAtTime(MASTER_VOLUME, t + 2.5);
   }
 
   _build() {
     const ctx = this.ctx;
 
     this.master = ctx.createGain();
-    // Stay silent until start() is called from the I'm-ready click —
-    // this lets the engine be constructed (and audio unlocked on iOS) on
-    // the Begin click without making sound during camera permission and
-    // positioning.
-    this.master.gain.value = 0;
+    // Start silent and fade in over 2.5s — avoids loud audio surprises.
+    this.master.gain.setValueAtTime(0, ctx.currentTime);
+    this.master.gain.linearRampToValueAtTime(MASTER_VOLUME, ctx.currentTime + 2.5);
     this.master.connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
@@ -1433,54 +1275,28 @@ function detectMotion() {
   // This is much more sensitive than averaging — a small region of
   // genuine movement (a finger twitch, a head tilt) creates a clear
   // count, while uniform sensor noise rarely crosses the threshold.
-  // Adaptive per-pixel threshold (v1.37). Effective threshold scales with
-  // the rolling average of per-pixel luma diffs, bounded to [PIXEL_THRESHOLD/2,
-  // PIXEL_THRESHOLD*4]. In bright scenes typical deltas are larger → threshold
-  // rises → fewer pixels qualify as moved → score doesn't tank just because
-  // the camera sees more contrast. In dark scenes typical deltas are smaller
-  // → threshold falls → real motion still registers. Result: same body
-  // motion produces a more comparable raw signal across lighting.
-  const effectiveThreshold = avgLumaDiff > 0
-    ? Math.max(PIXEL_THRESHOLD * 0.5,
-               Math.min(PIXEL_THRESHOLD * 4, 4 * avgLumaDiff))
-    : PIXEL_THRESHOLD;
-  lastEffectiveThreshold = effectiveThreshold;
-
   let changed = 0;
-  let totalLumaDiff = 0;
   const nPixels = current.length / 4;
   for (let i = 0; i < current.length; i += 4) {
     const lumaDiff = 0.299 * Math.abs(current[i]   - past[i])
                    + 0.587 * Math.abs(current[i+1] - past[i+1])
                    + 0.114 * Math.abs(current[i+2] - past[i+2]);
-    if (lumaDiff > effectiveThreshold) changed++;
-    totalLumaDiff += lumaDiff;
+    if (lumaDiff > PIXEL_THRESHOLD) changed++;
   }
   const raw = changed / nPixels; // fraction of pixels that "moved"
   lastRaw = raw;
 
-  // Update rolling avg luma diff (1% step per frame ≈ 1.7 s time constant).
-  // Slow enough that brief body motion doesn't shift the threshold; fast
-  // enough that lighting changes propagate within a few seconds.
-  const frameAvg = totalLumaDiff / nPixels;
-  avgLumaDiff += 0.01 * (frameAvg - avgLumaDiff);
-
-  // Rolling motion-distribution stats: p10 noise floor + p90 ceiling.
+  // Rolling noise floor (p10 over ~4 s) — captures the camera's
+  // ambient noise rate so we can subtract it cleanly.
   noiseArr[nHead] = raw;
   nHead  = (nHead + 1) % noiseArr.length;
   nCount = Math.min(nCount + 1, noiseArr.length);
   if (++nTick % 30 === 0 && nCount >= 30) {
     const s = noiseArr.slice(0, nCount); s.sort();
-    noiseFloor    = s[Math.floor(nCount * 0.10)];
-    motionCeiling = s[Math.floor(nCount * 0.90)];
+    noiseFloor = s[Math.floor(nCount * 0.10)];
   }
 
-  // Adaptive range: normalise against (p90 − p10) so the score
-  // calibrates to the user's recent motion distribution. MOTION_SCALE
-  // is the minimum range — when the user is super still and the
-  // p10/p90 collapse, we keep enough sensitivity floor to behave well.
-  const adaptiveRange = Math.max(motionCeiling - noiseFloor, MOTION_SCALE);
-  return Math.max(0, Math.min(1, (raw - noiseFloor) / adaptiveRange));
+  return Math.max(0, Math.min(1, (raw - noiseFloor) / MOTION_SCALE));
 }
 
 // ─────────────────────────────────────────────
@@ -1493,69 +1309,34 @@ function detectMotion() {
 // continuous motion scores well.
 // ─────────────────────────────────────────────
 function pushMotionSample(m) {
-  // EMA-smooth before storing so the variance metric reflects sustained
-  // motion rather than per-frame jitter from camera/hand noise.
-  smoothedMotion += MOTION_PRESMOOTH_ALPHA * (m - smoothedMotion);
-  motionWindow[mwHead] = smoothedMotion;
+  motionWindow[mwHead] = m;
   mwHead  = (mwHead + 1) % SMOOTH_WINDOW_FRAMES;
   mwCount = Math.min(mwCount + 1, SMOOTH_WINDOW_FRAMES);
 }
 
-// Shared mean/std-dev computation over the motion window. Called once
-// per frame; both score functions read from the cached values.
-function computeMotionStats() {
-  if (mwCount < 30) {
-    lastMotionMean = 0;
-    lastMotionStdDev = 0;
-    return;
-  }
+function smoothnessScore() {
+  if (mwCount < 30) return 0; // need ≥0.5 s of data
+
   let mean = 0;
   for (let i = 0; i < mwCount; i++) mean += motionWindow[i];
   mean /= mwCount;
+
   let variance = 0;
   for (let i = 0; i < mwCount; i++) {
     const d = motionWindow[i] - mean;
     variance += d * d;
   }
   variance /= mwCount;
-  lastMotionMean   = mean;
-  lastMotionStdDev = Math.sqrt(variance);
-}
-
-// Stillness score (v1.46): three-piece curve.
-//   - Quadratic climb 0.95 → 1.0 in motion [0, HARD_ZONE]
-//   - Plateau at 0.95 across motion [HARD_ZONE, HARD_ZONE + EASY_BAND]
-//   - Linear fall 0.95 → 0 across motion [..., ... + FALL_BAND]
-// Comfortable plateau for normal use; 100% requires genuine sub-noise
-// stillness; clear cliff at high motion.
-function stillnessScore(motionVal) {
-  if (motionVal <= STILL_HARD_ZONE) {
-    const t = motionVal / STILL_HARD_ZONE;
-    return 1.0 - 0.05 * t * t;          // 1.0 → 0.95, quadratic
-  }
-  const plateauEnd = STILL_HARD_ZONE + STILL_EASY_BAND;
-  if (motionVal <= plateauEnd) {
-    return 0.95;                          // comfort plateau
-  }
-  const fallEnd = plateauEnd + STILL_FALL_BAND;
-  if (motionVal <= fallEnd) {
-    const t = (motionVal - plateauEnd) / STILL_FALL_BAND;
-    return 0.95 * (1 - t);                // linear fall to 0
-  }
-  return 0;
-}
-
-function smoothnessScore() {
-  if (mwCount < 30) return 0; // need ≥0.5 s of data
+  const stdDev = Math.sqrt(variance);
 
   // In-range factor: 1 inside the target band, ramping to 0 outside
   let inRange;
-  if (lastMotionMean < SMOOTH_TARGET_MIN)      inRange = lastMotionMean / SMOOTH_TARGET_MIN;
-  else if (lastMotionMean <= SMOOTH_TARGET_MAX) inRange = 1;
-  else                                          inRange = Math.max(0, 1 - (lastMotionMean - SMOOTH_TARGET_MAX) / (1 - SMOOTH_TARGET_MAX));
+  if (mean < SMOOTH_TARGET_MIN)      inRange = mean / SMOOTH_TARGET_MIN;
+  else if (mean <= SMOOTH_TARGET_MAX) inRange = 1;
+  else                                inRange = Math.max(0, 1 - (mean - SMOOTH_TARGET_MAX) / (1 - SMOOTH_TARGET_MAX));
 
   // Stability factor: 1 when variance is low, 0 above SMOOTH_MAX_STDDEV
-  const stable = Math.max(0, 1 - lastMotionStdDev / SMOOTH_MAX_STDDEV);
+  const stable = Math.max(0, 1 - stdDev / SMOOTH_MAX_STDDEV);
 
   return inRange * stable;
 }
@@ -1707,11 +1488,11 @@ function setPhase(next) {
     actionBtn.disabled = false;
   }
   if (next === 'idle') {
-    actionBtn.textContent = '▶︎';
+    actionBtn.textContent = 'Begin Round';
     actionBtn.classList.remove('stop');
     actionBtn.classList.add('show');
   } else if (next === 'settling') {
-    actionBtn.textContent = '■';
+    actionBtn.textContent = 'Stop';
     actionBtn.classList.add('stop', 'show');
     if (roundMode === 'smoothness') {
       stateText.textContent = `Begin slow, continuous motion to start the clock · Esc to stop`;
@@ -1725,18 +1506,16 @@ function setPhase(next) {
     lastRecordTime = 0;
     recordingSamples = [];
   } else if (next === 'active') {
-    actionBtn.textContent = '■';
+    actionBtn.textContent = 'Stop';
     actionBtn.classList.add('stop', 'show');
     stateText.textContent = roundMode === 'smoothness'
       ? 'Move smoothly… · Esc to stop'
       : 'Hold… · Esc to stop';
     roundStart = performance.now();
     belowSince = 0;
-    // v1.38: motion window NOT reset between phases. Variance-based
-    // scoring needs continuity — settling samples are part of the
-    // build-up to active. Resetting here would force the score to 0
-    // for the first 0.5 s of every round (until window refilled),
-    // which would trip the failure-grace timer immediately.
+    // Fresh motion window per round so the previous round's tail doesn't
+    // bias the smoothness score in the first second of this one.
+    mwHead = 0; mwCount = 0;
     if (audioEngine) audioEngine.triggerStart();
   } else if (next === 'won') {
     actionBtn.classList.remove('stop');
@@ -1774,7 +1553,7 @@ function enterInterlude() {
   ringContainer.classList.add('breathing');
   const prompt = MOVEMENT_PROMPTS[Math.floor(Math.random() * MOVEMENT_PROMPTS.length)];
   stateText.textContent = `${consecutiveWins} in a row. Stand and move — ${prompt}.`;
-  actionBtn.textContent = '▶︎';
+  actionBtn.textContent = "I'm back";
   actionBtn.classList.remove('stop');
   actionBtn.classList.add('show');
 }
@@ -1841,7 +1620,7 @@ function onWin() {
   else                                          base = `Held. ${WINS_TO_STEP_UP - game.wins} more to step up.`;
   stateText.textContent = base + postRoundReminder(heldSecs);
 
-  actionBtn.textContent = '▶︎';
+  actionBtn.textContent = 'Continue';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(true);
@@ -1874,7 +1653,7 @@ function onLoss() {
   // Neutral, supportive copy — not failure-coded
   stateText.textContent = `You held ${heldSecs}s of ${fmtSecs(previousDuration)}.`
                         + postRoundReminder(heldSecs);
-  actionBtn.textContent = '▶︎';
+  actionBtn.textContent = 'Continue';
   actionBtn.classList.add('show');
   breakStart = performance.now(); // begin minimum-break cooldown
   saveLastTrajectory(false);
@@ -1928,7 +1707,7 @@ function startReplay() {
     mode: traj.mode,
   };
   phase = 'replay';
-  actionBtn.textContent = '■';
+  actionBtn.textContent = 'End replay';
   actionBtn.disabled = false;
   actionBtn.classList.remove('stop');
   actionBtn.classList.add('show');
@@ -2042,12 +1821,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Tap the version label to toggle the debug overlay (mobile-friendly
-// equivalent of the 'd' key, since phones have no keyboard handy).
-document.getElementById('version-label').addEventListener('click', () => {
-  document.getElementById('debug').classList.toggle('show');
-});
-
 // ─────────────────────────────────────────────
 // Main Loop
 //
@@ -2112,24 +1885,27 @@ function loop() {
 
   const motion = detectMotion();
   pushMotionSample(motion);
-  computeMotionStats();
 
-  // v1.44: motion + grace zone for stillness (no variance lag).
-  // Smoothness rounds keep their existing variance-based scoring since
-  // they specifically need to detect "smooth slow motion" which requires
-  // looking at the motion distribution.
+  // Mode-aware target: stillness = 1 - motion; smoothness = scored band.
+  // audioMotion drives the dissonance oscillator — high in both modes when
+  // the user is "doing it wrong" (moving in stillness, or jerky/still in
+  // smoothness), so the audio engine doesn't need to know about mode.
   let target, audioMotion;
   if (roundMode === 'smoothness' && (phase === 'active' || phase === 'settling')) {
-    target      = smoothnessScore();
-    audioMotion = 1 - target;
+    const score = smoothnessScore();
+    target = score;
+    audioMotion = 1 - score;
   } else {
-    target      = stillnessScore(motion);
+    target = 1 - motion;
     audioMotion = motion;
   }
-  // Asymmetric EMA. Faster falling alpha for responsive drop on motion;
-  // slow rising alpha so high stillness has to be earned, not drifted into.
-  const fallingAlpha = 0.25;
-  const risingAlpha  = 0.05;
+
+  // Asymmetric EMA. Falling alpha is constant — any motion drops the
+  // score fast. Rising alpha decays with current stillness so climbing
+  // toward 100% gets meaningfully harder near the top — micro-stillness
+  // alone won't push past 90% the way it used to.
+  const fallingAlpha = 0.20;
+  const risingAlpha  = 0.025 * (1 - 0.7 * stillness);
   const alpha = target < stillness ? fallingAlpha : risingAlpha;
   stillness   = Math.max(0, Math.min(1, stillness + alpha * (target - stillness)));
 
@@ -2191,10 +1967,10 @@ function loop() {
   if (breakStart > 0 && (phase === 'won' || phase === 'lost')) {
     const remaining = MIN_BREAK_SECS - (performance.now() - breakStart) / 1000;
     if (remaining > 0) {
-      actionBtn.textContent = Math.ceil(remaining);
+      actionBtn.textContent = `Continue in ${Math.ceil(remaining)}s`;
       actionBtn.disabled = true;
     } else {
-      actionBtn.textContent = '▶︎';
+      actionBtn.textContent = 'Continue';
       actionBtn.disabled = false;
       breakStart = 0;
     }
@@ -2205,11 +1981,7 @@ function loop() {
   while (frameTimes.length > 0 && now - frameTimes[0] > 1000) frameTimes.shift();
   dRaw.textContent    = lastRaw.toFixed(4);
   dFloor.textContent  = noiseFloor.toFixed(4);
-  dCeil.textContent   = motionCeiling.toFixed(4);
-  dThr.textContent    = lastEffectiveThreshold.toFixed(1);
   dMotion.textContent = motion.toFixed(3);
-  dMean.textContent   = lastMotionMean.toFixed(3);
-  dStd.textContent    = lastMotionStdDev.toFixed(3);
   dStill.textContent  = stillness.toFixed(3);
   dFps.textContent    = frameTimes.length;
 
@@ -2242,14 +2014,7 @@ const positioningVideo  = document.getElementById('positioning-video');
 const positionReadyBtn  = document.getElementById('position-ready-btn');
 
 beginBtn.addEventListener('click', async () => {
-  beginBtn.disabled = true;
-
-  // Create AudioEngine NOW, synchronously, in the FIRST user gesture.
-  // iOS Safari unlocks audio reliably only on the first gesture; later
-  // gestures (after async getUserMedia) can be treated as untrusted.
-  // Engine stays silent until start() is called from positionReadyBtn.
-  if (!audioEngine) audioEngine = new AudioEngine();
-
+  beginBtn.disabled = true; beginBtn.textContent = 'Opening camera…';
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
@@ -2276,19 +2041,16 @@ beginBtn.addEventListener('click', async () => {
     startScreen.style.display = 'none';
     positioningScreen.classList.add('show');
   } catch (err) {
-    beginBtn.disabled = false; beginBtn.textContent = '▶︎';
+    beginBtn.disabled = false; beginBtn.textContent = 'Begin';
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
     console.error(err);
   }
 });
 
 positionReadyBtn.addEventListener('click', () => {
-  // AudioEngine was created on the Begin click (first gesture, for iOS
-  // unlock); now we resume the context (defensive — in case it suspended
-  // during the camera prompt) and fade audio in.
-  if (!audioEngine) audioEngine = new AudioEngine(); // fallback if Begin path skipped
-  audioEngine.ctx.resume();
-  audioEngine.start();
+  // Audio engine starts here (after a fresh user gesture) so the fade-in
+  // begins as the meditation screen appears, not during framing.
+  if (!audioEngine) audioEngine = new AudioEngine();
   positioningScreen.classList.remove('show');
   meditScreen.style.display = 'flex';
   updateRoundInfo();
@@ -2457,12 +2219,8 @@ aboutLink.addEventListener('click', () => {
   obIdx = 0; renderOnboarding(); onboardingModal.classList.add('show');
 });
 
-// Show on first run, regardless of tier (this is universal orientation).
-// Gated by FEATURES.showOnboardingOnFirstRun so dev iteration can skip
-// the intro. The "about this practice" link still opens the modal
-// manually regardless.
-if (FEATURES.showOnboardingOnFirstRun
-    && !localStorage.getItem('hill-climbing-introduced-v1')) {
+// Show on first run, regardless of tier (this is universal orientation)
+if (!localStorage.getItem('hill-climbing-introduced-v1')) {
   renderOnboarding();
   onboardingModal.classList.add('show');
 }
@@ -2509,7 +2267,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.47 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.32 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
