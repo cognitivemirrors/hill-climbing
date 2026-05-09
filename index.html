@@ -779,10 +779,11 @@
     <button id="mute-btn" title="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera">re-frame</button>
     <button id="report-link" title="Report something that didn't feel right">this didn't feel right</button>
-    <p id="version-label">v1.34 · hill climbing · tier 0</p>
+    <p id="version-label">v1.35 · hill climbing · tier 0</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
+      ceil   <b id="d-ceil">—</b><br>
       motion <b id="d-motion">—</b><br>
       still  <b id="d-still">—</b><br>
       fps    <b id="d-fps">—</b>
@@ -966,9 +967,16 @@ let lastAmbientBell = 0; // ms timestamp of next scheduled ambient bell; 0 = idl
 const frameBuf = [];
 let   fbIdx    = 0;
 
-// Rolling noise floor: p10 of recent raw values (~4 s window)
+// Rolling motion-distribution percentiles over a ~4 s window:
+//   - noiseFloor (p10) — what "still" looks like on this camera in this room
+//   - motionCeiling (p90) — what "moving" looks like
+// The score normalises against the observed range, so the same body motion
+// scores comparably across bright/dark rooms, different cameras, and
+// different user motion patterns. MOTION_SCALE acts as a minimum range
+// floor — when the user is consistently still, we don't collapse the
+// range to near-zero (which would amplify any twitch into a crisis).
 const noiseArr = new Float32Array(240);
-let nHead = 0, nCount = 0, nTick = 0, noiseFloor = 0;
+let nHead = 0, nCount = 0, nTick = 0, noiseFloor = 0, motionCeiling = 0;
 
 // "Today" key — local-time date string. Stats roll over when this changes.
 function todayKey() {
@@ -1053,6 +1061,7 @@ const muteBtn        = document.getElementById('mute-btn');
 
 const dRaw    = document.getElementById('d-raw');
 const dFloor  = document.getElementById('d-floor');
+const dCeil   = document.getElementById('d-ceil');
 const dMotion = document.getElementById('d-motion');
 const dStill  = document.getElementById('d-still');
 const dFps    = document.getElementById('d-fps');
@@ -1322,17 +1331,22 @@ function detectMotion() {
   const raw = changed / nPixels; // fraction of pixels that "moved"
   lastRaw = raw;
 
-  // Rolling noise floor (p10 over ~4 s) — captures the camera's
-  // ambient noise rate so we can subtract it cleanly.
+  // Rolling motion-distribution stats: p10 noise floor + p90 ceiling.
   noiseArr[nHead] = raw;
   nHead  = (nHead + 1) % noiseArr.length;
   nCount = Math.min(nCount + 1, noiseArr.length);
   if (++nTick % 30 === 0 && nCount >= 30) {
     const s = noiseArr.slice(0, nCount); s.sort();
-    noiseFloor = s[Math.floor(nCount * 0.10)];
+    noiseFloor    = s[Math.floor(nCount * 0.10)];
+    motionCeiling = s[Math.floor(nCount * 0.90)];
   }
 
-  return Math.max(0, Math.min(1, (raw - noiseFloor) / MOTION_SCALE));
+  // Adaptive range: normalise against (p90 − p10) so the score
+  // calibrates to the user's recent motion distribution. MOTION_SCALE
+  // is the minimum range — when the user is super still and the
+  // p10/p90 collapse, we keep enough sensitivity floor to behave well.
+  const adaptiveRange = Math.max(motionCeiling - noiseFloor, MOTION_SCALE);
+  return Math.max(0, Math.min(1, (raw - noiseFloor) / adaptiveRange));
 }
 
 // ─────────────────────────────────────────────
@@ -2017,6 +2031,7 @@ function loop() {
   while (frameTimes.length > 0 && now - frameTimes[0] > 1000) frameTimes.shift();
   dRaw.textContent    = lastRaw.toFixed(4);
   dFloor.textContent  = noiseFloor.toFixed(4);
+  dCeil.textContent   = motionCeiling.toFixed(4);
   dMotion.textContent = motion.toFixed(3);
   dStill.textContent  = stillness.toFixed(3);
   dFps.textContent    = frameTimes.length;
@@ -2313,7 +2328,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.34 · hill climbing · tier ${TIER}`;
+document.getElementById('version-label').textContent = `v1.35 · hill climbing · tier ${TIER}`;
 </script>
 </body>
 </html>
