@@ -530,11 +530,20 @@
     #debug.show { display: block; }
     #debug b { color: #c8b8ff; font-weight: normal; }
 
-    /* ── Camera preview ── */
+    /* ── Camera preview ──
+       v1.55: hidden during practice (user doesn't want to see themselves
+       mid-session). Visibility is opacity:0 + pointer-events:none rather
+       than display:none, because the motion-detection loop reads frames
+       from this <video> element via drawImage — browsers pause frame
+       production for display:none / detached videos (the v1.4 bug). The
+       element stays laid out and "playing" so frames keep flowing; the
+       user just can't perceive it. */
     #camera-preview {
       position: fixed; bottom: 20px; right: 20px;
       width: 110px; height: 80px; object-fit: cover;
-      border-radius: 8px; opacity: 0.25;
+      border-radius: 8px;
+      opacity: 0;
+      pointer-events: none;
       border: 1px solid rgba(200, 184, 255, 0.15);
       transform: scaleX(-1); /* mirror */
     }
@@ -865,7 +874,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.54</p>
+    <p id="version-label">v1.55</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2640,7 +2649,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.54 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.55 · t${TIER}`;
 </script>
 </body>
 </html>
