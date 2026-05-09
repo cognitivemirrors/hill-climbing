@@ -119,8 +119,11 @@
       stroke: #9080d0;
       stroke-width: 3;
       stroke-linecap: round;
-      transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-                  stroke 0.8s ease,
+      /* v1.51: stroke-dashoffset transition removed — smoothing is now in
+         the underlying `stillness` lerp, so game logic, audio, and visuals
+         all track the same eased value. Stroke/filter still ease for
+         colour and glow changes (separate concern). */
+      transition: stroke 0.8s ease,
                   filter 0.8s ease;
     }
 
@@ -819,8 +822,10 @@
         <circle class="ring-track" cx="110" cy="110" r="90" />
         <!-- Progress ring -->
         <circle id="ring-progress" cx="110" cy="110" r="90" />
-        <!-- Threshold tick at 60% (≈216° in path-space, before SVG -90° rotation) -->
-        <line id="threshold-mark" x1="41.2" y1="60.1" x2="33.1" y2="54.2" />
+        <!-- v1.52: threshold tick hidden — gradient accumulator has no
+             threshold concept. Element kept so updateThresholdMark can
+             toggle visibility if a future version reintroduces a target. -->
+        <line id="threshold-mark" x1="41.2" y1="60.1" x2="33.1" y2="54.2" style="display:none" />
 
         <!-- Inner mandala (fades in at high stillness) -->
         <g id="inner-mandala">
@@ -860,7 +865,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera">↺</button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.49</p>
+    <p id="version-label">v1.53</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -960,27 +965,42 @@ const FEATURES = {
 };
 
 // ─────────────────────────────────────────────
-// Game constants — 2-up / 1-down staircase on duration AND threshold
+// Game constants — gradient accumulator (v1.52)
 // ─────────────────────────────────────────────
-// Both knobs adapt together: 2 wins step both up, 1 loss steps both down.
-// 2-up/1-down converges on a ~71% success rate (Levitt, 1971), which keeps
-// every round in the "challenging but possible" zone — the engagement zone
-// from psychophysics.
-const INITIAL_THRESHOLD   = 0.60; // starting stillness floor
-const THRESHOLD_STEP      = 0.02; // ±2 percentage points per step
-const THRESHOLD_MIN       = 0.50; // never harder to win than 50%
-const THRESHOLD_MAX       = 0.95; // never push past 95% stillness
-const INITIAL_DURATION    = 30;   // first round target, seconds
-const STEP_UP             = 15;   // +seconds after WINS_TO_STEP_UP wins
-const STEP_DOWN           = 10;   // -seconds after a loss
-const MIN_DURATION        = 15;
+// The score is no longer "stillness above a threshold for a duration." It
+// is an accumulator that fills proportionally to stillness above a neutral
+// point and drains below it. The game is to fill `capacity` within
+// `timeLimit`. Every frame of partial stillness contributes; the smoothness
+// is structural rather than applied.
+//
+// Per frame: A += dt * (stillness - NEUTRAL_POINT), clamped to [0, capacity].
+// Win when A >= capacity. Loss when elapsed >= timeLimit with A < capacity.
+//
+// Two knobs adapt on a 2-up / 1-down staircase (converges to ~71% per
+// Levitt 1971): timeLimit and requiredRate. Capacity = timeLimit *
+// requiredRate, so requiredRate is the average net stillness needed to
+// finish on time (e.g. 0.20 means avg stillness of 0.7 across the round).
+const NEUTRAL_POINT       = 0.5;  // stillness level at which fill rate is zero
+// v1.53: progress-modulated sensitivity. The fill/drain rate is multiplied
+// by `1 + SENS_SPAN * (progress - 0.5)` where progress = accumulator/capacity.
+// At progress=0 the multiplier is `1 - SENS_SPAN/2`; at progress=1 it is
+// `1 + SENS_SPAN/2`. SPAN=0 disables the modulation (uniform sensitivity);
+// SPAN=1.0 means rate ranges 0.5× → 1.5× from start to end. Effect: early
+// in the round, drift and twitches barely move the bucket — gentle entry.
+// Late in the round, every frame matters — the last 20% is delicate.
+// Calibration: this slows the time-to-fill at constant stillness by a few
+// percent (≈10% at SPAN=1.0), drifting the staircase slightly easier;
+// 2-up/1-down adapts to compensate within a few rounds.
+const SENS_SPAN           = 1.0;
+const INITIAL_REQUIRED_RATE = 0.20; // need avg stillness ≈ 0.70 to win
+const RATE_STEP           = 0.02; // ±2 percentage points per step
+const RATE_MIN            = 0.10; // floor: avg stillness ≈ 0.60 (forgiving)
+const RATE_MAX            = 0.45; // ceiling: avg stillness ≈ 0.95 (very hard)
+const INITIAL_TIME_LIMIT  = 30;   // first round time limit, seconds
+const TIME_STEP_UP        = 15;   // +seconds after WINS_TO_STEP_UP wins
+const TIME_STEP_DOWN      = 10;   // -seconds after a loss
+const MIN_TIME_LIMIT      = 15;
 const WINS_TO_STEP_UP     = 2;
-
-// Grace window — stillness must stay below the threshold continuously for
-// this long before the round counts as lost. Lets a brief twitch recover.
-// Tuned against the asymmetric EMA: a ~150 ms motion spike takes ~0.4 s
-// to recover above threshold, so 0.5 s allows that without much margin.
-const FAIL_GRACE_SECS     = 0.5;
 
 // Settling timeout — if the user can't reach the threshold within this
 // many seconds, fall back to idle. Handles "user walked away" gracefully.
@@ -1055,7 +1075,7 @@ const MOTION_PRESMOOTH_ALPHA = 0.20;
 // ─────────────────────────────────────────────
 // Safety constants — keep practice within healthy bounds
 // ─────────────────────────────────────────────
-const MAX_DURATION         = 5 * 60;  // hard cap on per-round target (5 min)
+const MAX_TIME_LIMIT       = 5 * 60;  // hard cap on per-round time limit (5 min)
 const POSTURE_AFTER        = 5 * 60;  // suggest movement after this much sitting (s)
 const SESSION_SOFT_CAP     = 30 * 60; // suggest a longer break after this much (s)
 const BREAK_AFTER_WINS     = 3;       // suggest a stretch after N consecutive wins
@@ -1121,28 +1141,34 @@ function todayKey() {
 }
 
 // Game state
+// v1.52: schema migrated from {duration, threshold} to {timeLimit, requiredRate}.
+// Old saves are detected and reset to fresh defaults — the accumulator paradigm
+// makes the prior staircase position non-meaningful (rate is in different units).
 const game = (() => {
   const today = todayKey();
   try {
     const s = JSON.parse(localStorage.getItem('stillness-game') || '{}');
     const sameDay = s.todayKey === today;
     return {
-      duration:  s.duration  ?? INITIAL_DURATION,
-      threshold: s.threshold ?? INITIAL_THRESHOLD,
-      wins:      s.wins      ?? 0,
-      best:      s.best      ?? 0,
-      round:     s.round     ?? 1,
-      totalWins: s.totalWins ?? 0,
-      todayKey:  today,
-      todaySecs: sameDay ? (s.todaySecs ?? 0) : 0,
-      todayWins: sameDay ? (s.todayWins ?? 0) : 0,
+      timeLimit:    s.timeLimit    ?? INITIAL_TIME_LIMIT,
+      requiredRate: s.requiredRate ?? INITIAL_REQUIRED_RATE,
+      wins:         s.wins         ?? 0,
+      best:         s.best         ?? 0, // longest fill achieved (capacity reached)
+      round:        s.round        ?? 1,
+      totalWins:    s.totalWins    ?? 0,
+      todayKey:     today,
+      todaySecs:    sameDay ? (s.todaySecs ?? 0) : 0,
+      todayWins:    sameDay ? (s.todayWins ?? 0) : 0,
     };
   } catch {
-    return { duration: INITIAL_DURATION, threshold: INITIAL_THRESHOLD,
+    return { timeLimit: INITIAL_TIME_LIMIT, requiredRate: INITIAL_REQUIRED_RATE,
              wins: 0, best: 0, round: 1, totalWins: 0,
              todayKey: today, todaySecs: 0, todayWins: 0 };
   }
 })();
+// Capacity is derived: timeLimit × requiredRate. Helper instead of cached field
+// so the two knobs are the source of truth — no risk of drift.
+function currentCapacity() { return game.timeLimit * game.requiredRate; }
 function saveGame() { localStorage.setItem('stillness-game', JSON.stringify(game)); }
 let saveAccumulator = 0; // periodic save throttle (seconds since last save)
 
@@ -1150,9 +1176,18 @@ let phase = 'idle';   // idle | settling | active | won | lost | interlude
 let roundMode = 'stillness'; // 'stillness' | 'smoothness' — mode of next round
 let roundStart = 0;   // performance.now() at active-phase start
 let settlingStart = 0;// performance.now() at settling-phase entry
-let belowSince = 0;   // performance.now() of first sub-threshold frame; 0 if above
 let breakStart = 0;   // performance.now() at start of post-round cooldown; 0 if no cooldown active
 let loopRunning = false; // guards against double-starting the loop on re-frame
+
+// v1.52: gradient accumulator. Integrates per frame during active rounds:
+// `accumulator += dt * (stillness - NEUTRAL_POINT)`, clamped to [0, capacity].
+// Reset to 0 at active-phase entry.
+// `roundFinalFraction` holds the 0..1 fraction reached at win/loss for the
+// won/lost visual hold. Stored as a fraction (not raw accumulator) because
+// the staircase mutates capacity in onWin/onLoss, so a stored ratio decouples
+// the display from the post-step capacity.
+let accumulator = 0;
+let roundFinalFraction = 0;
 
 // Trajectory recording / replay
 let recordingStart  = 0;   // performance.now() at recording start (settling entry)
@@ -1220,7 +1255,7 @@ const riToday  = document.getElementById('ri-today');
 const thresholdMark = document.getElementById('threshold-mark');
 
 // Cap is fixed by the safety constant — set it once at boot.
-riCap.textContent = fmtSecs(MAX_DURATION);
+riCap.textContent = fmtSecs(MAX_TIME_LIMIT);
 const actionBtn = document.getElementById('action-btn');
 const scoreDisplay = document.getElementById('score-display');
 const ringContainer = document.getElementById('ring-container');
@@ -1634,48 +1669,63 @@ function fmtToday(s) {
   return `${Math.floor(sec / 60)}m`;
 }
 
-// Position the threshold tick at game.threshold around the ring.
-// Ring lives in path-space (centre 110,110, radius 90); 0% sits at
-// 3 o'clock and progresses clockwise. The whole SVG is then rotated
-// -90° via CSS so visually 0% appears at 12 o'clock.
+// v1.52: threshold tick removed from the model — there is no threshold in
+// the gradient accumulator. The line element lives on in markup but is
+// hidden via inline style; the function is a no-op kept so other call
+// sites don't error during the transition. Future versions may delete
+// the SVG line entirely.
 function updateThresholdMark() {
-  const angle = game.threshold * 2 * Math.PI;
-  const cos = Math.cos(angle), sin = Math.sin(angle);
-  thresholdMark.setAttribute('x1', (110 + 85 * cos).toFixed(1));
-  thresholdMark.setAttribute('y1', (110 + 85 * sin).toFixed(1));
-  thresholdMark.setAttribute('x2', (110 + 95 * cos).toFixed(1));
-  thresholdMark.setAttribute('y2', (110 + 95 * sin).toFixed(1));
+  if (thresholdMark) thresholdMark.style.display = 'none';
 }
 
 function updateRoundInfo() {
   riRound.textContent  = game.round;
   riMode.textContent   = roundMode;
-  riTarget.textContent = fmtSecs(game.duration);
-  riFloor.textContent  = `${Math.round(game.threshold * 100)}%`;
+  // "Target" now means time limit; "Floor" now means required average net
+  // stillness (rate × 100% rounded). Capacity (timeLimit × rate) shows
+  // separately as the in-bucket goal.
+  riTarget.textContent = fmtSecs(game.timeLimit);
+  riFloor.textContent  = `${Math.round(game.requiredRate * 100)}%`;
   riBest.textContent   = fmtSecs(game.best);
   riToday.textContent  = fmtToday(game.todaySecs);
   updateThresholdMark();
 }
 
 function updateUI() {
-  const pct = Math.round(stillness * 100), color = stillnessColor(stillness);
+  // v1.52: two distinct visual signals on the same surface.
+  //   • During active/won/lost, the ring fill and score number show the
+  //     accumulator's progress toward capacity — the long-arc round score.
+  //   • Outside those phases, they show instantaneous stillness as a live
+  //     "you're being still" preview (idle/settling/interlude/replay use
+  //     the live signal so the ring stays alive without the round running).
+  // Color, audio, mandala, particles always read the instantaneous stillness
+  // — those are moment-to-moment feedback regardless of phase.
+  const cap = currentCapacity();
+  let displayValue; // 0..1 — what the ring fills to and the number reads
+  if (phase === 'active') {
+    displayValue = cap > 0 ? accumulator / cap : 0;
+  } else if (phase === 'won' || phase === 'lost') {
+    displayValue = roundFinalFraction;
+  } else {
+    displayValue = stillness;
+  }
+  displayValue = Math.max(0, Math.min(1, displayValue));
 
-  // Centre always shows stillness %. The countdown timer sits beside the
-  // ring during active rounds (see #round-timer). Below-threshold during
-  // active still tints the centre red as a warning at the same focal point.
+  const pct = Math.round(displayValue * 100);
+  const color = stillnessColor(stillness); // colour always reflects live stillness
+
   scoreNumber.textContent = pct;
-  scoreNumber.style.color = (phase === 'active' && stillness < game.threshold)
-    ? '#e09090' : color;
+  scoreNumber.style.color = color;
 
   if (phase === 'active') {
-    const remaining = game.duration - (performance.now() - roundStart) / 1000;
-    roundTimer.textContent = fmtSecs(remaining);
+    const remaining = game.timeLimit - (performance.now() - roundStart) / 1000;
+    roundTimer.textContent = fmtSecs(Math.max(0, remaining));
     roundTimer.classList.add('show');
   } else {
     roundTimer.classList.remove('show');
   }
 
-  ringProgress.style.strokeDashoffset = CIRCUMF * (1 - stillness);
+  ringProgress.style.strokeDashoffset = CIRCUMF * (1 - displayValue);
   ringProgress.style.stroke           = color;
   stillnessSvg.classList.toggle('pulsing',
     stillness > 0.75 && phase !== 'active' && phase !== 'interlude');
@@ -1747,7 +1797,10 @@ function setPhase(next) {
     if (roundMode === 'smoothness') {
       stateText.textContent = `Begin slow, continuous motion to start the clock · Esc to stop`;
     } else {
-      stateText.textContent = `Cross ${Math.round(game.threshold*100)}% to start the clock · Esc to stop`;
+      // v1.52: round starts when the accumulator would begin filling — the
+      // moment stillness crosses the neutral point. No specific percent to
+      // cross; the live stillness signal communicates readiness.
+      stateText.textContent = `Be still to begin · Esc to stop`;
     }
     settlingStart = performance.now();
     // Begin a fresh recording — earlier samples (settling lead-in) are part
@@ -1760,14 +1813,13 @@ function setPhase(next) {
     actionBtn.classList.add('stop', 'show');
     stateText.textContent = roundMode === 'smoothness'
       ? 'Move smoothly… · Esc to stop'
-      : 'Hold… · Esc to stop';
+      : 'Fill the bucket… · Esc to stop';
     roundStart = performance.now();
-    belowSince = 0;
+    accumulator = 0; // fresh round, empty bucket
     // v1.38: motion window NOT reset between phases. Variance-based
     // scoring needs continuity — settling samples are part of the
     // build-up to active. Resetting here would force the score to 0
-    // for the first 0.5 s of every round (until window refilled),
-    // which would trip the failure-grace timer immediately.
+    // for the first 0.5 s of every round (until window refilled).
     if (audioEngine) audioEngine.triggerStart();
   } else if (next === 'won') {
     actionBtn.classList.remove('stop');
@@ -1815,30 +1867,32 @@ function onWin() {
   game.wins++;
   game.totalWins++;
   game.todayWins++;
-  if (game.duration > game.best) game.best = game.duration;
+  // v1.52: best now tracks the longest time-limit at which the user has
+  // filled the bucket. The accumulator paradigm makes "longest time held"
+  // ill-defined — fill time varies with how aggressively the user pursues
+  // stillness — so we simply record the timeLimit they conquered.
+  if (game.timeLimit > game.best) game.best = game.timeLimit;
+  // Visual hold for won state is full ring.
+  roundFinalFraction = 1.0;
   // Smoothness rounds revert to stillness for the next round —
   // alternation pattern: stillness × N → interlude → smoothness → stillness × N → …
   const wasSmooth = roundMode === 'smoothness';
   if (wasSmooth) roundMode = 'stillness';
-  let durationStepped = false, thresholdStepped = false;
+  let timeStepped = false, rateStepped = false;
   if (game.wins >= WINS_TO_STEP_UP) {
-    // Both knobs step together — duration AND stillness floor — but each
-    // is bounded independently so one can max out while the other still climbs.
-    if (game.duration < MAX_DURATION) {
-      game.duration = Math.min(MAX_DURATION, game.duration + STEP_UP);
-      durationStepped = true;
+    // Both knobs step together — timeLimit AND requiredRate. Capacity
+    // grows on both axes (longer rounds, higher required average).
+    if (game.timeLimit < MAX_TIME_LIMIT) {
+      game.timeLimit = Math.min(MAX_TIME_LIMIT, game.timeLimit + TIME_STEP_UP);
+      timeStepped = true;
     }
-    if (game.threshold < THRESHOLD_MAX) {
-      game.threshold = Math.min(THRESHOLD_MAX, game.threshold + THRESHOLD_STEP);
-      thresholdStepped = true;
+    if (game.requiredRate < RATE_MAX) {
+      game.requiredRate = Math.min(RATE_MAX, game.requiredRate + RATE_STEP);
+      rateStepped = true;
     }
     game.wins = 0;
   }
-  const stepped = durationStepped || thresholdStepped;
-  const cappedOut = !stepped && game.wins === 0; // reached caps on both
-  // Note: cappedOut here means we hit the WINS_TO_STEP_UP threshold but
-  // both axes are at their cap. Detected post-hoc by neither stepping.
-  const fullyCapped = game.duration >= MAX_DURATION && game.threshold >= THRESHOLD_MAX;
+  const fullyCapped = game.timeLimit >= MAX_TIME_LIMIT && game.requiredRate >= RATE_MAX;
   game.round++;
   saveGame();
   updateRoundInfo();
@@ -1863,13 +1917,13 @@ function onWin() {
   }
 
   const heldSecs = (performance.now() - roundStart) / 1000;
-  const tPct = Math.round(game.threshold * 100);
+  const ratePct = Math.round(game.requiredRate * 100);
   let base;
-  if (fullyCapped)                              base = `Held. Both caps reached — stay here.`;
-  else if (durationStepped && thresholdStepped) base = `Held. Now ${fmtSecs(game.duration)} above ${tPct}%.`;
-  else if (durationStepped)                     base = `Held. Next: ${fmtSecs(game.duration)}.`;
-  else if (thresholdStepped)                    base = `Held. Floor now ${tPct}%.`;
-  else                                          base = `Held. ${WINS_TO_STEP_UP - game.wins} more to step up.`;
+  if (fullyCapped)                  base = `Filled. Both caps reached — stay here.`;
+  else if (timeStepped && rateStepped) base = `Filled. Next: ${fmtSecs(game.timeLimit)} at +${ratePct}%.`;
+  else if (timeStepped)             base = `Filled. Next: ${fmtSecs(game.timeLimit)}.`;
+  else if (rateStepped)             base = `Filled. Required rate now +${ratePct}%.`;
+  else                              base = `Filled. ${WINS_TO_STEP_UP - game.wins} more to step up.`;
   stateText.textContent = base + postRoundReminder(heldSecs);
 
   actionBtn.textContent = '▶︎';
@@ -1883,14 +1937,20 @@ function onLoss() {
   consecutiveWins = 0;
   game.wins = 0;
   if (roundMode === 'smoothness') roundMode = 'stillness';
-  const previousDuration = game.duration;
-  if (game.duration > MIN_DURATION) {
-    game.duration = Math.max(MIN_DURATION, game.duration - STEP_DOWN);
+  // v1.52: snapshot how much of the bucket filled before time ran out, as
+  // a fraction (decoupled from the staircase mutation that follows). Used
+  // for both the visual hold and the post-round message.
+  const previousCapacity = currentCapacity();
+  roundFinalFraction = previousCapacity > 0
+    ? Math.max(0, Math.min(1, accumulator / previousCapacity)) : 0;
+  const filledPct = Math.round(roundFinalFraction * 100);
+  if (game.timeLimit > MIN_TIME_LIMIT) {
+    game.timeLimit = Math.max(MIN_TIME_LIMIT, game.timeLimit - TIME_STEP_DOWN);
   }
-  // Threshold steps down on every loss too — same direction as duration,
-  // so the next round is easier on both axes.
-  if (game.threshold > THRESHOLD_MIN) {
-    game.threshold = Math.max(THRESHOLD_MIN, game.threshold - THRESHOLD_STEP);
+  // Required rate steps down on every loss too — same direction as
+  // timeLimit, so the next round is easier on both axes.
+  if (game.requiredRate > RATE_MIN) {
+    game.requiredRate = Math.max(RATE_MIN, game.requiredRate - RATE_STEP);
   }
   game.round++;
   saveGame();
@@ -1903,7 +1963,7 @@ function onLoss() {
 
   const heldSecs = Math.floor((performance.now() - roundStart) / 1000);
   // Neutral, supportive copy — not failure-coded
-  stateText.textContent = `You held ${heldSecs}s of ${fmtSecs(previousDuration)}.`
+  stateText.textContent = `You filled ${filledPct}% in ${heldSecs}s.`
                         + postRoundReminder(heldSecs);
   actionBtn.textContent = '▶︎';
   actionBtn.classList.add('show');
@@ -1923,7 +1983,8 @@ function saveLastTrajectory(won) {
   const trajectory = {
     timestamp: Date.now(),
     mode: roundMode,
-    duration: game.duration,
+    timeLimit: game.timeLimit,
+    capacity:  currentCapacity(),
     held: (performance.now() - roundStart) / 1000,
     won,
     samples: recordingSamples,
@@ -1957,6 +2018,12 @@ function startReplay() {
     duration: traj.samples[traj.samples.length - 1].t,
     index: 0,
     mode: traj.mode,
+    // v1.52: capacity used during recording, so the replay can derive the
+    // accumulator without coupling to the player's current settings. Older
+    // trajectories without capacity recorded fall back to the live setting.
+    capacity: traj.capacity ?? currentCapacity(),
+    accumulator: 0,
+    lastSampleTime: 0,
   };
   phase = 'replay';
   actionBtn.textContent = '■';
@@ -2117,13 +2184,30 @@ function loop() {
     }
     const sample = replayState.samples[replayState.index];
     stillness = sample.s;
+    // v1.52: derive accumulator at replay time so the ring fills the same
+    // way it did live. Samples are at 10 Hz; integrate using the inter-
+    // sample interval so the accumulator is independent of frame rate.
+    // v1.53: progress-modulated sensitivity is applied here too so
+    // playback feels identical to the live round.
+    const sampleT = sample.t;
+    const sampleDt = Math.max(0, sampleT - replayState.lastSampleTime);
+    replayState.lastSampleTime = sampleT;
+    const replayProgress = replayState.capacity > 0
+      ? replayState.accumulator / replayState.capacity : 0;
+    const replaySens = 1 + SENS_SPAN * (replayProgress - 0.5);
+    replayState.accumulator = Math.max(0, Math.min(replayState.capacity,
+      replayState.accumulator + sampleDt * (stillness - NEUTRAL_POINT) * replaySens));
     if (audioEngine) audioEngine.update(stillness, sample.m);
 
-    // Mirror the same visual updates the live loop performs
+    // Mirror the same visual updates the live loop performs. Ring/number
+    // show the replay's reconstructed accumulator; colour reflects live
+    // stillness as in the active phase.
+    const replayPct = replayState.capacity > 0
+      ? replayState.accumulator / replayState.capacity : 0;
     const color = stillnessColor(stillness);
-    ringProgress.style.strokeDashoffset = CIRCUMF * (1 - stillness);
+    ringProgress.style.strokeDashoffset = CIRCUMF * (1 - replayPct);
     ringProgress.style.stroke = color;
-    scoreNumber.textContent = Math.round(stillness * 100);
+    scoreNumber.textContent = Math.round(replayPct * 100);
     scoreNumber.style.color = color;
     innerMandala.style.opacity = Math.max(0, (stillness - 0.45) / 0.55);
 
@@ -2157,16 +2241,24 @@ function loop() {
     target      = stillnessScore(motion);
     audioMotion = motion;
   }
-  // Asymmetric EMA. Faster falling alpha for responsive drop on motion;
-  // slow rising alpha so high stillness has to be earned, not drifted into.
-  const fallingAlpha = 0.25;
-  const risingAlpha  = 0.05;
-  const alpha = target < stillness ? fallingAlpha : risingAlpha;
-  stillness   = Math.max(0, Math.min(1, stillness + alpha * (target - stillness)));
+  // v1.51: symmetric exponential pursuit toward target — replaces the prior
+  // asymmetric EMA (α=0.25 falling / 0.05 rising). The ring used to get this
+  // smoothing from a CSS transition (0.6 s cubic-bezier ease-out on
+  // stroke-dashoffset); we've now lifted that easing into the score itself
+  // so game logic, audio, ring, and the displayed number all read one
+  // value. α=0.10 per frame at ~60 fps reaches ~63% of a step in ~160 ms,
+  // ~95% in ~480 ms — perceptually close to what the CSS transition was
+  // doing, and the symmetry means brief motion blips no longer drag the
+  // score to zero (the property you noticed and liked on the ring).
+  const SCORE_ALPHA = 0.10;
+  stillness = Math.max(0, Math.min(1, stillness + SCORE_ALPHA * (target - stillness)));
 
   // ── Phase machine ──
   if (phase === 'settling') {
-    if (stillness >= game.threshold) {
+    if (stillness > NEUTRAL_POINT) {
+      // v1.52: round begins the moment net fill rate goes positive —
+      // the accumulator would be banking from this instant if we were
+      // already active, so just start now.
       setPhase('active');
     } else if ((performance.now() - settlingStart) / 1000 >= SETTLING_TIMEOUT) {
       // Took too long to settle — gently return to idle (user may have walked away)
@@ -2174,20 +2266,21 @@ function loop() {
       stateText.textContent = 'Take your time. Begin again whenever you\'re ready.';
     }
   } else if (phase === 'active') {
-    let failed = false;
-    if (stillness < game.threshold) {
-      // Track *continuous* time below threshold; only fail after grace expires.
-      if (belowSince === 0) belowSince = performance.now();
-      if ((performance.now() - belowSince) / 1000 >= FAIL_GRACE_SECS) {
-        belowSince = 0;
-        setPhase('lost');
-        failed = true;
-      }
-    } else {
-      belowSince = 0; // recovered — reset the grace timer
-    }
-    if (!failed && (performance.now() - roundStart) / 1000 >= game.duration) {
+    // v1.52: gradient accumulator. Every frame contributes proportionally
+    // to (stillness - NEUTRAL_POINT). Above neutral fills, below drains.
+    // No threshold cliff, no failure-grace window — drain is the grace.
+    // v1.53: sensitivity ramps with progress (less sensitive early, more
+    // sensitive late). Symmetric — applies to both fill and drain.
+    const cap = currentCapacity();
+    const progress = cap > 0 ? accumulator / cap : 0;
+    const sens = 1 + SENS_SPAN * (progress - 0.5);
+    accumulator = Math.max(0, Math.min(cap,
+      accumulator + dt * (stillness - NEUTRAL_POINT) * sens));
+
+    if (accumulator >= cap) {
       setPhase('won');
+    } else if ((performance.now() - roundStart) / 1000 >= game.timeLimit) {
+      setPhase('lost');
     }
   }
 
@@ -2326,7 +2419,7 @@ positionReadyBtn.addEventListener('click', () => {
   setPhase('idle');
   // Personalised greeting: first-time, returning today, or returning across days.
   if (game.totalWins === 0) {
-    stateText.textContent = `Welcome. Your first round: ${fmtSecs(game.duration)} above ${Math.round(game.threshold*100)}%.`;
+    stateText.textContent = `Welcome. Your first round: fill the bucket within ${fmtSecs(game.timeLimit)}.`;
   } else if (game.todayWins > 0) {
     stateText.textContent = `Welcome back. Round ${game.round}.`;
   } else {
@@ -2525,7 +2618,8 @@ reportSubmit.addEventListener('click', () => {
       text: text.slice(0, 2000),
       snapshot: {
         round: game.round,
-        duration: game.duration,
+        timeLimit: game.timeLimit,
+        requiredRate: game.requiredRate,
         todaySecs: Math.floor(game.todaySecs),
         phase,
         tier: TIER,
@@ -2540,7 +2634,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.49 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.53 · t${TIER}`;
 </script>
 </body>
 </html>

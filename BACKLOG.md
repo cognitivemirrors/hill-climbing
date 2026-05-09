@@ -17,7 +17,7 @@ Move items between sections freely. The order within a section is rough priority
 
 Things noticed but not yet sorted into a category. Empty this regularly.
 
-- [ ]
+- [ ] **Onboarding copy is stale post-v1.52.** The six-page modal still describes the old game ("hold above a moving threshold," "drop below for half a second or longer and the round ends," "amber tick marks the floor"). Currently invisible because `FEATURES.showOnboardingOnFirstRun` is `false`, but anyone re-enabling it sees a wrong description of the practice. Rewrite to match the gradient-accumulator paradigm before re-enabling.
 
 ---
 
@@ -176,6 +176,10 @@ Items captured via the in-app `this didn't feel right` link. Pull from `localSto
 
 Items completed in recent versions, kept for context. Archive to a CHANGELOG when this gets noisy.
 
+- [x] v1.53 — Progress-modulated sensitivity. Fill/drain rate now multiplied by `1 + SENS_SPAN * (progress - 0.5)`, where `SENS_SPAN = 1.0`. Sensitivity ramps from 0.5× at progress=0 to 1.5× at progress=1.0. Effect: early-round drift and twitches barely move the bucket (gentle entry); late-round, every frame matters (delicate ending). Symmetric — applies to both fill and drain. Replay applies the same modulation so playback feels identical to the live round. Calibration drift: ≈10% slower time-to-fill at constant stillness; staircase adapts.
+- [x] v1.52 — **Paradigm shift: gradient accumulator.** Score is now an integral, not an instant. Per frame during active rounds: `A += dt * (stillness - 0.5)`, clamped to `[0, capacity]`. Win when A reaches capacity; lose when timeLimit elapses. Two staircase knobs (timeLimit, requiredRate) replace (duration, threshold); capacity = timeLimit × requiredRate. The 2-up/1-down cadence (Levitt 1971) is preserved. Removed: failure-grace window, threshold-tick visual, old asymmetric-fail logic — every frame counts proportionally, drain is the grace. Visuals: ring fill and score number show accumulator/capacity during active/won/lost; live stillness during idle/settling/interlude/replay. Color, audio, mandala, particles continue to track instantaneous stillness — moment-to-moment feedback runs alongside long-arc round score. Replay derives the accumulator from recorded samples + saved capacity. localStorage schema migrated; old saves reset to fresh defaults.
+- [x] v1.51 — Collapsed three values back to one. Replaced the asymmetric EMA (α=0.25 falling / 0.05 rising) with a symmetric exponential pursuit (α=0.10 both directions), and removed the CSS transition on `stroke-dashoffset`. Game logic, audio, ring fill, and the displayed integer all now read the same eased `stillness`. The ring's old "anti-zero-drop" property — that the user explicitly liked — is now a property of the score itself, not just the rendered ring. Tradeoff: rising is faster than the prior design (α 0.05 → 0.10), so high stillness builds slightly faster than before; the curve in `stillnessScore()` (linear fall 0.80→1.00) still gates 100% behind genuinely sub-noise motion.
+- [x] v1.50 — Display-only smoothing on the score number (`displayedStillness` lerps toward `stillness` per frame, α≈0.10). Superseded by v1.51 which lifted the smoothing into the underlying score itself.
 - [x] v1.32 — Temple-atmosphere paradigm: harmonic drone fades at peak stillness; ambient pentatonic bell strikes at 6–14s intervals replace the sustained sound. Dissonance floor reduced to 0.01.
 - [x] v1.31 — More milestone bells in high range (added 97% → 792 Hz, 99% → 864 Hz). Five total milestones now.
 - [x] v1.30 — Per-layer fade-in / fade-out windows along the stillness axis. Anchor layers (sub-bass + fundamental) replaced point-density at peak with sparse two-tone texture.
