@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Journal</title>
+  <style>
+    :root {
+      --bg:    #0c0e14;
+      --panel: rgba(255,255,255,0.035);
+      --line:  rgba(255,255,255,0.10);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --warm:  hsl(38,75%,64%);
+      --cool:  hsl(214,70%,68%);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 90px;
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { left: 20px; }
+    #data-controls { right: 20px; display: flex; gap: 16px; }
+    #data-controls button {
+      background: none; border: none; color: var(--dim);
+      font-size: 11px; letter-spacing: 0.06em; cursor: pointer; transition: color 0.2s;
+    }
+    #data-controls button:hover { color: var(--text); }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 16px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    main { max-width: 620px; margin: 0 auto; }
+
+    /* ── write view ─────────────────────────────────────────────── */
+    .meta-line {
+      font-size: 11px; color: var(--dim); letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 16px;
+    }
+    .prompt-line { font-size: 15px; color: var(--mid); margin-bottom: 14px; }
+    #entry-text {
+      width: 100%; min-height: 210px; resize: none; display: block;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.7;
+      padding: 18px; outline: none; transition: border-color 0.2s;
+    }
+    #entry-text:focus { border-color: rgba(255,255,255,0.22); }
+    #entry-text::placeholder { color: var(--faint); }
+
+    .scales { display: flex; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+    .scale-block {
+      flex: 1; min-width: 220px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; padding: 15px 18px 16px;
+    }
+    .scale-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .scale-label { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mid); }
+    .scale-value { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+    .scale { display: flex; gap: 7px; }
+    .dot {
+      flex: 1; height: 26px; border-radius: 7px; padding: 0;
+      border: 1px solid rgba(255,255,255,0.14); background: transparent;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .dot:hover { border-color: rgba(255,255,255,0.32); }
+    .dot.on { border-color: transparent; }
+    .scale-anchors {
+      display: flex; justify-content: space-between; margin-top: 9px;
+      font-size: 10px; color: var(--faint); letter-spacing: 0.05em;
+    }
+
+    .write-actions { display: flex; align-items: center; gap: 18px; margin-top: 24px; }
+    #save-btn {
+      min-width: 124px; height: 44px; border-radius: 22px; padding: 0 26px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+    }
+    #save-btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    #save-btn:disabled { opacity: 0.32; cursor: default; }
+    #cancel-edit-btn {
+      background: none; border: none; color: var(--dim);
+      font-size: 12px; letter-spacing: 0.06em; cursor: pointer; transition: color 0.2s;
+    }
+    #cancel-edit-btn:hover { color: var(--text); }
+    #save-feedback {
+      font-size: 12px; color: var(--mid); letter-spacing: 0.06em;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #save-feedback.show { opacity: 1; }
+    .hint { font-size: 11px; color: var(--faint); letter-spacing: 0.04em; margin-top: 14px; }
+
+    /* ── history view ───────────────────────────────────────────── */
+    .day-group { margin-bottom: 30px; }
+    .day-header {
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);
+      margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .entry-card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 15px 18px; margin-bottom: 12px; animation: fadeUp 0.3s ease;
+    }
+    .entry-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .entry-time { font-size: 11px; color: var(--dim); letter-spacing: 0.05em; white-space: nowrap; }
+    .entry-ratings { display: flex; gap: 14px; }
+    .rating-chip { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--mid); letter-spacing: 0.03em; }
+    .rating-swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .entry-text { font-size: 15px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
+    .entry-text:empty::before { content: '— check-in, no note —'; color: var(--faint); font-style: italic; }
+    .entry-actions { display: flex; gap: 16px; margin-top: 12px; opacity: 0; transition: opacity 0.2s; }
+    .entry-card:hover .entry-actions { opacity: 1; }
+    .entry-actions button {
+      background: none; border: none; color: var(--dim);
+      font-size: 11px; letter-spacing: 0.05em; cursor: pointer; transition: color 0.2s;
+    }
+    .entry-actions button:hover { color: var(--text); }
+    .entry-actions button.armed { color: hsl(8,72%,64%); }
+
+    .empty { text-align: center; color: var(--dim); font-size: 14px; margin-top: 84px; line-height: 1.9; }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 80px; }
+      #version-label { display: none; }
+      .scale-block { min-width: 100%; }
+      .entry-actions { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<div class="corner" id="version-label">v0.1 · journal</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="write">Write</button>
+  <button class="mode-btn"        data-view="history">History</button>
+</nav>
+<div class="corner" id="data-controls">
+  <button id="export-btn">export</button>
+  <button id="import-btn">import</button>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- write -->
+  <section id="write-view">
+    <div class="meta-line" id="write-meta"></div>
+    <div class="prompt-line" id="prompt-line"></div>
+    <textarea id="entry-text" placeholder="Write freely. Nothing here leaves your device."></textarea>
+
+    <div class="scales">
+      <div class="scale-block">
+        <div class="scale-top"><span class="scale-label">Mood</span><span class="scale-value" id="mood-value">—</span></div>
+        <div class="scale" id="scale-mood"></div>
+        <div class="scale-anchors"><span>low</span><span>high</span></div>
+      </div>
+      <div class="scale-block">
+        <div class="scale-top"><span class="scale-label">Satisfaction</span><span class="scale-value" id="sat-value">—</span></div>
+        <div class="scale" id="scale-sat"></div>
+        <div class="scale-anchors"><span>low</span><span>high</span></div>
+      </div>
+    </div>
+
+    <div class="write-actions">
+      <button id="save-btn" disabled>SAVE</button>
+      <button id="cancel-edit-btn" class="hidden">cancel edit</button>
+      <span id="save-feedback">saved</span>
+    </div>
+    <div class="hint">⌘/Ctrl + Enter to save · a note, a rating, or both</div>
+  </section>
+
+  <!-- history -->
+  <section id="history-view" class="hidden">
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty hidden">
+      Nothing here yet.<br>Your first thought will land on this page.
+    </div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const VERSION    = 'v0.1 · journal';
+const DB_NAME    = 'journal';
+const STORE      = 'entries';
+const SCALE_MAX  = 7;
+const PROMPTS = [
+  'What’s present right now?',
+  'What’s been asking for your attention?',
+  'Name what you’re feeling, plainly.',
+  'What happened today that mattered?',
+  'What’s the truth you’re circling around?',
+  'Where did your mind keep returning?',
+  'What would you tell a friend in your position?',
+];
+
+// ── State ───────────────────────────────────────────────────────────────────
+const state = {
+  view:      'write',
+  entries:   [],                                  // newest first
+  editingId: null,
+  draft:     { text: '', mood: null, satisfaction: null },
+  pendingDelete: null,                            // {id, timer} for two-tap delete
+};
+
+// ── IndexedDB (minimal promise wrapper) ─────────────────────────────────────
+let _db = null;
+function db() {
+  if (_db) return Promise.resolve(_db);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        const store = d.createObjectStore(STORE, { keyPath: 'id' });
+        store.createIndex('created', 'created');
+      }
+    };
+    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+function idbAll() {
+  return db().then(d => new Promise((res, rej) => {
+    const req = d.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+    req.onsuccess = () => res(req.result || []);
+    req.onerror   = () => rej(req.error);
+  }));
+}
+function idbPut(entry) {
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(entry);
+    tx.oncomplete = () => res(entry);
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function idbDelete(id) {
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function uid() {
+  return (crypto.randomUUID && crypto.randomUUID()) ||
+         `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function valueColor(v) {                          // 1..7 → cool → warm
+  const t = (v - 1) / (SCALE_MAX - 1);
+  const hue = 214 - t * (214 - 38);
+  return `hsl(${hue.toFixed(0)}, 62%, 62%)`;
+}
+function dayKey(ts) { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function dayLabel(ts) {
+  const d = new Date(ts), now = new Date();
+  if (dayKey(ts) === dayKey(now.getTime())) return 'Today';
+  if (dayKey(ts) === dayKey(now.getTime() - 86400000)) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function timeLabel(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function escapeHTML(s) { const p = document.createElement('div'); p.textContent = s; return p.innerHTML; }
+
+// ── DOM ─────────────────────────────────────────────────────────────────────
+const writeView   = document.getElementById('write-view');
+const historyView = document.getElementById('history-view');
+const writeMeta   = document.getElementById('write-meta');
+const promptLine  = document.getElementById('prompt-line');
+const textEl      = document.getElementById('entry-text');
+const moodValue   = document.getElementById('mood-value');
+const satValue    = document.getElementById('sat-value');
+const saveBtn     = document.getElementById('save-btn');
+const cancelEdit  = document.getElementById('cancel-edit-btn');
+const saveFeedback= document.getElementById('save-feedback');
+const historyList = document.getElementById('history-list');
+const historyEmpty= document.getElementById('history-empty');
+const importFile  = document.getElementById('import-file');
+
+// ── Scale inputs ────────────────────────────────────────────────────────────
+function renderScale(containerId, value) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = '';
+  for (let i = 1; i <= SCALE_MAX; i++) {
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (value && i <= value ? ' on' : '');
+    if (value && i <= value) dot.style.background = valueColor(value);
+    dot.dataset.v = i;
+    c.appendChild(dot);
+  }
+}
+function renderScales() {
+  renderScale('scale-mood', state.draft.mood);
+  renderScale('scale-sat',  state.draft.satisfaction);
+  moodValue.textContent = state.draft.mood        ? `${state.draft.mood}/${SCALE_MAX}` : '—';
+  satValue.textContent  = state.draft.satisfaction ? `${state.draft.satisfaction}/${SCALE_MAX}` : '—';
+}
+function pickScale(field, v) {
+  state.draft[field] = (state.draft[field] === v) ? null : v;   // tap active to clear
+  renderScales();
+  refreshSaveState();
+}
+document.getElementById('scale-mood').addEventListener('click', e => {
+  if (e.target.dataset.v) pickScale('mood', +e.target.dataset.v);
+});
+document.getElementById('scale-sat').addEventListener('click', e => {
+  if (e.target.dataset.v) pickScale('satisfaction', +e.target.dataset.v);
+});
+
+// ── Write view ──────────────────────────────────────────────────────────────
+function refreshSaveState() {
+  const has = textEl.value.trim() || state.draft.mood || state.draft.satisfaction;
+  saveBtn.disabled = !has;
+}
+function autoGrow() {
+  textEl.style.height = 'auto';
+  textEl.style.height = Math.max(210, textEl.scrollHeight) + 'px';
+}
+function renderWrite() {
+  textEl.value = state.draft.text;
+  autoGrow();
+  renderScales();
+  refreshSaveState();
+  if (state.editingId) {
+    const e = state.entries.find(x => x.id === state.editingId);
+    writeMeta.textContent = `Editing · ${dayLabel(e.created)} · ${timeLabel(e.created)}`;
+    promptLine.classList.add('hidden');
+    saveBtn.textContent = 'UPDATE';
+    cancelEdit.classList.remove('hidden');
+  } else {
+    writeMeta.textContent = `${dayLabel(Date.now())} · ${timeLabel(Date.now())}`;
+    promptLine.textContent = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+    promptLine.classList.remove('hidden');
+    saveBtn.textContent = 'SAVE';
+    cancelEdit.classList.add('hidden');
+  }
+}
+function resetDraft() {
+  state.editingId = null;
+  state.draft = { text: '', mood: null, satisfaction: null };
+}
+function flashSaved(msg) {
+  saveFeedback.textContent = msg;
+  saveFeedback.classList.add('show');
+  setTimeout(() => saveFeedback.classList.remove('show'), 1600);
+}
+
+async function save() {
+  const text = textEl.value.trim();
+  if (!text && !state.draft.mood && !state.draft.satisfaction) return;
+  const now = Date.now();
+
+  if (state.editingId) {
+    const e = state.entries.find(x => x.id === state.editingId);
+    const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction, updated: now };
+    await idbPut(updated);
+    resetDraft();
+    await loadEntries();
+    switchView('history');
+  } else {
+    const entry = {
+      id: uid(), created: now, updated: now,
+      text, mood: state.draft.mood, satisfaction: state.draft.satisfaction,
+      embedding: null, embModel: null,            // reserved for the semantic-map phase
+    };
+    await idbPut(entry);
+    resetDraft();
+    await loadEntries();
+    renderWrite();
+    flashSaved('saved');
+  }
+}
+
+function startEdit(id) {
+  const e = state.entries.find(x => x.id === id);
+  if (!e) return;
+  state.editingId = id;
+  state.draft = { text: e.text || '', mood: e.mood || null, satisfaction: e.satisfaction || null };
+  switchView('write');
+}
+
+// ── History view ────────────────────────────────────────────────────────────
+function clearPendingDelete() {
+  if (state.pendingDelete) { clearTimeout(state.pendingDelete.timer); state.pendingDelete = null; }
+}
+function ratingChip(label, v) {
+  if (!v) return '';
+  return `<span class="rating-chip"><span class="rating-swatch" style="background:${valueColor(v)}"></span>${label} ${v}</span>`;
+}
+function renderHistory() {
+  clearPendingDelete();
+  historyList.innerHTML = '';
+  if (!state.entries.length) { historyEmpty.classList.remove('hidden'); return; }
+  historyEmpty.classList.add('hidden');
+
+  let lastDay = null;
+  let group = null;
+  state.entries.forEach(e => {
+    const k = dayKey(e.created);
+    if (k !== lastDay) {
+      lastDay = k;
+      group = document.createElement('div');
+      group.className = 'day-group';
+      const h = document.createElement('div');
+      h.className = 'day-header';
+      h.textContent = dayLabel(e.created);
+      group.appendChild(h);
+      historyList.appendChild(group);
+    }
+    const card = document.createElement('div');
+    card.className = 'entry-card';
+    card.innerHTML = `
+      <div class="entry-head">
+        <span class="entry-time">${timeLabel(e.created)}${e.updated > e.created + 1000 ? ' · edited' : ''}</span>
+        <span class="entry-ratings">${ratingChip('mood', e.mood)}${ratingChip('sat', e.satisfaction)}</span>
+      </div>
+      <div class="entry-text">${escapeHTML(e.text || '')}</div>
+      <div class="entry-actions">
+        <button data-act="edit">edit</button>
+        <button data-act="delete">delete</button>
+      </div>`;
+    card.querySelector('[data-act="edit"]').addEventListener('click', () => startEdit(e.id));
+    const delBtn = card.querySelector('[data-act="delete"]');
+    delBtn.addEventListener('click', () => handleDelete(e.id, delBtn));
+    group.appendChild(card);
+  });
+}
+function handleDelete(id, btn) {
+  if (state.pendingDelete && state.pendingDelete.id === id) {
+    clearPendingDelete();
+    idbDelete(id).then(loadEntries).then(() => { if (state.view === 'history') renderHistory(); });
+    return;
+  }
+  clearPendingDelete();
+  btn.textContent = 'tap again';
+  btn.classList.add('armed');
+  const timer = setTimeout(() => { btn.textContent = 'delete'; btn.classList.remove('armed'); state.pendingDelete = null; }, 3000);
+  state.pendingDelete = { id, timer };
+}
+
+// ── View switching ──────────────────────────────────────────────────────────
+function switchView(v) {
+  state.view = v;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  if (v === 'write') {
+    writeView.classList.remove('hidden');
+    historyView.classList.add('hidden');
+    renderWrite();
+    textEl.focus();
+  } else {
+    writeView.classList.add('hidden');
+    historyView.classList.remove('hidden');
+    renderHistory();
+  }
+}
+
+// ── Data load + export/import ───────────────────────────────────────────────
+async function loadEntries() {
+  const all = await idbAll();
+  state.entries = all.sort((a, b) => b.created - a.created);
+}
+function exportData() {
+  const payload = { app: 'journal', schema: 1, exported: Date.now(), entries: state.entries };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `journal-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = Array.isArray(parsed) ? parsed : parsed.entries;
+    if (!Array.isArray(incoming)) throw new Error('no entries array');
+    let n = 0;
+    for (const e of incoming) {
+      if (!e || typeof e.text === 'undefined') continue;
+      await idbPut({
+        id: e.id || uid(),
+        created: e.created || Date.now(),
+        updated: e.updated || e.created || Date.now(),
+        text: String(e.text || ''),
+        mood: e.mood ?? null,
+        satisfaction: e.satisfaction ?? null,
+        embedding: e.embedding ?? null,
+        embModel: e.embModel ?? null,
+      });
+      n++;
+    }
+    await loadEntries();
+    switchView('history');
+    flashSaved(`imported ${n}`);
+    alert(`Imported ${n} entr${n === 1 ? 'y' : 'ies'} (merged by id).`);
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+textEl.addEventListener('input', () => { state.draft.text = textEl.value; autoGrow(); refreshSaveState(); });
+saveBtn.addEventListener('click', save);
+cancelEdit.addEventListener('click', () => { resetDraft(); switchView('history'); });
+textEl.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!saveBtn.disabled) save(); }
+});
+document.getElementById('export-btn').addEventListener('click', exportData);
+document.getElementById('import-btn').addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+(async () => {
+  try {
+    await loadEntries();
+  } catch (err) {
+    document.querySelector('main').innerHTML =
+      '<div class="empty">Storage unavailable in this browser context.<br>' +
+      'IndexedDB may be disabled (private window?). Your entries can’t be saved here.</div>';
+    return;
+  }
+  switchView('write');
+})();
+</script>
+</body>
+</html>
