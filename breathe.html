@@ -6,17 +6,36 @@
   <title>Breathe · Hill Climbing</title>
   <style>
     :root {
-      --bg:   #0c0e14;
-      --text: rgba(255,255,255,0.82);
-      --dim:  rgba(255,255,255,0.36);
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.12);
+      --line-strong: rgba(255,255,255,0.22);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.36);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Breathe (blue) ─────────────────── */
+      --accent:      hsl(200,76%,68%);
+      --accent-soft: hsla(200,76%,66%,0.5);
+      --accent-glow: hsla(205,72%,56%,0.18);
+      /* breath-phase tints (inhale warm / exhale cool) */
       --warm: hsla(200,76%,66%,1);
       --cool: hsla(232,65%,72%,1);
+      --bg: var(--bg-base);        /* legacy alias */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%; height: 100%;
-      background: var(--bg); color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background:
+        radial-gradient(ellipse 85% 72% at 50% 30%, var(--accent-glow), transparent 72%),
+        var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-ui);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       overflow: hidden; user-select: none;
     }
@@ -39,7 +58,7 @@
       cursor: pointer; user-select: none;
       transition: color 0.2s, border-color 0.2s;
     }
-    #home-link:hover { color: var(--warm); border-color: hsla(200,76%,66%,0.5); }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
     #home-link svg { width: 16px; height: 16px; display: block; }
 
     /* mode nav */
@@ -61,7 +80,8 @@
     /* ring (shared) */
     #ring-view { display: flex; flex-direction: column; align-items: center; }
     #phase-label {
-      font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase;
+      font-family: var(--font-display);
+      font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase;
       color: var(--dim); height: 16px; margin-bottom: 38px; transition: color 0.7s ease;
     }
     #ring {
@@ -72,8 +92,9 @@
       transition: transform 0.7s ease, border-color 0.7s ease, box-shadow 0.7s ease;
     }
     #countdown {
-      font-size: 46px; font-weight: 200; letter-spacing: -0.02em; color: var(--text);
-      opacity: 0; transition: opacity 0.4s ease; font-variant-numeric: tabular-nums;
+      font-family: var(--font-display);
+      font-size: 52px; font-weight: 400; letter-spacing: -0.01em; color: var(--text);
+      opacity: 0; transition: opacity 0.4s ease; font-variant-numeric: lining-nums tabular-nums;
     }
     #instruction { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; margin-top: 12px; height: 16px; }
 
@@ -97,7 +118,7 @@
       transition: border-color 0.2s, color 0.2s;
     }
     .proto-btn:hover    { border-color: rgba(255,255,255,0.32); color: var(--text); }
-    .proto-btn.sel      { border-color: var(--warm); color: var(--warm); }
+    .proto-btn.sel      { border-color: var(--accent); color: var(--accent); }
     .proto-btn:disabled { opacity: 0.34; cursor: default; pointer-events: none; }
     #proto-info {
       position: fixed; bottom: 38px; left: 22px;
@@ -111,11 +132,11 @@
     /* prime (guidance cards) */
     #prime-view { display: flex; flex-direction: column; align-items: center; max-width: 380px; padding: 0 28px; }
     #prime-card { text-align: center; margin-bottom: 36px; animation: fadeUp 0.4s ease; }
-    #prime-card h2 { font-size: 15px; font-weight: 500; letter-spacing: 0.06em; margin-bottom: 18px; color: var(--text); }
+    #prime-card h2 { font-family: var(--font-display); font-size: 19px; font-weight: 400; letter-spacing: 0.04em; margin-bottom: 18px; color: var(--text); }
     #prime-card p  { font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.56); }
     #prime-dots { display: flex; gap: 8px; margin-bottom: 32px; }
     .prime-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background 0.3s; }
-    .prime-dot.on { background: var(--warm); }
+    .prime-dot.on { background: var(--accent); }
     #prime-next-btn {
       width: 170px; height: 42px; border-radius: 21px;
       border: 1.5px solid rgba(255,255,255,0.22);
@@ -124,8 +145,8 @@
       transition: border-color 0.2s, background 0.2s, color 0.2s;
     }
     #prime-next-btn:hover { border-color: rgba(255,255,255,0.44); background: rgba(255,255,255,0.05); }
-    #prime-next-btn.final { border-color: var(--warm); color: var(--warm); }
-    #prime-next-btn.final:hover { background: rgba(100,185,220,0.08); }
+    #prime-next-btn.final { border-color: var(--accent); color: var(--accent); }
+    #prime-next-btn.final:hover { background: var(--accent-glow); }
     #prime-skip-btn {
       margin-top: 8px; background: transparent; border: none;
       color: var(--dim); font-size: 11px; letter-spacing: 0.08em;
@@ -135,10 +156,11 @@
 
     /* exercise */
     #exercise-view { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-    #exercise-label { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+    #exercise-label { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--dim); }
     #exercise-timer {
-      font-size: 64px; font-weight: 200; font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em; color: var(--text); line-height: 1;
+      font-family: var(--font-display);
+      font-size: 68px; font-weight: 400; font-variant-numeric: lining-nums tabular-nums;
+      letter-spacing: -0.01em; color: var(--text); line-height: 1;
     }
     #exercise-tip { font-size: 12px; color: var(--dim); letter-spacing: 0.07em; margin-top: 8px; }
     #recover-btn {
@@ -152,7 +174,7 @@
 
     /* recover controls */
     #recover-controls { margin-top: 44px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-    #recover-status { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+    #recover-status { font-family: var(--font-display); font-size: 13px; color: var(--dim); letter-spacing: 0.16em; text-transform: uppercase; }
     #stop-training-btn {
       width: 112px; height: 42px; border-radius: 21px;
       border: 1.5px solid rgba(255,255,255,0.14);
@@ -170,8 +192,8 @@
     }
     @media (max-width: 480px) {
       #ring { width: 240px; height: 240px; }
-      #countdown { font-size: 38px; }
-      #exercise-timer { font-size: 52px; }
+      #countdown { font-size: 44px; }
+      #exercise-timer { font-size: 58px; }
       #prime-card p { font-size: 13px; }
     }
   </style>
@@ -183,7 +205,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · breathe</div>
+<div class="corner" id="version-label">v0.4 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 

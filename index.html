@@ -7,22 +7,26 @@
   <title>Hill Climbing</title>
   <style>
     :root {
-      --bg:    #0c0e14;
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
       --text:  rgba(255,255,255,0.86);
       --mid:   rgba(255,255,255,0.52);
       --dim:   rgba(255,255,255,0.34);
       --faint: rgba(255,255,255,0.16);
       --line:  rgba(255,255,255,0.10);
-      --panel: rgba(255,255,255,0.035);
+      --panel: rgba(255,255,255,0.04);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --bg: var(--bg-base);        /* legacy alias */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       width: 100%; min-height: 100%;
       background:
         radial-gradient(ellipse 80% 60% at 50% 38%, rgba(40,40,72,0.30), transparent 70%),
-        var(--bg);
+        var(--bg-base);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      font-family: var(--font-ui);
       -webkit-font-smoothing: antialiased;
     }
     body {
@@ -36,14 +40,16 @@
     /* ── Masthead ─────────────────────────────────────────────── */
     header { text-align: center; margin-bottom: 52px; animation: fadeUp 0.7s ease; }
     h1 {
-      font-size: 2rem; font-weight: 300; letter-spacing: 0.42em;
-      text-indent: 0.42em; /* offset the trailing letter-space so it reads centred */
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 2.1rem; letter-spacing: 0.36em;
+      text-indent: 0.36em; /* offset the trailing letter-space so it reads centred */
       color: var(--text); text-transform: uppercase;
       text-shadow: 0 0 48px rgba(150,140,210,0.22);
     }
     header p {
-      margin-top: 16px; font-size: 0.8rem; color: var(--dim);
-      letter-spacing: 0.16em;
+      font-family: var(--font-display); font-style: italic;
+      margin-top: 16px; font-size: 0.95rem; color: var(--dim);
+      letter-spacing: 0.04em;
     }
 
     /* ── Cards ────────────────────────────────────────────────── */
@@ -80,8 +86,8 @@
     .card:hover .glyph, .card:focus-visible .glyph { color: var(--accent); }
     .glyph svg { width: 100%; height: 100%; display: block; }
     .card h2 {
-      font-size: 0.95rem; font-weight: 500;
-      letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.05rem; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--text); margin-bottom: 9px;
     }
     .card p {
