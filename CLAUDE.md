@@ -8,7 +8,9 @@ This is a working solo-developer project. The user is building a stillness-medit
 
 ## 1. Project state
 
-- **Single-file HTML web app** at `/Users/kevinchan/stillness/index.html`. No build system, no dependencies, no backend. Open the file in a browser to run.
+> **⚠️ STRUCTURE CHANGED 2026-05-30 (read before editing files).** The project is now **three apps behind a hub**, not one. `index.html` is a static **hub/landing page** (Meditate · Breathe · Reflect cards). The meditation app — everything this handoff calls "the app" / "index.html" below — now lives in **`meditate.html`** (v1.60). The other two practices are `breathe.html` (breathwork + nervous-system training, was `nervous-system.html`) and `reflect.html` (journal, was `journal.html`). Each app links back to the hub via a top-left `#home-link`. **When the text below says `index.html`, it means `meditate.html`.** This handoff predates the multi-app split and is otherwise still pinned at v1.32 — treat its file references accordingly.
+
+- **Single-file HTML web app** at `/Users/kevinchan/stillness/meditate.html` (formerly `index.html`). No build system, no dependencies, no backend. Open the file in a browser to run.
 - **Current version:** v1.32. Tier 0 (solo developer).
 - **Git is initialised** at v1.32 baseline. Each version bump should be its own commit + tag. See §4 for workflow.
 - **The app:** measures user stillness via webcam motion detection, plays synthesised sound that responds to stillness, and runs a 2-up/1-down staircase game that adapts both round duration and stillness threshold to keep the user near a ~71% success rate.
@@ -22,7 +24,10 @@ This is a working solo-developer project. The user is building a stillness-medit
 
 | File | Purpose | Read first? |
 |---|---|---|
-| `index.html` | The app — single-file HTML/CSS/JS, ~2200 lines | Yes (skim, don't memorise) |
+| `index.html` | **Hub/landing page** (static, ~210 lines) — three cards linking to the apps below. Added 2026-05-30. | Yes (quick skim) |
+| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~2700 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
+| `breathe.html` | Breathwork + nervous-system training app (~580 lines). Was `nervous-system.html`. | If relevant |
+| `reflect.html` | Journal app, IndexedDB-backed (~570 lines). Was `journal.html`. | If relevant |
 | `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. Contains `[DECISION]` markers for unresolved values. | Yes |
 | `REQUIREMENTS.md` | Auditable specifics: data inventory, adverse-event runbook, tier transition criteria, verification procedures, decision register | Yes |
 | `BACKLOG.md` | Work tracking. Categorised by Bugs / Features / Tuning / Design Questions / Done | Yes |

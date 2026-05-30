@@ -28,7 +28,7 @@ See `REQUIREMENTS.md §1.1` for the full data inventory.
 
 ## Tier
 
-The app currently runs at **Tier 0** (solo / developer). The `TIER` constant at the top of the JS in `index.html` controls escalating safety features. Higher tiers activate pre-screening, responsibility-forward copy, backend report submission, age gating, and other guardrails. See `REQUIREMENTS.md §4` for the criteria each tier requires.
+The app currently runs at **Tier 0** (solo / developer). The `TIER` constant at the top of the JS in `meditate.html` controls escalating safety features. Higher tiers activate pre-screening, responsibility-forward copy, backend report submission, age gating, and other guardrails. See `REQUIREMENTS.md §4` for the criteria each tier requires.
 
 ## Documents
 

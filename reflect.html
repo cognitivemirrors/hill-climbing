@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Journal</title>
+  <title>Reflect · Hill Climbing</title>
   <style>
     :root {
       --bg:    #0c0e14;
@@ -36,8 +36,23 @@
       position: fixed; top: 16px; font-size: 11px; color: var(--dim);
       letter-spacing: 0.06em; z-index: 11;
     }
-    #version-label { left: 20px; }
+    #version-label { top: 22px; left: 62px; }
     #data-controls { right: 20px; display: flex; gap: 16px; }
+
+    /* Home / all-practices link — returns to the hub. Top-left; the version
+       label sits to its right. z-index above the topbar + corners. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--warm); border-color: hsla(38,75%,64%,0.5); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
     #data-controls button {
       background: none; border: none; color: var(--dim);
       font-size: 11px; letter-spacing: 0.06em; cursor: pointer; transition: color 0.2s;
@@ -160,7 +175,12 @@
 <body>
 
 <div class="topbar"></div>
-<div class="corner" id="version-label">v0.1 · journal</div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.2 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -212,7 +232,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.1 · journal';
+const VERSION    = 'v0.2 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SCALE_MAX  = 7;

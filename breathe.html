@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breathe · Hill Climbing</title>
+  <style>
+    :root {
+      --bg:   #0c0e14;
+      --text: rgba(255,255,255,0.82);
+      --dim:  rgba(255,255,255,0.36);
+      --warm: hsla(200,76%,66%,1);
+      --cool: hsla(232,65%,72%,1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      overflow: hidden; user-select: none;
+    }
+
+    /* corners */
+    .corner { position: fixed; font-size: 11px; color: var(--dim); letter-spacing: 0.06em; }
+    #version-label { top: 23px; left: 64px; }
+    #session-timer { top: 18px; right: 22px; font-variant-numeric: tabular-nums; }
+    #cycle-count   { bottom: 20px; right: 22px; }
+
+    /* Home / all-practices link — returns to the hub. Top-left; the version
+       label sits to its right. */
+    #home-link {
+      position: fixed; top: 13px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--warm); border-color: hsla(200,76%,66%,0.5); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    /* mode nav */
+    #mode-nav {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      display: flex;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 14px; border-radius: 14px;
+      border: none; background: transparent; color: var(--dim);
+      font-size: 11px; letter-spacing: 0.07em;
+      cursor: pointer; transition: background 0.2s, color 0.2s; white-space: nowrap;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    /* ring (shared) */
+    #ring-view { display: flex; flex-direction: column; align-items: center; }
+    #phase-label {
+      font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--dim); height: 16px; margin-bottom: 38px; transition: color 0.7s ease;
+    }
+    #ring {
+      width: 300px; height: 300px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.13); box-shadow: none;
+      display: flex; align-items: center; justify-content: center;
+      transform: scale(0.56);
+      transition: transform 0.7s ease, border-color 0.7s ease, box-shadow 0.7s ease;
+    }
+    #countdown {
+      font-size: 46px; font-weight: 200; letter-spacing: -0.02em; color: var(--text);
+      opacity: 0; transition: opacity 0.4s ease; font-variant-numeric: tabular-nums;
+    }
+    #instruction { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; margin-top: 12px; height: 16px; }
+
+    /* breathwork controls */
+    #breathwork-controls { margin-top: 46px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+    #start-btn {
+      width: 112px; height: 42px; border-radius: 21px;
+      border: 1.5px solid rgba(255,255,255,0.22);
+      background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    #start-btn:hover  { border-color: rgba(255,255,255,0.44); background: rgba(255,255,255,0.05); }
+    #start-btn.active { border-color: rgba(255,255,255,0.12); color: var(--dim); }
+    #proto-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 360px; }
+    .proto-btn {
+      padding: 5px 13px; border-radius: 14px;
+      border: 1.5px solid rgba(255,255,255,0.14);
+      background: transparent; color: var(--dim);
+      font-size: 12px; letter-spacing: 0.04em; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .proto-btn:hover    { border-color: rgba(255,255,255,0.32); color: var(--text); }
+    .proto-btn.sel      { border-color: var(--warm); color: var(--warm); }
+    .proto-btn:disabled { opacity: 0.34; cursor: default; pointer-events: none; }
+    #proto-info {
+      position: fixed; bottom: 38px; left: 22px;
+      font-size: 11px; color: var(--dim); letter-spacing: 0.04em; line-height: 1.6; max-width: 230px;
+    }
+    #safety-note {
+      position: fixed; bottom: 20px; left: 22px;
+      font-size: 10px; color: rgba(255,255,255,0.18); letter-spacing: 0.03em;
+    }
+
+    /* prime (guidance cards) */
+    #prime-view { display: flex; flex-direction: column; align-items: center; max-width: 380px; padding: 0 28px; }
+    #prime-card { text-align: center; margin-bottom: 36px; animation: fadeUp 0.4s ease; }
+    #prime-card h2 { font-size: 15px; font-weight: 500; letter-spacing: 0.06em; margin-bottom: 18px; color: var(--text); }
+    #prime-card p  { font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.56); }
+    #prime-dots { display: flex; gap: 8px; margin-bottom: 32px; }
+    .prime-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background 0.3s; }
+    .prime-dot.on { background: var(--warm); }
+    #prime-next-btn {
+      width: 170px; height: 42px; border-radius: 21px;
+      border: 1.5px solid rgba(255,255,255,0.22);
+      background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    #prime-next-btn:hover { border-color: rgba(255,255,255,0.44); background: rgba(255,255,255,0.05); }
+    #prime-next-btn.final { border-color: var(--warm); color: var(--warm); }
+    #prime-next-btn.final:hover { background: rgba(100,185,220,0.08); }
+    #prime-skip-btn {
+      margin-top: 8px; background: transparent; border: none;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.08em;
+      cursor: pointer; transition: color 0.2s;
+    }
+    #prime-skip-btn:hover { color: var(--text); }
+
+    /* exercise */
+    #exercise-view { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #exercise-label { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); }
+    #exercise-timer {
+      font-size: 64px; font-weight: 200; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em; color: var(--text); line-height: 1;
+    }
+    #exercise-tip { font-size: 12px; color: var(--dim); letter-spacing: 0.07em; margin-top: 8px; }
+    #recover-btn {
+      margin-top: 32px; width: 190px; height: 52px; border-radius: 26px;
+      border: 1.5px solid rgba(255,255,255,0.32);
+      background: rgba(255,255,255,0.04); color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #recover-btn:hover { border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.09); }
+
+    /* recover controls */
+    #recover-controls { margin-top: 44px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+    #recover-status { font-size: 12px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+    #stop-training-btn {
+      width: 112px; height: 42px; border-radius: 21px;
+      border: 1.5px solid rgba(255,255,255,0.14);
+      background: transparent; color: var(--dim);
+      font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    #stop-training-btn:hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+
+    /* utils */
+    .hidden { display: none !important; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 480px) {
+      #ring { width: 240px; height: 240px; }
+      #countdown { font-size: 38px; }
+      #exercise-timer { font-size: 52px; }
+      #prime-card p { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.3 · breathe</div>
+<div class="corner" id="session-timer">0:00</div>
+<div class="corner" id="cycle-count"></div>
+
+<nav id="mode-nav">
+  <button class="mode-btn active" data-mode="breathwork">Breathwork</button>
+  <button class="mode-btn"        data-mode="training">Training Loop</button>
+</nav>
+
+<div id="ring-view">
+  <div id="phase-label">—</div>
+  <div id="ring"><div id="countdown"></div></div>
+  <div id="instruction"></div>
+</div>
+
+<div id="breathwork-controls">
+  <button id="start-btn">BEGIN</button>
+  <div id="proto-row">
+    <button class="proto-btn sel" data-key="coherence">Coherence</button>
+    <button class="proto-btn"     data-key="physiologicalSigh">Sigh</button>
+    <button class="proto-btn"     data-key="box">Box</button>
+    <button class="proto-btn"     data-key="fourSevenEight">4-7-8</button>
+  </div>
+</div>
+
+<div id="prime-view" class="hidden">
+  <div id="prime-card"><h2></h2><p></p></div>
+  <div id="prime-dots">
+    <div class="prime-dot on"></div>
+    <div class="prime-dot"></div>
+    <div class="prime-dot"></div>
+    <div class="prime-dot"></div>
+  </div>
+  <button id="prime-next-btn">CONTINUE</button>
+  <button id="prime-skip-btn">skip intro</button>
+</div>
+
+<div id="exercise-view" class="hidden">
+  <div id="exercise-label">EXERCISING</div>
+  <div id="exercise-timer">0:00</div>
+  <div id="exercise-tip">push to 80–90% effort</div>
+  <button id="recover-btn">START RECOVERY</button>
+</div>
+
+<div id="recover-controls" class="hidden">
+  <div id="recover-status">—</div>
+  <button id="stop-training-btn">STOP</button>
+</div>
+
+<div id="proto-info"></div>
+<div id="safety-note">if dizzy, stop and breathe normally</div>
+
+<script>
+'use strict';
+
+const PROTOCOLS = {
+  coherence: {
+    info: '5.5 breaths/min · maximises heart rate variability',
+    phases: [
+      { id:'inhale',  label:'INHALE', note:'breathe in through nose',        dur:5.5, scale:0.92, ease:'ease-in',  freq:440 },
+      { id:'exhale',  label:'EXHALE', note:'breathe out slowly',              dur:5.5, scale:0.37, ease:'ease-out', freq:330 },
+    ],
+  },
+  physiologicalSigh: {
+    info: 'fastest known acute-stress reset · double inhale + long exhale',
+    phases: [
+      { id:'inhale',  label:'INHALE', note:'breathe in through nose',         dur:2, scale:0.75, ease:'ease-in',  freq:440 },
+      { id:'inhale2', label:'INHALE', note:'sniff in more air',               dur:1, scale:0.92, ease:'ease-in',  freq:480 },
+      { id:'exhale',  label:'EXHALE', note:'long slow exhale through mouth',  dur:8, scale:0.37, ease:'ease-out', freq:330 },
+    ],
+  },
+  box: {
+    info: '4–4–4–4 · symmetrical · used in high-stress performance contexts',
+    phases: [
+      { id:'inhale',     label:'INHALE', note:'breathe in through nose', dur:4, scale:0.92, ease:'ease-in',  freq:440 },
+      { id:'holdTop',    label:'HOLD',   note:'retain gently',           dur:4, scale:0.92, ease:'linear',   freq:null },
+      { id:'exhale',     label:'EXHALE', note:'breathe out steadily',    dur:4, scale:0.37, ease:'ease-out', freq:330 },
+      { id:'holdBottom', label:'HOLD',   note:'rest empty',              dur:4, scale:0.37, ease:'linear',   freq:null },
+    ],
+  },
+  fourSevenEight: {
+    info: '4–7–8 · extended hold deepens parasympathetic activation',
+    phases: [
+      { id:'inhale',  label:'INHALE', note:'breathe in through nose',   dur:4, scale:0.92, ease:'ease-in',  freq:440 },
+      { id:'holdTop', label:'HOLD',   note:'retain gently',             dur:7, scale:0.92, ease:'linear',   freq:null },
+      { id:'exhale',  label:'EXHALE', note:'breathe out through mouth', dur:8, scale:0.37, ease:'ease-out', freq:330 },
+    ],
+  },
+};
+
+const RECOVERY_STAGES = [
+  { protoKey:'physiologicalSigh', maxCycles:3,        getStatus: () => `Resetting · ${Math.min(s.cycles + 1, 3)} / 3` },
+  { protoKey:'coherence',         maxCycles:Infinity,  getStatus: () => 'Coherence · settling' },
+];
+
+const PRIME_CARDS = [
+  {
+    title: 'How this works',
+    body:  'You\'ll deliberately stress your nervous system through exercise, then practice consciously returning to calm. The speed of that return — how quickly your breathing and heart rate normalise — is the capacity you\'re building. It transfers directly to emotional regulation.',
+  },
+  {
+    title: 'During your session',
+    body:  'Push to 80–90% of your maximum effort. Choose something genuinely hard: sprint intervals, heavy lifts, rowing. A light pace won\'t generate the arousal level you need. Aim for at least 10–20 minutes of sustained high intensity.',
+  },
+  {
+    title: 'What to notice',
+    body:  'As your effort peaks, observe the sensations without labelling them uncomfortable. Elevated heart rate, heat, breathlessness — these carry the same physiological signatures as strong emotion. Practicing neutral observation now builds the same skill.',
+  },
+  {
+    title: 'The transition is the work',
+    body:  'Return here the moment you stop — don\'t rest and let your heart rate drop naturally first. You\'ll begin with three physiological sighs to rapidly reset, then coherence breathing as your arousal settles. The discomfort at the start of recovery is exactly where the training is.',
+  },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+const s = {
+  mode:             'breathwork',
+  running:          false,
+  protoKey:         'coherence',
+  phaseIdx:         0,
+  phaseStart:       0,
+  sessionStart:     0,
+  cycles:           0,
+  ctx:              null,
+  raf:              null,
+  trainingStage:    'prime',
+  primeCardIdx:     0,
+  exerciseStart:    0,
+  exerciseRaf:      null,
+  recoveryStageIdx: 0,
+};
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+
+const ring             = document.getElementById('ring');
+const phaseLabel       = document.getElementById('phase-label');
+const countdown        = document.getElementById('countdown');
+const instrEl          = document.getElementById('instruction');
+const startBtn         = document.getElementById('start-btn');
+const sessionEl        = document.getElementById('session-timer');
+const cycleEl          = document.getElementById('cycle-count');
+const protoInfo        = document.getElementById('proto-info');
+const ringView         = document.getElementById('ring-view');
+const breathworkCtrl   = document.getElementById('breathwork-controls');
+const primeView        = document.getElementById('prime-view');
+const exerciseView     = document.getElementById('exercise-view');
+const recoverCtrl      = document.getElementById('recover-controls');
+const primeCardEl      = document.getElementById('prime-card');
+const primeDots        = document.querySelectorAll('.prime-dot');
+const primeNextBtn     = document.getElementById('prime-next-btn');
+const exerciseTimerEl  = document.getElementById('exercise-timer');
+const recoverBtn       = document.getElementById('recover-btn');
+const recoverStatusEl  = document.getElementById('recover-status');
+const stopTrainingBtn  = document.getElementById('stop-training-btn');
+const safetyNote       = document.getElementById('safety-note');
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+
+function initAudio() {
+  if (!s.ctx) s.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (s.ctx.state === 'suspended') s.ctx.resume();
+}
+
+function bell(freq, vol = 0.20) {
+  if (!s.ctx || !freq) return;
+  const ctx = s.ctx, t = ctx.currentTime;
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.984, t + 0.9);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.018);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 1.7);
+  osc.start(t); osc.stop(t + 1.8);
+}
+
+// ── Ring ──────────────────────────────────────────────────────────────────────
+
+function applyPhase(ph) {
+  const isHold = ph.id === 'holdTop' || ph.id === 'holdBottom';
+  const warm   = ph.id.startsWith('inhale') || ph.id === 'holdTop';
+  if (!isHold) {
+    ring.style.transition = `transform ${ph.dur}s ${ph.ease}, border-color 0.65s ease, box-shadow 0.65s ease`;
+    ring.style.transform  = `scale(${ph.scale})`;
+  } else {
+    ring.style.transition = 'border-color 0.65s ease, box-shadow 0.65s ease';
+  }
+  if (warm) {
+    ring.style.borderColor = 'hsla(200,76%,66%,0.80)';
+    ring.style.boxShadow   = '0 0 55px hsla(200,80%,66%,0.20), inset 0 0 32px hsla(200,80%,66%,0.07)';
+    phaseLabel.style.color = 'hsla(200,76%,66%,0.86)';
+  } else {
+    ring.style.borderColor = 'hsla(232,65%,72%,0.80)';
+    ring.style.boxShadow   = '0 0 55px hsla(232,70%,72%,0.20), inset 0 0 32px hsla(232,70%,72%,0.07)';
+    phaseLabel.style.color = 'hsla(232,65%,72%,0.86)';
+  }
+  phaseLabel.textContent = ph.label;
+  instrEl.textContent    = ph.note;
+  if (ph.freq) bell(ph.freq);
+}
+
+function resetRing() {
+  ring.style.transition   = 'transform 0.7s ease, border-color 0.7s ease, box-shadow 0.7s ease';
+  ring.style.transform    = 'scale(0.56)';
+  ring.style.borderColor  = 'rgba(255,255,255,0.13)';
+  ring.style.boxShadow    = 'none';
+  phaseLabel.style.color  = 'var(--dim)';
+  phaseLabel.textContent  = '—';
+  instrEl.textContent     = '';
+  countdown.textContent   = '';
+  countdown.style.opacity = '0';
+}
+
+// ── Tick ──────────────────────────────────────────────────────────────────────
+
+function proto()  { return PROTOCOLS[s.protoKey]; }
+function phases() { return proto().phases; }
+
+function enterPhase(idx, now) {
+  s.phaseIdx   = idx;
+  s.phaseStart = now;
+  applyPhase(phases()[idx]);
+  countdown.style.opacity = '1';
+}
+
+function tick(now) {
+  if (!s.running) return;
+  s.raf = requestAnimationFrame(tick);
+
+  const ph      = phases()[s.phaseIdx];
+  const elapsed = (now - s.phaseStart) / 1000;
+  const rem     = Math.max(0, ph.dur - elapsed);
+
+  countdown.textContent = rem < 1.05 ? rem.toFixed(1) : Math.ceil(rem);
+
+  const secs = Math.floor((now - s.sessionStart) / 1000);
+  sessionEl.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+  if (elapsed >= ph.dur) {
+    const next = (s.phaseIdx + 1) % phases().length;
+    if (next === 0) {
+      s.cycles++;
+      if (s.mode === 'training') { advanceRecovery(now); return; }
+      cycleEl.textContent = s.cycles === 1 ? '1 cycle' : `${s.cycles} cycles`;
+    }
+    enterPhase(next, now);
+  }
+}
+
+// ── Recovery sequencing ───────────────────────────────────────────────────────
+
+function advanceRecovery(now) {
+  const rs = RECOVERY_STAGES[s.recoveryStageIdx];
+  if (s.cycles >= rs.maxCycles && s.recoveryStageIdx < RECOVERY_STAGES.length - 1) {
+    s.recoveryStageIdx++;
+    s.cycles   = 0;
+    s.protoKey = RECOVERY_STAGES[s.recoveryStageIdx].protoKey;
+    recoverStatusEl.textContent = RECOVERY_STAGES[s.recoveryStageIdx].getStatus();
+    enterPhase(0, now);
+  } else {
+    recoverStatusEl.textContent = rs.getStatus();
+    enterPhase((s.phaseIdx + 1) % phases().length, now);
+  }
+}
+
+// ── View helpers ──────────────────────────────────────────────────────────────
+
+function show(...els) { els.forEach(e => e.classList.remove('hidden')); }
+function hide(...els) { els.forEach(e => e.classList.add('hidden')); }
+
+// ── Breathwork ────────────────────────────────────────────────────────────────
+
+function startBreathwork() {
+  initAudio();
+  s.running = true; s.cycles = 0; s.sessionStart = performance.now();
+  startBtn.textContent = 'STOP'; startBtn.classList.add('active');
+  cycleEl.textContent  = '';
+  document.querySelectorAll('.proto-btn').forEach(b => b.disabled = true);
+  enterPhase(0, s.sessionStart);
+  s.raf = requestAnimationFrame(tick);
+}
+
+function stopBreathwork() {
+  s.running = false; cancelAnimationFrame(s.raf);
+  startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
+  document.querySelectorAll('.proto-btn').forEach(b => b.disabled = false);
+  resetRing(); sessionEl.textContent = '0:00';
+}
+
+// ── Training: prime ───────────────────────────────────────────────────────────
+
+function renderPrimeCard() {
+  const card = PRIME_CARDS[s.primeCardIdx];
+  primeCardEl.querySelector('h2').textContent = card.title;
+  primeCardEl.querySelector('p').textContent  = card.body;
+  primeCardEl.style.animation = 'none';
+  void primeCardEl.offsetWidth;
+  primeCardEl.style.animation = '';
+  primeDots.forEach((d, i) => d.classList.toggle('on', i === s.primeCardIdx));
+  const last = s.primeCardIdx === PRIME_CARDS.length - 1;
+  primeNextBtn.textContent = last ? 'BEGIN EXERCISE' : 'CONTINUE';
+  primeNextBtn.classList.toggle('final', last);
+}
+
+function advancePrimeCard() {
+  if (s.primeCardIdx < PRIME_CARDS.length - 1) { s.primeCardIdx++; renderPrimeCard(); }
+  else startExercise();
+}
+
+// ── Training: exercise ────────────────────────────────────────────────────────
+
+function startExercise() {
+  s.trainingStage = 'exercise'; s.exerciseStart = performance.now();
+  hide(primeView, ringView, breathworkCtrl, recoverCtrl); show(exerciseView);
+  sessionEl.textContent = '0:00';
+  tickExercise(s.exerciseStart);
+}
+
+function tickExercise(now) {
+  if (s.trainingStage !== 'exercise') return;
+  const secs = Math.floor((now - s.exerciseStart) / 1000);
+  exerciseTimerEl.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  s.exerciseRaf = requestAnimationFrame(tickExercise);
+}
+
+// ── Training: recover ─────────────────────────────────────────────────────────
+
+function startRecovery() {
+  s.trainingStage = 'recover'; s.recoveryStageIdx = 0; s.cycles = 0;
+  s.protoKey = RECOVERY_STAGES[0].protoKey;
+  cancelAnimationFrame(s.exerciseRaf);
+  hide(exerciseView, primeView, breathworkCtrl); show(ringView, recoverCtrl);
+  recoverStatusEl.textContent = RECOVERY_STAGES[0].getStatus();
+  cycleEl.textContent = '';
+  initAudio();
+  s.running = true; s.sessionStart = performance.now();
+  enterPhase(0, s.sessionStart);
+  s.raf = requestAnimationFrame(tick);
+}
+
+function stopTraining() {
+  s.running = false;
+  cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
+  resetRing(); sessionEl.textContent = '0:00'; cycleEl.textContent = '';
+  s.trainingStage = 'prime'; s.primeCardIdx = 0; renderPrimeCard();
+  hide(ringView, exerciseView, recoverCtrl, breathworkCtrl); show(primeView);
+}
+
+// ── Mode switch ───────────────────────────────────────────────────────────────
+
+function switchMode(newMode) {
+  s.running = false;
+  cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
+  resetRing(); startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
+  document.querySelectorAll('.proto-btn').forEach(b => b.disabled = false);
+  sessionEl.textContent = '0:00'; cycleEl.textContent = '';
+  s.mode = newMode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === newMode));
+  if (newMode === 'breathwork') {
+    hide(primeView, exerciseView, recoverCtrl);
+    show(ringView, breathworkCtrl);
+    protoInfo.classList.remove('hidden'); safetyNote.classList.remove('hidden');
+  } else {
+    s.trainingStage = 'prime'; s.primeCardIdx = 0; renderPrimeCard();
+    hide(ringView, breathworkCtrl, exerciseView, recoverCtrl);
+    show(primeView);
+    protoInfo.classList.add('hidden'); safetyNote.classList.add('hidden');
+  }
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchMode(b.dataset.mode)));
+startBtn.addEventListener('click', () => s.running ? stopBreathwork() : startBreathwork());
+document.querySelectorAll('.proto-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (s.running) return;
+    s.protoKey = btn.dataset.key;
+    document.querySelectorAll('.proto-btn').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    protoInfo.textContent = proto().info;
+  });
+});
+primeNextBtn.addEventListener('click', advancePrimeCard);
+document.getElementById('prime-skip-btn').addEventListener('click', startExercise);
+recoverBtn.addEventListener('click', startRecovery);
+stopTrainingBtn.addEventListener('click', stopTraining);
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !e.repeat && s.mode === 'breathwork') {
+    e.preventDefault();
+    s.running ? stopBreathwork() : startBreathwork();
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+protoInfo.textContent = proto().info;
+</script>
+</body>
+</html>
