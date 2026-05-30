@@ -362,6 +362,24 @@ const recoverStatusEl  = document.getElementById('recover-status');
 const stopTrainingBtn  = document.getElementById('stop-training-btn');
 const safetyNote       = document.getElementById('safety-note');
 
+// ── Wake Lock ─────────────────────────────────────────────────────────────────
+
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// Re-acquire after tab becomes visible again (iOS releases on hide)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && s.running) acquireWakeLock();
+});
+
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
 function initAudio() {
@@ -480,7 +498,7 @@ function hide(...els) { els.forEach(e => e.classList.add('hidden')); }
 // ── Breathwork ────────────────────────────────────────────────────────────────
 
 function startBreathwork() {
-  initAudio();
+  initAudio(); acquireWakeLock();
   s.running = true; s.cycles = 0; s.sessionStart = performance.now();
   startBtn.textContent = 'STOP'; startBtn.classList.add('active');
   cycleEl.textContent  = '';
@@ -490,7 +508,7 @@ function startBreathwork() {
 }
 
 function stopBreathwork() {
-  s.running = false; cancelAnimationFrame(s.raf);
+  s.running = false; cancelAnimationFrame(s.raf); releaseWakeLock();
   startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
   document.querySelectorAll('.proto-btn').forEach(b => b.disabled = false);
   resetRing(); sessionEl.textContent = '0:00';
@@ -541,14 +559,14 @@ function startRecovery() {
   hide(exerciseView, primeView, breathworkCtrl); show(ringView, recoverCtrl);
   recoverStatusEl.textContent = RECOVERY_STAGES[0].getStatus();
   cycleEl.textContent = '';
-  initAudio();
+  initAudio(); acquireWakeLock();
   s.running = true; s.sessionStart = performance.now();
   enterPhase(0, s.sessionStart);
   s.raf = requestAnimationFrame(tick);
 }
 
 function stopTraining() {
-  s.running = false;
+  s.running = false; releaseWakeLock();
   cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
   resetRing(); sessionEl.textContent = '0:00'; cycleEl.textContent = '';
   s.trainingStage = 'prime'; s.primeCardIdx = 0; renderPrimeCard();
@@ -558,7 +576,7 @@ function stopTraining() {
 // ── Mode switch ───────────────────────────────────────────────────────────────
 
 function switchMode(newMode) {
-  s.running = false;
+  s.running = false; releaseWakeLock();
   cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
   resetRing(); startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
   document.querySelectorAll('.proto-btn').forEach(b => b.disabled = false);

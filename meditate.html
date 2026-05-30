@@ -1264,6 +1264,21 @@ let roundStart = 0;   // performance.now() at active-phase start
 let settlingStart = 0;// performance.now() at settling-phase entry
 let breakStart = 0;   // performance.now() at start of post-round cooldown; 0 if no cooldown active
 let loopRunning = false; // guards against double-starting the loop on re-frame
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// Re-acquire after returning to the tab (iOS releases on hide)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && loopRunning) acquireWakeLock();
+});
 
 // v1.52: gradient accumulator. Integrates per frame during active rounds:
 // `accumulator += dt * (stillness - NEUTRAL_POINT)`, clamped to [0, capacity].
@@ -2494,6 +2509,7 @@ function enterMeditation() {
   // the loop body to run twice per frame.
   if (!loopRunning) {
     loopRunning = true;
+    acquireWakeLock();
     setTimeout(loop, 600);
   }
 }
