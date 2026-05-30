@@ -945,7 +945,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.62</p>
+    <p id="version-label">v1.64</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1257,6 +1257,23 @@ const game = (() => {
 function currentCapacity() { return game.timeLimit * game.requiredRate; }
 function saveGame() { localStorage.setItem('stillness-game', JSON.stringify(game)); }
 let saveAccumulator = 0; // periodic save throttle (seconds since last save)
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────
+// Records one flag per app per day in a shared localStorage log the hub reads.
+// NOTE: do NOT reuse todayKey() above for this — its format ("Y-M-D", unpadded)
+// differs from the canonical hub key. Always use hcDayKey() for the usage log.
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function markUsage(app) {
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log[app] ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+let hcLoggedToday = false; // count one meditation/day; settling fires once per round
 
 let phase = 'idle';   // idle | settling | active | won | lost | interlude
 let roundMode = 'stillness'; // 'stillness' | 'smoothness' — mode of next round
@@ -1926,6 +1943,9 @@ function setPhase(next) {
       stateText.textContent = `Be still to begin`;
     }
     settlingStart = performance.now();
+    // A sit has begun — count today as a meditation day (once per page load;
+    // the day-keyed log dedupes anyway, the flag just avoids redundant writes).
+    if (!hcLoggedToday) { markUsage('meditate'); hcLoggedToday = true; }
     // Begin a fresh recording — earlier samples (settling lead-in) are part
     // of the trajectory, not just the active round.
     recordingStart = performance.now();
@@ -2785,7 +2805,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.62 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.64 · t${TIER}`;
 </script>
 </body>
 </html>

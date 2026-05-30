@@ -341,6 +341,20 @@ const s = {
   recoveryStageIdx: 0,
 };
 
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+// Records one flag per app per day in a shared localStorage log the hub reads.
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function markUsage(app) {
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log[app] ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+
 // ── DOM ───────────────────────────────────────────────────────────────────────
 
 const ring             = document.getElementById('ring');
@@ -501,6 +515,7 @@ function hide(...els) { els.forEach(e => e.classList.add('hidden')); }
 // ── Breathwork ────────────────────────────────────────────────────────────────
 
 function startBreathwork() {
+  markUsage('breathe');
   initAudio(); acquireWakeLock();
   s.running = true; s.cycles = 0; s.sessionStart = performance.now();
   startBtn.textContent = 'STOP'; startBtn.classList.add('active');
@@ -556,6 +571,7 @@ function tickExercise(now) {
 // ── Training: recover ─────────────────────────────────────────────────────────
 
 function startRecovery() {
+  markUsage('breathe');
   s.trainingStage = 'recover'; s.recoveryStageIdx = 0; s.cycles = 0;
   s.protoKey = RECOVERY_STAGES[0].protoKey;
   cancelAnimationFrame(s.exerciseRaf);

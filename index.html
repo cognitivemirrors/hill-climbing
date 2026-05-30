@@ -106,6 +106,48 @@
       letter-spacing: 0.2em; text-transform: uppercase;
     }
 
+    /* ── This-week dashboard ──────────────────────────────────── */
+    .dashboard {
+      margin-top: 46px; width: 100%; max-width: 360px;
+      display: flex; flex-direction: column; gap: 13px;
+      animation: fadeUp 0.7s ease backwards; animation-delay: 0.28s;
+    }
+    .dash-title {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 0.72rem; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--dim); text-align: center; margin-bottom: 3px;
+    }
+    .dash-row { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; gap: 12px; }
+    .dash-label {
+      font-family: var(--font-display); font-size: 0.74rem;
+      letter-spacing: 0.06em; color: var(--mid);
+    }
+    .dash-strip { display: flex; gap: 6px; }
+    .dash-strip .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--faint); transition: background 0.4s ease;
+    }
+    .dash-strip .dot.on { background: var(--accent); }
+    .dash-count {
+      font-family: var(--font-ui); font-size: 0.66rem;
+      color: var(--dim); letter-spacing: 0.04em;
+      min-width: 32px; text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .dash-row.meditate { --accent: #b9a8f0; }
+    .dash-row.breathe  { --accent: hsl(200,76%,68%); }
+    .dash-row.reflect  { --accent: hsl(38,80%,66%); }
+    .dash-streak {
+      margin-top: 9px; display: flex; align-items: baseline;
+      justify-content: center; gap: 9px;
+    }
+    .streak-num {
+      font-family: var(--font-display); font-size: 1.5rem; color: var(--text);
+      text-shadow: 0 0 28px rgba(150,140,210,0.18); font-variant-numeric: tabular-nums;
+    }
+    .streak-cap {
+      font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint);
+    }
+
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -117,10 +159,12 @@
       nav { flex-direction: column; align-items: stretch; max-width: 340px; }
       .card { max-width: none; flex-basis: auto; flex-direction: row; gap: 18px; text-align: left; padding: 20px 22px; align-items: center; }
       .glyph { width: 34px; height: 34px; margin-bottom: 0; flex: none; }
+      .dashboard { max-width: 340px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      header, .card { animation: none; }
+      header, .card, .dashboard { animation: none; }
       .card:hover, .card:focus-visible { transform: none; }
+      .dash-strip .dot { transition: none; }
     }
   </style>
 </head>
@@ -167,7 +211,157 @@
     </a>
   </nav>
 
+  <section class="dashboard" aria-label="This week">
+    <div class="dash-title">This week</div>
+    <div class="dash-row meditate">
+      <span class="dash-label">Meditate</span>
+      <span class="dash-strip" data-strip="meditate" aria-hidden="true"></span>
+      <span class="dash-count" data-count="meditate">·</span>
+    </div>
+    <div class="dash-row breathe">
+      <span class="dash-label">Breathe</span>
+      <span class="dash-strip" data-strip="breathe" aria-hidden="true"></span>
+      <span class="dash-count" data-count="breathe">·</span>
+    </div>
+    <div class="dash-row reflect">
+      <span class="dash-label">Reflect</span>
+      <span class="dash-strip" data-strip="reflect" aria-hidden="true"></span>
+      <span class="dash-count" data-count="reflect">·</span>
+    </div>
+    <div class="dash-streak">
+      <span class="streak-num" id="streak-num">0</span>
+      <span class="streak-cap">week streak</span>
+    </div>
+  </section>
+
   <footer>hill climbing · private · on-device</footer>
+
+  <script>
+  (function () {
+    const USAGE_KEY = 'hill-climbing-usage';
+    const WEEK_START = 1;        // Monday — the one place to change the week boundary
+    const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
+    const APPS = ['meditate', 'breathe', 'reflect'];
+
+    // Canonical local-time day key — MUST match the one written by meditate.html
+    // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
+    // (their month formats differ); always key through this function.
+    function hcDayKey(d) {
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    // Local-midnight Date of the week containing d (Date+setDate, no epoch math → DST-safe).
+    function weekStartDate(d) {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      x.setDate(x.getDate() - ((x.getDay() - WEEK_START + 7) % 7));
+      return x;
+    }
+    function weekKeysFrom(start) {
+      const out = [];
+      for (let i = 0; i < 7; i++) { const d = new Date(start); d.setDate(start.getDate() + i); out.push(hcDayKey(d)); }
+      return out;
+    }
+
+    function readUsageLog() {
+      try { return JSON.parse(localStorage.getItem(USAGE_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function logDaySet(log, app) { return new Set(Object.keys((log && log[app]) || {})); }
+
+    // Read journal days from the SAME IndexedDB reflect.html writes — read-only.
+    // Open with NO version: opens whatever version exists (so a future reflect
+    // schema bump never throws VersionError here), and never alters the schema.
+    // CRITICAL: reflect.html creates the 'entries' store lazily in its own
+    // onupgradeneeded at version 1. If the hub is visited BEFORE reflect has ever
+    // run, opening here would create an empty, storeless 'journal' DB — and because
+    // it now exists at v1, reflect's later open won't fire onupgradeneeded and its
+    // store would never be created, breaking the journal. So if OUR open created
+    // the DB (onupgradeneeded fired), we delete it again to leave no trace.
+    // Any failure → empty set, so the dashboard still renders meditate + breathe.
+    function journalDaySet() {
+      return new Promise(function (resolve) {
+        let settled = false, created = false;
+        const done = function (set) { if (!settled) { settled = true; resolve(set); } };
+        let req;
+        try { req = indexedDB.open('journal'); }
+        catch (e) { return done(new Set()); }
+        req.onupgradeneeded = function () { created = true; /* do NOT create any store */ };
+        req.onerror   = function () { done(new Set()); };
+        req.onblocked = function () { done(new Set()); };
+        req.onsuccess = function () {
+          const db = req.result;
+          try {
+            if (created || !db.objectStoreNames.contains('entries')) {
+              db.close();
+              // Only delete what we ourselves just created — never an existing journal.
+              if (created) { try { indexedDB.deleteDatabase('journal'); } catch (e) {} }
+              return done(new Set());
+            }
+            const getAll = db.transaction('entries', 'readonly').objectStore('entries').getAll();
+            getAll.onsuccess = function () {
+              const set = new Set();
+              (getAll.result || []).forEach(function (e) {
+                if (e && typeof e.created === 'number') set.add(hcDayKey(new Date(e.created)));
+              });
+              done(set);
+            };
+            getAll.onerror = function () { done(new Set()); };
+          } catch (e) { done(new Set()); }
+        };
+      });
+    }
+
+    function daysThisWeek(set) {
+      return weekKeysFrom(weekStartDate(new Date())).map(function (k) { return set.has(k); });
+    }
+
+    // PARAMETER: redefine "an active week" by changing this one predicate.
+    // Current rule: ≥STREAK_MIN_DAYS distinct days that week had any-app activity.
+    function weekIsActive(weekKeys, sets) {
+      let n = 0;
+      for (const k of weekKeys) {
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k)) n++;
+      }
+      return n >= STREAK_MIN_DAYS;
+    }
+    function weeklyStreak(sets) {
+      let streak = 0;
+      let ref = weekStartDate(new Date());
+      if (weekIsActive(weekKeysFrom(ref), sets)) streak++;   // current week counts only if already active…
+      for (;;) {                                             // …and never breaks the streak
+        ref = new Date(ref); ref.setDate(ref.getDate() - 7);
+        if (weekIsActive(weekKeysFrom(ref), sets)) streak++; else break;
+      }
+      return streak;
+    }
+
+    function render(sets) {
+      APPS.forEach(function (app) {
+        const week = daysThisWeek(sets[app]);
+        const strip = document.querySelector('[data-strip="' + app + '"]');
+        if (strip) {
+          strip.innerHTML = '';
+          week.forEach(function (on) {
+            const dot = document.createElement('span');
+            dot.className = on ? 'dot on' : 'dot';
+            strip.appendChild(dot);
+          });
+        }
+        const count = document.querySelector('[data-count="' + app + '"]');
+        if (count) count.textContent = week.filter(Boolean).length + ' / 7';
+      });
+      const streakEl = document.getElementById('streak-num');
+      if (streakEl) streakEl.textContent = weeklyStreak(sets);
+    }
+
+    const log = readUsageLog();
+    const sets = {
+      meditate: logDaySet(log, 'meditate'),
+      breathe:  logDaySet(log, 'breathe'),
+      reflect:  new Set(),   // filled async from the journal IndexedDB
+    };
+    render(sets);            // instant: meditate + breathe (+ partial streak), even if IDB is unavailable
+    journalDaySet().then(function (js) { sets.reflect = js; render(sets); });
+  })();
+  </script>
 
 </body>
 </html>

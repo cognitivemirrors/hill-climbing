@@ -2,7 +2,7 @@
 
 **For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Then ask the user §6's confirmation question before making any change.
 
-This is a working solo-developer project. The user is building a stillness-meditation web app. The git baseline is `v1.32`; this handoff has been kept current through to that version.
+This is a working solo-developer project. The user is building a stillness-meditation web app. The git baseline is `v1.32`; this handoff has been updated through **v1.63** (committed), with v1.64 (weekly usage dashboard) implemented in-session but not yet committed as of this update.
 
 ---
 
@@ -11,7 +11,7 @@ This is a working solo-developer project. The user is building a stillness-medit
 > **⚠️ STRUCTURE CHANGED 2026-05-30 (read before editing files).** The project is now **three apps behind a hub**, not one. `index.html` is a static **hub/landing page** (Meditate · Breathe · Reflect cards). The meditation app — everything this handoff calls "the app" / "index.html" below — now lives in **`meditate.html`** (v1.60). The other two practices are `breathe.html` (breathwork + nervous-system training, was `nervous-system.html`) and `reflect.html` (journal, was `journal.html`). Each app links back to the hub via a top-left `#home-link`. **When the text below says `index.html`, it means `meditate.html`.** This handoff predates the multi-app split and is otherwise still pinned at v1.32 — treat its file references accordingly.
 
 - **Single-file HTML web app** at `/Users/kevinchan/stillness/meditate.html` (formerly `index.html`). No build system, no dependencies, no backend. Open the file in a browser to run.
-- **Current version:** v1.32. Tier 0 (solo developer).
+- **Current version:** v1.63 committed; v1.64 (weekly usage dashboard) implemented and awaiting commit. Tier 0 (solo developer).
 - **Git is initialised** at v1.32 baseline. Each version bump should be its own commit + tag. See §4 for workflow.
 - **The app:** measures user stillness via webcam motion detection, plays synthesised sound that responds to stillness, and runs a 2-up/1-down staircase game that adapts both round duration and stillness threshold to keep the user near a ~71% success rate.
 - **Two round modes** alternate: "stillness" rounds (the default) and "smoothness" rounds (after every motion interlude — the user maintains slow continuous motion instead of stillness).
@@ -24,9 +24,9 @@ This is a working solo-developer project. The user is building a stillness-medit
 
 | File | Purpose | Read first? |
 |---|---|---|
-| `index.html` | **Hub/landing page** (static, ~210 lines) — three cards linking to the apps below. Added 2026-05-30. | Yes (quick skim) |
-| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~2700 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
-| `breathe.html` | Breathwork + nervous-system training app (~580 lines). Was `nervous-system.html`. | If relevant |
+| `index.html` | **Hub/landing page** (~290 lines) — three cards + weekly usage dashboard (added v1.64). Added 2026-05-30. | Yes (quick skim) |
+| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~2720 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
+| `breathe.html` | Breathwork + nervous-system training app (~645 lines). Was `nervous-system.html`. | If relevant |
 | `reflect.html` | Journal app, IndexedDB-backed (~570 lines). Was `journal.html`. | If relevant |
 | `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. Contains `[DECISION]` markers for unresolved values. | Yes |
 | `REQUIREMENTS.md` | Auditable specifics: data inventory, adverse-event runbook, tier transition criteria, verification procedures, decision register | Yes |
@@ -69,7 +69,7 @@ These are how the user has consistently operated. Default to these unless told o
 - **Git workflow — "shipped" means pushed.** The repo was initialised at v1.32 (baseline commit `4683660`) and is hosted at `github.com/cognitivemirrors/hill-climbing`, deploying to GitHub Pages at `https://cognitivemirrors.github.io/hill-climbing/` on every push to `main` (~1–2 minute redeploy). **A local edit is not a ship.** When you say "shipped vX.Y" in chat, that claim must be backed by a commit + tag + push, otherwise the user is testing one thing and your statement claims another. This drifted in the v1.50–v1.53 cycle (four version bumps, zero commits) and required a retroactive consolidated commit. Don't repeat it.
 
   **Per-version checklist (run end-to-end before saying "shipped"):**
-  1. Bump both version locations in `index.html` (the `#version-label` HTML literal and the `document.getElementById(...).textContent` line).
+  1. Bump both version locations in `meditate.html` (the `#version-label` HTML literal and the `document.getElementById(...).textContent` line). The hub (`index.html`) does not currently carry a version label.
   2. Add a `Done` entry to BACKLOG.md (top of the list, terse).
   3. `git add` the files; `git commit -m "vX.Y · brief summary"` with a HEREDOC body and `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` trailer.
   4. `git tag -a vX.Y -m "..."` — annotated, not lightweight.
@@ -101,7 +101,7 @@ The user has been thoughtful and explicit about what matters. Carry these forwar
 
 Before making any change, ask:
 
-> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The repo's at v1.32 baseline (`git log` should show that). Before I do anything, can you confirm: (a) are we still at TIER 0; (b) is the highest-leverage next item still S1 (replay clears cooldown) or S4 (sticky reminder flags); and (c) any context the prior session missed?"
+> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The current committed version is v1.63 (v1.64 dashboard was implemented but may or may not be committed yet — check `git log`). Before I do anything, can you confirm: (a) are we still at TIER 0; (b) is the highest-leverage next item still S1 (replay clears cooldown) or S4 (sticky reminder flags); and (c) any context the prior session missed?"
 
 Wait for the answer. Then proceed.
 
@@ -123,6 +123,11 @@ These came up in conversation and informed code, but the reasoning isn't fully c
 - **The reward at peak stillness is space, not sound.** This is the v1.30/v1.32 design philosophy. The "rich" zone is around 75–82% (where the harmonic stack peaks); 100% is sparser. Approaching is rewarded, arriving is gentle.
 - **Mobile responsive in v1.29.** Single breakpoint at 640px. Round-info wraps; ring shrinks to 240px; timer moves below ring; corner buttons tighten. Not a full mobile-first redesign; it's a "doesn't break" pass.
 - **Audio aesthetic preference: sparse + bell-like over sustained-tonal.** Established across the v1.26–v1.32 arc with multiple feedback rounds. When in doubt about audio (a new mode, a new effect, a tuning question), lean toward fewer simultaneous tones with natural decay rather than dense sustained synthesis. The temple-atmosphere paradigm at v1.32 is the touchstone — sub-bass + fundamental fade out at peak stillness, leaving room for occasional pentatonic bell strikes. Deviations from this principle should be deliberate experiments with explicit user ask, not assumed.
+- **Hub usage dashboard (v1.64) — data model.** Usage tracking uses a new localStorage key `hill-climbing-usage` written by `meditate.html` and `breathe.html`; the hub reads that log plus the journal's IndexedDB directly (same origin). `reflect.html` is not modified — its full entry history counts retroactively for free. The hybrid approach was confirmed with the user over merging onto IndexedDB: localStorage is right-sized for tiny day-flags; IDB would require cross-page version coordination (a `VersionError`/`blocked` footgun). Migration trigger: if usage tracking ever grows into per-session records with timestamps, move to a dedicated IDB `usage` store (separate from the journal DB to avoid schema coupling).
+- **Hub usage dashboard (v1.64) — canonical day key.** `hcDayKey()` in every writer file and the hub uses zero-padded `YYYY-MM-DD` (e.g. `"2026-05-30"`). This is **deliberately different** from meditate's `todayKey()` (unpadded, `getMonth()+1`) and reflect's internal `dayKey()` (0-indexed month). Do not mix these formats — only `hcDayKey` feeds the usage log. Future maintainers: never "reuse" either app's existing date helper for the dashboard.
+- **Hub usage dashboard (v1.64) — hook points.** meditate: `setPhase('settling')` — the moment a sit begins (not page-open, not first win). Guarded by `hcLoggedToday` flag per page-load to avoid redundant writes across rounds. breathe: `startBreathwork()` and `startRecovery()` — the two session-start functions. Do **not** hook `tick()`, `enterPhase()`, `advanceRecovery()`, or `startExercise()` — those run per-frame/per-cycle.
+- **Hub usage dashboard (v1.64) — IndexedDB gotcha.** The hub opens the journal's IDB with **no version number** and **no `onupgradeneeded`**. If you open it at `version: 1` with a store-creating `onupgradeneeded`, and the user visits the hub before ever opening reflect.html, a storeless `journal` DB gets created — reflect's later `open('journal', 1)` won't fire `onupgradeneeded` (same version, already exists) and the `entries` store is **never created**, silently breaking the journal. If our versionless open creates the DB (detectable: `onupgradeneeded` fired), delete it immediately and return an empty set.
+- **Weekly streak rule (v1.64).** ≥1 active day/week (any app). Changed from ≥3 at user request. Isolated in `STREAK_MIN_DAYS` constant and `weekIsActive()` predicate — easy to change. Weekly not daily to avoid daily-streak shame mechanics (CONSTRAINTS §5). Current week never breaks the streak; it only adds +1 if already active.
 - **"No audio on iPhone" debugging order.** Always ask in this order before shipping code: (1) is the iPhone hardware silent switch off? Safari respects it for web audio. (2) is the volume up? (3) is the device in a low-power mode that might suspend audio? Only after the user has confirmed all three should you start changing AudioContext / unlock code. v1.33 and v1.34 shipped iOS-specific Web Audio unlock changes when the actual cause was the silent switch — a real-world physical toggle that no code change could have fixed. Lesson: physical-world causes are simpler and more common than they look. Ask first.
 
 ---
@@ -138,13 +143,13 @@ These shaped the project's direction. If a future user wants to revisit any of t
 
 ---
 
-## 9. Active open questions (live as of v1.32)
+## 9. Active open questions (live as of v1.63 / v1.64)
 
 - **S1 (replay clears cooldown)** and **S4 (sticky reminder flags)** are the next safety items to fix. Either is a reasonable choice; user hasn't picked yet.
 - **The 12 [DECISION] markers in CONSTRAINTS.md** have proposed defaults in REQUIREMENTS.md §7 but await explicit founder ratification. Don't unilaterally treat them as resolved.
-- **Aesthetic polish via design tokens** was discussed but not started. Backlog has it as a high-value future task.
-- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet.
-- **Audio tuning of v1.32 is fresh.** The user approved the temple-atmosphere paradigm but it's only had one feedback cycle. Be ready for further tuning of: ambient bell interval (currently 6–14s), volume (currently 35%), pentatonic scale, and the fade-out range for anchor layers (currently 0.85–1.0).
+- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet. The v1.64 reflect dot-strip on the hub is a first step toward surfacing journal usage, but it doesn't add ratings.
+- **Audio tuning (temple-atmosphere paradigm from v1.32)** has been stable across many versions. Still watch for: ambient bell interval (6–14s), volume (35%), pentatonic scale, and anchor-layer fade-out range (0.85–1.0).
+- **REQUIREMENTS.md §1.1 data inventory is missing the `hill-climbing-usage` localStorage key** added in v1.64. That table is a binding auditable doc — needs founder ratification to amend. Tracked in KNOWN_RISKS.md L21. *(Aesthetic polish via design tokens was an open question; resolved in v1.61.)*
 
 ---
 
@@ -164,11 +169,11 @@ For the benefit of the next instance, knowing what to be cautious about:
 
 Before relying on anything in this file, verify:
 
-1. The version label in `index.html` matches what this doc claims (v1.32 at write time).
+1. The version label in `meditate.html` matches what this doc claims. (`index.html` is the hub and does not carry a version label.)
 2. The files listed in §2 still exist with the same purposes.
 3. The TIER constant at the top of the JS is still `0`.
 4. None of the §9 open questions has been answered without this doc being updated.
-5. `git log` shows the v1.32 baseline commit is still the earliest in the history.
+5. `git log` shows the v1.32 baseline commit (`4683660`) is still the earliest in the history.
 
 If any of those are out of date, treat this file as stale and ask the user to update or re-handoff.
 

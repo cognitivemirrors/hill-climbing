@@ -21,6 +21,7 @@ Every item the app stores or transmits, where, for how long, and how it's delete
 | `hill-combing-reports` | Adverse-event reports: list of `{timestamp, text (≤2000 chars), snapshot {round, duration, todaySecs, phase, tier}}`. Capped at 50 entries. | < 100 KB max | Until user clears or 50-cap rotation | Same as above |
 | `hill-combing-last-trajectory` | Most recent round's audio trajectory: `{timestamp, mode, duration, held, won, samples: [{t, s, m}]}` | < 50 KB | Overwritten by next round-end | Same as above |
 | `hill-climbing-introduced-v1` | Onboarding completion flag (`'1'`) | ~10 B | Until user clears | Same as above |
+| `hill-climbing-usage` | Per-app daily usage flags: `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { "YYYY-MM-DD": 1, … } }`. Written by `meditate.html` (on entering settling phase) and `breathe.html` (on session start); read by `index.html` hub dashboard. Reflect usage is derived separately from the journal IndexedDB. No session content, no user-identifiable data — only boolean day-flags. | < 10 KB (grows ~2 KB/yr) | Until user clears; no auto-pruning (streak requires full history) | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
 
 The `hill-combing-*` keys retain the legacy prefix to preserve user state across the v1.19 rename. New keys may use `hill-climbing-*`.
 

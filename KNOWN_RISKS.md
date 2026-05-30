@@ -120,6 +120,18 @@ The most likely future entries here would be: a code path that disables the idle
 ### L18. No data export or delete-all-my-data button
 - Privacy. Tier 2+ prerequisite per REQUIREMENTS.md §1.4.
 
+### L20. Weekly streak display and CONSTRAINTS §5 anti-pattern tension
+- **Confidence:** confirmed (design choice, not a bug)
+- **Where:** `index.html` dashboard, added v1.64.
+- **Description:** CONSTRAINTS §5 explicitly rejects "streak mechanics that punish absence" and "streak counts displayed prominently." The weekly streak counter is designed to avoid those patterns: it is weekly rather than daily, placed below the practice cards (not the first thing on the page), uses a rule where an inactive current week does not break the streak (it only grows or holds), and there are no notifications or loss-aversion triggers. The risk is that future changes (making it daily, moving it above the cards, adding push notifications) drift it into the anti-pattern.
+- **Mitigation:** `STREAK_MIN_DAYS` and `WEEK_START` are named constants; the "what makes a week count" predicate is isolated in `weekIsActive()`. Any change to the streak mechanic should be reviewed against CONSTRAINTS §5 before shipping.
+
+### L21. `hill-climbing-usage` localStorage key not in REQUIREMENTS.md §1.1 data inventory
+- **Confidence:** confirmed (documentation gap, not code bug)
+- **Where:** REQUIREMENTS.md §1.1 claims to document every localStorage key the apps store. The new key added in v1.64 — `hill-climbing-usage` — is missing from that table.
+- **Shape:** `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { "YYYY-MM-DD": 1, … } }`. Stores only date-flags; no session content, no text, no user-identifiable data.
+- ✅ **Resolved:** added to REQUIREMENTS.md §1.1 with founder confirmation (v1.64).
+
 ### L19. GitHub Pages legacy build trigger occasionally drops pushes
 - **Confidence:** observed (v1.57 and v1.58 push events both failed to auto-trigger builds; v1.56 was the last commit Pages built before manual intervention)
 - **Where:** the repo is on `build_type: "legacy"` Pages (per `gh api .../pages`), which auto-builds on push to `main`. The trigger isn't 100% reliable — quick successive pushes occasionally land without firing a build, leaving the deployed site behind the repo head.
