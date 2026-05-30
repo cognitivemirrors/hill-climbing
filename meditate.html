@@ -59,26 +59,29 @@
       animation: fadeIn 1.8s ease;
     }
 
-    #start-screen h1 {
-      font-size: 3rem; font-weight: normal;
-      letter-spacing: 0.5em; color: #c8b8ff;
-      text-shadow: 0 0 60px rgba(180, 140, 255, 0.4);
+    /* Landing ring — a static replica of the practice ring at rest, so the
+       landing reads as the practice screen paused rather than a title card. */
+    #start-ring {
+      width: 300px; height: 300px;
+      display: flex; align-items: center; justify-content: center;
     }
+    #start-ring svg { width: 100%; height: 100%; }
 
     #start-screen p {
-      font-size: 1rem; color: #6858a0;
-      letter-spacing: 0.15em; line-height: 1.8;
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1.05rem; color: rgba(200, 184, 255, 0.6);
+      letter-spacing: 0.04em; line-height: 1.7;
     }
 
     #begin-btn {
-      margin-top: 16px;
-      width: 88px; height: 88px;
+      margin-top: 8px;
+      padding: 0 34px; height: 50px;
       flex: 0 0 auto;
       display: flex; align-items: center; justify-content: center;
-      border: 1px solid rgba(200, 184, 255, 0.35);
-      border-radius: 50%; background: transparent;
+      border: 1px solid rgba(200, 184, 255, 0.4);
+      border-radius: 25px; background: transparent;
       color: #c8b8ff;
-      font-size: 1.5rem;
+      font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase;
       cursor: pointer; transition: all 0.4s ease;
     }
     #begin-btn:hover {
@@ -284,7 +287,16 @@
     /* Stop-button styling during a round (signals neutral abort, not failure) */
     #action-btn.stop {
       border-color: rgba(180, 160, 200, 0.25);
-      color: #8878aa; font-size: 0.75rem;
+      color: #8878aa;
+      font-size: 0;            /* hide the ■ glyph — it renders small/inconsistently */
+    }
+    /* Draw the stop square in CSS for reliable, well-proportioned sizing
+       across platforms (the unicode ■ rendered oddly small in the button). */
+    #action-btn.stop::before {
+      content: '';
+      width: 20px; height: 20px;
+      background: currentColor;
+      border-radius: 4px;
     }
     #action-btn.stop:hover {
       background: rgba(180, 160, 200, 0.06);
@@ -443,7 +455,7 @@
 
     /* v1.47: icon-button defensive shape rules. Belt-and-braces against
        iOS Safari rendering bounding boxes as ovals from font metrics. */
-    #begin-btn, #position-ready-btn, #action-btn,
+    #position-ready-btn, #action-btn,
     #mute-btn, #reframe-btn, #report-link,
     #safety-link, #about-link {
       aspect-ratio: 1 / 1;
@@ -703,9 +715,8 @@
         font-size: 0.85rem;
         margin-top: 44px; /* clear the timer that now sits below the ring */
       }
-      #start-screen h1 {
-        font-size: 2.1rem;
-        letter-spacing: 0.3em;
+      #start-ring {
+        width: 240px; height: 240px;
       }
       #start-screen p {
         max-width: 88vw;
@@ -834,8 +845,14 @@
 
   <!-- ── Start Screen ── -->
   <div id="start-screen">
-    <h1>Meditate</h1>
-    <button id="begin-btn" aria-label="Begin">▶︎</button>
+    <div id="start-ring" aria-hidden="true">
+      <svg viewBox="0 0 220 220">
+        <circle class="ring-dots"  cx="110" cy="110" r="100" />
+        <circle class="ring-track" cx="110" cy="110" r="90" />
+      </svg>
+    </div>
+    <p id="start-prompt">Find a comfortable position.</p>
+    <button id="begin-btn" aria-label="Get started">Get started</button>
     <div class="corner-icons">
       <div id="about-link" title="About this practice">?</div>
       <div id="safety-link" title="Safety notice">ⓘ</div>
@@ -928,7 +945,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.61</p>
+    <p id="version-label">v1.62</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1347,6 +1364,7 @@ class AudioEngine {
     this.ctx   = new (window.AudioContext || window.webkitAudioContext)();
     this.muted = false;
     this.started = false;
+    this.roundAudible = false;   // audio sounds only during a round (set via setPhase)
 
     // iOS Safari unlock (v1.34: triple-redundant). iOS 17+ enforces
     // strict gesture rules: AudioContext must be unlocked in the FIRST
@@ -1536,7 +1554,22 @@ class AudioEngine {
 
   setMuted(m) {
     this.muted = m;
-    this.master.gain.setTargetAtTime(m ? 0 : MASTER_VOLUME, this.ctx.currentTime, 0.3);
+    this._applyGain(0.3);
+  }
+
+  // Audio is audible only while a round is happening — gated by phase via
+  // setPhase. The idle "Be still to begin" wait is silent; the pre-round
+  // drone was reported as intrusive. Respects the user's mute preference.
+  setRoundAudible(on) {
+    this.roundAudible = on;
+    this._applyGain(on ? 0.7 : 0.4);
+  }
+
+  // Single source of truth for the master gain: audible only when in a round
+  // and not muted. Mute, phase changes, and idle-pause resume all route here.
+  _applyGain(tau = 0.4) {
+    const target = (this.muted || !this.roundAudible) ? 0 : MASTER_VOLUME;
+    this.master.gain.setTargetAtTime(target, this.ctx.currentTime, tau);
   }
 }
 
@@ -1849,6 +1882,9 @@ function updateUI() {
 function setPhase(next) {
   phase = next;
   phaseEntryTime = performance.now();
+  // Audio sounds only during a round; idle and interlude are silent.
+  if (audioEngine) audioEngine.setRoundAudible(
+    next === 'settling' || next === 'active' || next === 'won' || next === 'lost' || next === 'replay');
   resumeFromIdlePause(); // any phase change clears the pause overlay
   // Any transition out of won/lost (idle/settling) clears any active
   // post-round cooldown and re-enables the button.
@@ -2137,9 +2173,7 @@ function resumeFromIdlePause() {
   if (!idlePaused) return;
   idlePaused = false;
   ringContainer.classList.remove('idle-paused');
-  if (audioEngine && !muted) {
-    audioEngine.master.gain.setTargetAtTime(MASTER_VOLUME, audioEngine.ctx.currentTime, 0.8);
-  }
+  if (audioEngine) audioEngine._applyGain(0.8);   // respects mute + round phase
   // Restore prior state-text (or leave the new phase's text if setPhase changed it)
   if (savedStateText) {
     stateText.textContent = savedStateText;
@@ -2506,26 +2540,28 @@ beginBtn.addEventListener('click', async () => {
       else cameraPreview.onloadedmetadata = res;
     });
 
-    audioEngine.start(); // begin gain ramp now that we're entering practice
+    // Audio gain is no longer ramped on entry — it stays silent through the
+    // idle "Be still to begin" wait and fades in only when a round begins
+    // (setPhase → setRoundAudible). The iOS unlock already happened in the
+    // AudioEngine constructor, on the Begin gesture above.
     startScreen.style.display = 'none';
     enterMeditation();
   } catch (err) {
-    beginBtn.disabled = false; beginBtn.textContent = '▶︎';
+    beginBtn.disabled = false; beginBtn.textContent = 'Get started';
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
     console.error(err);
   }
 });
 
 positionReadyBtn.addEventListener('click', () => {
-  // Audio is already running by the time the user can reach this button —
-  // the Begin path called start() before showing meditation, and reframe-btn
-  // never tears that down. Defensive resume() in case iOS suspended the
-  // context while positioning was open. Fallback engine creation handles the
-  // (now-edge-case) path where this is somehow the first gesture.
+  // Audio gain is phase-gated (setRoundAudible) now, so returning here just
+  // re-enters meditation at idle — silent until a round starts. Defensive
+  // resume() in case iOS suspended the context while positioning was open.
+  // Fallback engine creation handles the (now-edge-case) path where this is
+  // somehow the first gesture.
   if (!audioEngine) {
     audioEngine = new AudioEngine();
     audioEngine.ctx.resume();
-    audioEngine.start();
   } else {
     audioEngine.ctx.resume();
   }
@@ -2733,7 +2769,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.61 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.62 · t${TIER}`;
 </script>
 </body>
 </html>
