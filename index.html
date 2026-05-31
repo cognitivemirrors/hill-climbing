@@ -177,6 +177,52 @@
       header, .card, .dashboard { animation: none; }
       .card:hover, .card:focus-visible { transform: none; }
       .dash-strip .dot { transition: none; }
+      #install-banner { animation: none; }
+    }
+
+    /* ── Install banner ───────────────────────────────────────────
+       Hidden until JS decides the app is installable (or shows the
+       iOS hint). Dismissed state is remembered in localStorage, so it
+       never nags. */
+    #install-banner {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      z-index: 50; display: none; align-items: center; gap: 16px;
+      width: calc(100% - 36px); max-width: 440px;
+      padding: 14px 16px;
+      background: rgba(20,20,34,0.92);
+      border: 1px solid var(--line); border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      animation: fadeUp 0.5s ease;
+    }
+    #install-banner.show { display: flex; }
+    #install-banner .ib-icon { width: 34px; height: 34px; flex: none; border-radius: 8px; }
+    #install-banner .ib-text { flex: 1 1 auto; min-width: 0; }
+    #install-banner .ib-title { font-size: 0.9rem; color: var(--text); letter-spacing: 0.01em; }
+    #install-banner .ib-sub {
+      margin-top: 2px; font-size: 0.78rem; color: var(--mid); line-height: 1.35;
+    }
+    #install-banner .ib-sub b { color: var(--text); font-weight: 600; }
+    #install-banner button {
+      font-family: var(--font-ui); cursor: pointer; border-radius: 9px;
+      transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    }
+    #install-banner .ib-install {
+      flex: none; padding: 9px 16px; font-size: 0.85rem;
+      color: #fff; background: rgba(144,128,208,0.92);
+      border: 1px solid rgba(170,156,224,0.9);
+    }
+    #install-banner .ib-install:hover { background: rgba(160,144,224,1); }
+    #install-banner .ib-close {
+      flex: none; width: 30px; height: 30px; padding: 0;
+      font-size: 1.1rem; line-height: 1; color: var(--mid);
+      background: transparent; border: 1px solid var(--line);
+    }
+    #install-banner .ib-close:hover { color: var(--text); border-color: var(--mid); }
+    /* iOS hint mode hides the install button (no programmatic install on iOS). */
+    #install-banner.ios .ib-install { display: none; }
+    @media (max-width: 600px) {
+      #install-banner { bottom: 14px; padding: 12px 14px; gap: 12px; }
     }
   </style>
 </head>
@@ -247,6 +293,75 @@
   </section>
 
   <footer>hill climbing · private · on-device</footer>
+
+  <!-- Install prompt. Hidden by default; shown by JS only when the app is
+       installable (or, on iOS Safari, with a Share-sheet hint). -->
+  <div id="install-banner" role="dialog" aria-label="Install Hill Climbing">
+    <img class="ib-icon" src="/icon-192.png" alt="" width="34" height="34">
+    <div class="ib-text">
+      <div class="ib-title">Install Hill Climbing</div>
+      <div class="ib-sub" id="ib-sub">Add it to your home screen for a full-screen, offline practice.</div>
+    </div>
+    <button class="ib-install" id="ib-install" type="button">Install</button>
+    <button class="ib-close" id="ib-close" type="button" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <script>
+  // ── Install banner ──────────────────────────────────────────────────────
+  (function () {
+    const DISMISS_KEY = 'hill-climbing-install-dismissed';
+    const banner  = document.getElementById('install-banner');
+    const sub     = document.getElementById('ib-sub');
+    const btn     = document.getElementById('ib-install');
+    const close   = document.getElementById('ib-close');
+
+    // Already installed (launched standalone)? Never show the banner.
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) {}
+    if (standalone || dismissed) return;
+
+    function dismiss() {
+      banner.classList.remove('show');
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
+    }
+    close.addEventListener('click', dismiss);
+
+    // Chrome / Edge / Android: capture the real install prompt.
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      sub.textContent = 'Add it to your home screen for a full-screen, offline practice.';
+      banner.classList.remove('ios');
+      banner.classList.add('show');
+    });
+
+    btn.addEventListener('click', async function () {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch (e) {}
+      deferredPrompt = null;
+      dismiss();
+    });
+
+    // If the install completes, tuck the banner away.
+    window.addEventListener('appinstalled', dismiss);
+
+    // iOS Safari fires no beforeinstallprompt and has no programmatic
+    // install — show a Share-sheet hint instead.
+    const ua = window.navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS masquerades as Mac
+    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    if (isIOS && isSafari) {
+      banner.classList.add('ios');
+      sub.innerHTML = 'Tap the Share button, then <b>Add to Home Screen</b>.';
+      banner.classList.add('show');
+    }
+  })();
+  </script>
 
   <script>
   (function () {
