@@ -1,0 +1,66 @@
+name: Practice reminders
+
+# Sends a gentle Web Push prompt to your devices, morning and evening.
+# The receiving half lives in the PWA (sw.js); this is the sender.
+#
+# Setup (one time):
+#   1. Repo → Settings → Secrets and variables → Actions → New repository secret
+#        VAPID_PRIVATE_KEY  = the private key from setup
+#        PUSH_SUBSCRIPTION   = the subscription JSON copied from the app
+#      (optional) VAPID_SUBJECT = mailto:you@example.com
+#   2. Enable reminders in the app, copy the subscription into PUSH_SUBSCRIPTION.
+#   3. Trigger this workflow manually (Run workflow) to test before the cron.
+#
+# Cron is UTC. GitHub's scheduler is approximate (often several minutes late,
+# occasionally more), which is fine for a "morning / evening" reminder.
+
+on:
+  schedule:
+    - cron: '7 12 * * *'   # ~08:07 America/Toronto (EDT) — morning sit reminder
+    - cron: '7 0 * * *'    # ~20:07 America/Toronto (EDT) — evening reflection
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Which prompt to send when run manually'
+        type: choice
+        options: [morning, evening]
+        default: morning
+
+# Avoid overlapping runs if a previous one is somehow still going.
+concurrency:
+  group: practice-reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: push
+        run: npm install --no-audit --no-fund
+
+      - name: Send reminder
+        working-directory: push
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PUSH_SUBSCRIPTION: ${{ secrets.PUSH_SUBSCRIPTION }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            # Scheduled run: pick morning/evening from which cron fired.
+            if [ "${{ github.event.schedule }}" = "7 0 * * *" ]; then
+              MODE="evening"
+            else
+              MODE="morning"
+            fi
+          fi
+          echo "Sending $MODE reminder"
+          node send.js "$MODE"

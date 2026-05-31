@@ -1,0 +1,15 @@
+{
+  "name": "hill-climbing-push",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scheduled Web Push sender for Hill Climbing practice reminders.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "morning": "node send.js morning",
+    "evening": "node send.js evening"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

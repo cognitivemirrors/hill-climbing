@@ -180,6 +180,47 @@
       #install-banner { animation: none; }
     }
 
+    /* ── Daily reminders ──────────────────────────────────────────
+       Opt-in Web Push. Hidden unless service workers exist; tucked behind a
+       quiet toggle so it never nags. */
+    #reminders { display: none; margin-top: 24px; width: 100%; max-width: 360px; text-align: center; }
+    #reminders.ready { display: block; }
+    .rem-toggle {
+      font-family: var(--font-ui); font-size: 0.62rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--faint);
+      background: transparent; border: none; cursor: pointer;
+      padding: 6px 10px; transition: color 0.2s ease;
+    }
+    .rem-toggle:hover { color: var(--mid); }
+    .rem-panel {
+      display: none; margin-top: 12px; padding: 16px 16px 18px; text-align: left;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    }
+    .rem-panel.show { display: block; }
+    .rem-msg { font-size: 0.8rem; line-height: 1.55; color: var(--mid); }
+    .rem-msg b { color: var(--text); font-weight: 600; }
+    .rem-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .rem-btn {
+      font-family: var(--font-ui); font-size: 0.82rem; cursor: pointer;
+      color: #fff; background: rgba(144,128,208,0.92);
+      border: 1px solid rgba(170,156,224,0.9); border-radius: 9px;
+      padding: 9px 16px; transition: background 0.2s ease, opacity 0.2s ease;
+    }
+    .rem-btn:hover { background: rgba(160,144,224,1); }
+    .rem-btn[disabled] { opacity: 0.5; cursor: default; }
+    .rem-sub {
+      display: none; margin-top: 12px; width: 100%; height: 90px;
+      font-family: ui-monospace, Menlo, monospace; font-size: 0.6rem; line-height: 1.4;
+      color: var(--mid); background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line); border-radius: 8px; padding: 9px; resize: none;
+    }
+    .rem-sub.show { display: block; }
+    .rem-hint { display: none; margin-top: 9px; font-size: 0.7rem; line-height: 1.5; color: var(--dim); }
+    .rem-hint.show { display: block; }
+    .rem-hint code { font-family: ui-monospace, Menlo, monospace; color: var(--mid); }
+    .rem-copy { display: none; margin-top: 10px; }
+    .rem-copy.show { display: inline-block; }
+
     /* ── Install banner ───────────────────────────────────────────
        Hidden until JS decides the app is installable (or shows the
        iOS hint). Dismissed state is remembered in localStorage, so it
@@ -289,6 +330,19 @@
     <div class="dash-streak">
       <span class="streak-num" id="streak-num">0</span>
       <span class="streak-cap">week streak</span>
+    </div>
+  </section>
+
+  <section id="reminders" aria-label="Daily reminders">
+    <button class="rem-toggle" id="rem-toggle" type="button" aria-expanded="false">Daily reminders</button>
+    <div class="rem-panel" id="rem-panel">
+      <div class="rem-msg" id="rem-msg">A gentle prompt to practice, morning and evening — only if you want it.</div>
+      <div class="rem-actions">
+        <button class="rem-btn" id="rem-enable" type="button">Enable reminders</button>
+      </div>
+      <textarea class="rem-sub" id="rem-sub" readonly spellcheck="false" aria-label="Your push subscription"></textarea>
+      <button class="rem-btn rem-copy" id="rem-copy" type="button">Copy</button>
+      <div class="rem-hint" id="rem-hint">Setup: paste this into the repo's <code>PUSH_SUBSCRIPTION</code> secret.</div>
     </div>
   </section>
 
@@ -493,6 +547,140 @@
     };
     render(sets);            // instant: meditate + breathe (+ partial streak), even if IDB is unavailable
     journalDaySet().then(function (js) { sets.reflect = js; render(sets); });
+  })();
+  </script>
+
+  <!-- ── Daily reminders (opt-in Web Push) ─────────────────────── -->
+  <script>
+  (function () {
+    if (!('serviceWorker' in navigator)) return;   // unsupported → leave section hidden
+
+    // Public half of the VAPID keypair (safe to ship). The private half lives
+    // only in the GitHub Actions secret that sends the pushes.
+    const VAPID_PUBLIC = 'BKDvc7yIpMeGn5bcP3udXgGkO1l0Kaw3EKHLFnPxRg8GLRLqlpqBIx9mWGn794aBo_Fh2BkHJ_Kg-09GrZuqByU';
+
+    const section = document.getElementById('reminders');
+    const toggle  = document.getElementById('rem-toggle');
+    const panel   = document.getElementById('rem-panel');
+    const msg     = document.getElementById('rem-msg');
+    const actions = panel.querySelector('.rem-actions');
+    const enable  = document.getElementById('rem-enable');
+    const subBox  = document.getElementById('rem-sub');
+    const hint    = document.getElementById('rem-hint');
+    const copyBtn = document.getElementById('rem-copy');
+
+    section.classList.add('ready');   // browser can at least register a worker
+
+    const hasPush = 'PushManager' in window && 'Notification' in window;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+
+    function urlB64ToUint8Array(base64) {
+      const pad = '='.repeat((4 - base64.length % 4) % 4);
+      const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(b64);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+
+    function showSubscription(sub) {
+      subBox.value = JSON.stringify(sub);
+      subBox.classList.add('show');
+      hint.classList.add('show');
+      copyBtn.classList.add('show');
+      copyBtn.textContent = 'Copy';
+    }
+    function hideSubscription() {
+      subBox.classList.remove('show');
+      hint.classList.remove('show');
+      copyBtn.classList.remove('show');
+    }
+
+    // Reflect the current state every time the panel opens.
+    async function refresh() {
+      hideSubscription();
+      if (!hasPush) {
+        msg.textContent = "This browser can't do reminders. Try Chrome, Edge, or an installed app.";
+        actions.style.display = 'none';
+        return;
+      }
+      if (isIOS && !standalone) {
+        msg.innerHTML = "First add Hill Climbing to your Home Screen, then open it from there to turn on reminders.";
+        actions.style.display = 'none';
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        msg.textContent = 'Notifications are blocked for this app. Allow them in your settings, then reopen this.';
+        actions.style.display = 'none';
+        return;
+      }
+      actions.style.display = '';
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          msg.innerHTML = "Reminders are <b>on</b> — a gentle prompt morning and evening.";
+          enable.textContent = 'Turn off';
+          enable.dataset.state = 'on';
+          showSubscription(existing);
+          return;
+        }
+      } catch (e) {}
+      msg.textContent = 'A gentle prompt to practice, morning and evening — only if you want it.';
+      enable.textContent = 'Enable reminders';
+      enable.dataset.state = 'off';
+    }
+
+    toggle.addEventListener('click', function () {
+      const open = panel.classList.toggle('show');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) refresh();
+    });
+
+    enable.addEventListener('click', async function () {
+      if (enable.dataset.state === 'on') {            // turn off
+        enable.disabled = true;
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) await sub.unsubscribe();
+        } catch (e) {}
+        enable.disabled = false;
+        refresh();
+        return;
+      }
+      enable.disabled = true;                          // turn on
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { enable.disabled = false; refresh(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+        });
+        enable.disabled = false;
+        await refresh();                               // shows the subscription
+        setTimeout(function () { subBox.focus(); subBox.select(); }, 50);
+      } catch (e) {
+        enable.disabled = false;
+        msg.textContent = "Couldn't enable reminders: " + (e && e.message ? e.message : 'unknown error');
+      }
+    });
+
+    subBox.addEventListener('click', function () { subBox.select(); });   // tap to select-all
+
+    copyBtn.addEventListener('click', async function () {
+      try {
+        await navigator.clipboard.writeText(subBox.value);
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1500);
+      } catch (e) {
+        subBox.focus(); subBox.select();   // fallback: manual long-press copy
+      }
+    });
   })();
   </script>
 

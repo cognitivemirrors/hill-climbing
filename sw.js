@@ -3,7 +3,7 @@
    Strategy: network-first for page navigations (so version bumps reach
    users immediately when online), cache-first for static assets, and a
    full offline fallback to the cached app shell when the network is gone. */
-const CACHE_VERSION = 'hc-v1.75';
+const CACHE_VERSION = 'hc-v1.76';
 const CACHE_NAME = `hill-climbing-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -70,6 +70,44 @@ self.addEventListener('fetch', (event) => {
         return response;
       }).catch(() => cached);
       return cached || network;
+    })
+  );
+});
+
+/* ── Web Push ───────────────────────────────────────────────────────────
+   A scheduled sender (GitHub Actions) posts a VAPID-signed message; we show
+   it as a notification. Payload is JSON: { title, body, url, tag }. These
+   reminders are user-initiated — the person turned them on in the app. */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; }
+  catch (e) { data = { body: event.data && event.data.text() }; }
+
+  const title = data.title || 'Hill Climbing';
+  const body  = data.body  || 'A moment to come back to stillness.';
+  const url   = data.url   || '/';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.tag || 'hc-reminder',
+      data: { url },
+    })
+  );
+});
+
+// Tapping a reminder focuses an open window (navigating it) or opens the app.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) { client.navigate(url); return client.focus(); }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
     })
   );
 });

@@ -14,3 +14,8 @@ NOTES.local.md
 
 # Generated screenshots / recordings (if added later)
 screenshots/local/
+
+# Push sender — installed deps and any local secrets (NEVER commit these)
+push/node_modules/
+.env
+*.env
