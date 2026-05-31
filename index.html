@@ -353,13 +353,15 @@
     // If the install completes, tuck the banner away.
     window.addEventListener('appinstalled', dismiss);
 
-    // iOS Safari fires no beforeinstallprompt and has no programmatic
-    // install — show a Share-sheet hint instead.
+    // Every iOS browser is WebKit underneath — none fire
+    // beforeinstallprompt and none expose a programmatic install. So on
+    // ANY iOS browser (Safari, plus Chrome/Edge/Firefox which carry
+    // CriOS/EdgiOS/FxiOS), show the Share-sheet hint. They all offer
+    // "Add to Home Screen" in the share menu.
     const ua = window.navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua)
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS masquerades as Mac
-    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-    if (isIOS && isSafari) {
+    if (isIOS) {
       banner.classList.add('ios');
       sub.innerHTML = 'Tap the Share button, then <b>Add to Home Screen</b>.';
       banner.classList.add('show');
