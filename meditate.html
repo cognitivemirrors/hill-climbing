@@ -832,13 +832,13 @@
 <div id="safety-modal">
   <div class="safety-content" id="safety-content">
     <h2>Before You Begin</h2>
-    <p>This practice measures your physical stillness through the camera and responds with synthesised sound.</p>
+    <p>This practice is a quiet timed sit. You choose a length; a bell opens and closes it over a soft ambient sound.</p>
     <ul>
       <li>If you have a history of <b>seizures, dissociation, panic disorder, PTSD,</b> or severe anxiety, please consult a clinician before regular practice.</li>
-      <li>Stop any time you feel uncomfortable, dizzy, or distressed. Press <b>Esc</b> mid-round to abort with no penalty.</li>
+      <li>Stop any time you feel uncomfortable, dizzy, or distressed. Press <b>Esc</b> or the <b>■</b> button to end the sit — nothing is recorded.</li>
       <li>This is not therapy or medical care.</li>
-      <li>Watch for back, knee, or neck strain. Take breaks between rounds.</li>
-      <li>Each round caps at 5 minutes. The app will suggest pauses after extended sessions.</li>
+      <li>Watch for back, knee, or neck strain. Take breaks between sits.</li>
+      <li>You set the length of each sit. Stop early whenever you need to.</li>
     </ul>
     <button id="acknowledge-btn">I understand</button>
   </div>
@@ -895,9 +895,15 @@
     <p id="start-prompt">Find a comfortable position.</p>
     <!-- Mode picker (v1.65). Two ways to sit: a camera-guided stillness
          practice (the original game) and a quiet timed countdown. The
-         timed card reveals an inline duration row + Begin button. -->
+         timed card reveals an inline duration row + Begin button.
+         v1.67: the camera-guided Stillness card is temporarily hidden
+         (display:none) while its technical issues are worked out. The
+         button element is intentionally left in the DOM — endTimedSit()
+         and the timed-mode handler still reference modeStillnessBtn, so
+         removing it would throw at load. To restore: delete the inline
+         style below and remove this note. -->
     <div id="mode-picker">
-      <button id="mode-stillness" class="mode-card" aria-label="Stillness — camera-guided">
+      <button id="mode-stillness" class="mode-card" style="display:none" aria-label="Stillness — camera-guided">
         <span class="mode-card-title">Stillness</span>
         <span class="mode-card-sub">camera-guided</span>
       </button>
@@ -1008,7 +1014,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.66</p>
+    <p id="version-label">v1.67</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -2937,12 +2943,12 @@ const safetyLink  = document.getElementById('safety-link');
 if (SAFETY.responsibilityCopy) {
   document.getElementById('safety-content').innerHTML = `
     <h2>Before You Begin</h2>
-    <p>This practice measures your physical stillness and responds with sound. We take responsibility for the harm it might cause and want to know when something doesn't feel right.</p>
+    <p>This practice is a quiet timed sit over a soft ambient sound. We take responsibility for the harm it might cause and want to know when something doesn't feel right.</p>
     <ul>
-      <li>If something unsettles you during practice — surfaced feelings, dissociation, panic, or distress — pause immediately. Press <b>Esc</b> to abort with no penalty. Tap <b>"this didn't feel right"</b> to tell us, any time.</li>
+      <li>If something unsettles you during practice — surfaced feelings, dissociation, panic, or distress — pause immediately. Press <b>Esc</b> or the <b>■</b> button to end the sit. Tap <b>"this didn't feel right"</b> to tell us, any time.</li>
       <li>If you have a history of <b>dissociation, panic, PTSD,</b> or psychosis, please talk with a clinician before regular practice.</li>
       <li>If you're in crisis right now, contact your local emergency line or call/text 988 (US).</li>
-      <li>Watch for back, knee, or neck strain. Each round caps at 5 minutes.</li>
+      <li>Watch for back, knee, or neck strain. Each sit runs the length you choose.</li>
       <li>We track our own incident rate and publish it. We are not a substitute for therapy, but we don't disclaim responsibility either.</li>
     </ul>
     <button id="acknowledge-btn">I understand</button>
@@ -2968,38 +2974,31 @@ safetyLink.addEventListener('click', () => safetyModal.classList.add('show'));
 // ─────────────────────────────────────────────
 // Onboarding modal — first-run guided introduction (all tiers)
 // ─────────────────────────────────────────────
+// v1.67: the camera-guided stillness game is temporarily removed while its
+// technical issues are worked out, so the onboarding describes only the
+// quiet timed sit. The earlier stillness/staircase/smoothness copy is in
+// git history (≤ v1.66) for whenever that mode returns.
 const onboardingPages = [
   {
     title: 'Welcome',
     body: `
-      <p>Meditate is a stillness practice. Your camera measures how still you are; the app turns that into sound.</p>
-      <p>Each round, you hold above a moving threshold. As you succeed, the bar rises. As you struggle, it drops — you're climbing your own hill, finding the next step you can reach.</p>
+      <p>Meditate is a quiet timed sit. You choose how long; a bell opens the sit and a bell closes it, with a soft ambient sound underneath.</p>
+      <p>There's nothing to achieve here — no score, no streak to keep. Just the length of time you set aside.</p>
     `,
   },
   {
     title: 'How it works',
     body: `
-      <p>Rounds start at 30 seconds. Sit before your camera and try to stay still. The app measures your motion continuously and computes a stillness score from 0 to 100%.</p>
-      <p>A round starts when your score crosses the floor (initially 60%). Hold above the floor for the round duration and you win; drop below for half a second or longer and the round ends.</p>
-      <p>Two wins in a row raise both the duration and the floor. One loss drops them. This <b>2-up / 1-down rhythm</b> finds your edge — about 70% of rounds succeed at steady state.</p>
-      <p>Between rounds: a 10-second pause. After every three wins: an untimed movement interlude — stand and stretch — followed by one <b>smoothness round</b>, where you maintain slow continuous motion instead of stillness.</p>
-    `,
-  },
-  {
-    title: 'What you\'ll see and hear',
-    body: `
-      <p>The large ring shows your current score (0 to 100%). In stillness rounds it tracks how still you are; in smoothness rounds it tracks how well you maintain slow, continuous motion. It fills clockwise and shifts colour from purple to cyan-white as your score rises.</p>
-      <p>The amber tick marks the floor you must stay above. It moves around the ring as the threshold staircase advances.</p>
-      <p>The countdown timer sits beside the ring during active rounds. The centre always shows the current score so the main feedback never moves.</p>
-      <p>The sound is layered: a sub-bass drone, harmonic tones that emerge as your score rises, and a dissonance oscillator that beats audibly when your score drops. A high score aligns all the layers; a low score breaks them apart.</p>
+      <p>Pick a length — 5 to 45 minutes — and press <b>Begin</b>. A single bell marks the start.</p>
+      <p>A ring fills slowly as the time passes, and a countdown beside it shows how long remains. When the sit completes, a closing bell sounds.</p>
+      <p>You can end early any time: press the <b>■</b> button or <b>Esc</b>. Nothing is lost — there's no penalty and no record of stopping.</p>
     `,
   },
   {
     title: 'Why this might help',
     body: `
-      <p>Sustained-attention practice can cultivate body awareness, support emotional regulation, and create moments of genuine quiet. Real-time biofeedback may help by giving you immediate signal about when your attention has drifted — gains vary by person.</p>
-      <p>The movement interludes balance stillness with restorative motion, gentler on the back, knees, and circulation than long static sitting.</p>
-      <p>The adaptive staircase keeps each round at your edge — challenging but achievable — the engagement zone where most learning tends to happen.</p>
+      <p>Sustained-attention practice can cultivate body awareness, support emotional regulation, and create moments of genuine quiet. Gains vary by person.</p>
+      <p>Setting aside a fixed, unhurried length and letting a bell hold the boundary means you don't have to watch the clock — the sit ends on its own.</p>
     `,
   },
   {
@@ -3007,8 +3006,8 @@ const onboardingPages = [
     body: `
       <p>This is not therapy or medical care.</p>
       <p>If you have a history of <b>seizures, dissociation, panic disorder, PTSD,</b> or severe anxiety, please talk with a clinician before regular practice. Sustained inward focus can surface unprocessed material — adverse experiences are documented across studies of regular meditation.</p>
-      <p>Stop any time you feel dizzy, distressed, or dissociated. Press <b>Esc</b> mid-round to abort with no penalty. Tap the <b>"this didn't feel right"</b> link to capture a concern.</p>
-      <p>The app caps rounds at 5 minutes, prompts a break between rounds, and dims itself after 5 minutes of inactivity. Take breaks. Watch for back, knee, or neck strain.</p>
+      <p>Stop any time you feel dizzy, distressed, or dissociated. Press <b>Esc</b> or the <b>■</b> button to end the sit.</p>
+      <p>Take breaks. Watch for back, knee, or neck strain from long static sitting.</p>
       <p>If you're in crisis right now, contact your local emergency line or call/text 988 (US).</p>
     `,
   },
@@ -3016,7 +3015,7 @@ const onboardingPages = [
     title: 'Ready?',
     body: `
       <p>You can return to this introduction any time via the <b>"about this practice"</b> link on the start screen.</p>
-      <p>When you're ready, click <b>Begin</b> on the start screen. Your browser will ask for camera permission; the app will then guide you through framing.</p>
+      <p>When you're ready, choose a length and press <b>Begin</b>. No camera, no setup — just the sit.</p>
     `,
   },
 ];
@@ -3105,7 +3104,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.66 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.67 · t${TIER}`;
 </script>
 </body>
 </html>
