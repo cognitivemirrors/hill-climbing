@@ -1,0 +1,24 @@
+{
+  "name": "Hill Climbing — Stillness",
+  "short_name": "Stillness",
+  "description": "A stillness-meditation practice: Meditate, Breathe, and Reflect.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080810",
+  "theme_color": "#0a0b12",
+  "categories": ["health", "lifestyle"],
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Meditate", "short_name": "Meditate", "url": "/meditate.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Breathe", "short_name": "Breathe", "url": "/breathe.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Reflect", "short_name": "Reflect", "url": "/reflect.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ]
+}
