@@ -1008,7 +1008,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.65</p>
+    <p id="version-label">v1.66</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1180,6 +1180,17 @@ const AMBIENT_BELL_MAX_MS    = 14000;
 const AMBIENT_BELL_VOL       = 0.35;
 const AMBIENT_BELL_SCALE     = [432, 528, 648, 792, 864, 1056, 1296];
 
+// Timed-mode ambient wash (v1.66). A soft brown-noise bed (ocean/wind-like)
+// that plays under the opening and closing bells of a timed sit. Lowpassed
+// so it's a gentle hush, not hiss, with a slow gain swell so it breathes
+// like distant waves rather than sitting flat. Deliberately textural, not
+// tonal — distinct from the sustained sine-drone the user found fatiguing.
+const TIMED_NOISE_BASE   = 0.05;   // steady level (relative to master)
+const TIMED_NOISE_SWELL  = 0.03;   // ± swell depth added by the slow LFO
+const TIMED_NOISE_LFO_HZ = 0.07;   // ≈14 s swell period
+const TIMED_NOISE_CUTOFF = 520;    // lowpass — soft hush, no high hiss
+const TIMED_OPEN_BELL    = 528;    // opening bell pitch (closing uses 220)
+
 // ─────────────────────────────────────────────
 // Variance-based scoring (v1.38)
 // ─────────────────────────────────────────────
@@ -1349,7 +1360,6 @@ let timedMinutes   = 10;          // selected duration; overwritten on load
 let timedStart     = 0;           // performance.now() when the sit began
 let timedDurationSecs = 0;
 let timedRunning   = false;       // guards the dedicated timed rAF chain
-let timedNextBell  = 0;           // ms timestamp for the next ambient bell
 function readStoredTimedMinutes() {
   try {
     const stored = parseInt(localStorage.getItem(TIMED_MINUTES_KEY), 10);
@@ -1694,6 +1704,51 @@ class AudioEngine {
     const t = this.ctx.currentTime;
     this.oscs.forEach(L => L.gain.gain.setTargetAtTime(0, t, 0.4));
     this.discGain.gain.setTargetAtTime(0, t, 0.4);
+  }
+
+  // Timed mode (v1.66): a soft ambient noise bed under the sit. Brown noise
+  // (integrated white — low, rounded rumble) looped through a lowpass, with a
+  // slow LFO swelling the level so it breathes like distant waves. Routes
+  // through dry+reverb → master, so mute and the round gate still apply.
+  startAmbientNoise() {
+    if (this.noiseGain) return; // already running
+    const ctx = this.ctx, t = ctx.currentTime;
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;  // brown integration
+      data[i] = last * 3.2;                 // makeup gain to ~unity
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = TIMED_NOISE_CUTOFF; filter.Q.value = 0.5;
+    const gain = ctx.createGain();
+    // Slow swell summed onto the level so the bed rises and falls gently.
+    const lfo = ctx.createOscillator(), lfoGain = ctx.createGain();
+    lfo.frequency.value = TIMED_NOISE_LFO_HZ; lfoGain.gain.value = TIMED_NOISE_SWELL;
+    lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+    src.connect(filter); filter.connect(gain);
+    gain.connect(this.dry); gain.connect(this.reverb);
+    gain.gain.setValueAtTime(0, t);                                  // fade in
+    gain.gain.linearRampToValueAtTime(TIMED_NOISE_BASE, t + 2.5);
+    src.start(t); lfo.start(t);
+    this.noiseSrc = src; this.noiseLfo = lfo; this.noiseGain = gain; this.noiseLfoGain = lfoGain;
+  }
+
+  stopAmbientNoise() {
+    if (!this.noiseGain) return;
+    const t = this.ctx.currentTime;
+    this.noiseGain.gain.cancelScheduledValues(t);
+    this.noiseGain.gain.setValueAtTime(TIMED_NOISE_BASE, t);
+    this.noiseGain.gain.linearRampToValueAtTime(0, t + 1.5);         // fade out
+    this.noiseLfoGain.gain.setTargetAtTime(0, t, 0.4);               // stop the swell
+    const src = this.noiseSrc, lfo = this.noiseLfo;
+    try { src.stop(t + 2); } catch {}
+    try { lfo.stop(t + 2); } catch {}
+    this.noiseSrc = null; this.noiseLfo = null; this.noiseGain = null; this.noiseLfoGain = null;
   }
 
   // Single source of truth for the master gain: audible only when in a round
@@ -2761,7 +2816,7 @@ timedPills.addEventListener('click', e => {
 function endTimedSit(message) {
   timedRunning = false;
   roundTimer.classList.remove('show');
-  if (audioEngine) audioEngine.setRoundAudible(false); // fades master to 0
+  if (audioEngine) { audioEngine.stopAmbientNoise(); audioEngine.setRoundAudible(false); } // fade out
   releaseWakeLock();
   meditationMode = 'stillness'; // back to default for the next entry
   if (message) stateText.textContent = message;
@@ -2798,14 +2853,9 @@ function timedLoop() {
     // Countdown timer.
     roundTimer.textContent = fmtSecs(Math.ceil(timedDurationSecs - elapsed));
 
-    // Ambient pentatonic bells on a gentle random interval — the same
-    // temple-atmosphere palette as the stillness reward, but unconditional
-    // (there's no stillness gate in timed mode).
-    if (now > timedNextBell) {
-      const f = AMBIENT_BELL_SCALE[Math.floor(Math.random() * AMBIENT_BELL_SCALE.length)];
-      if (audioEngine) audioEngine.triggerBell(f, AMBIENT_BELL_VOL);
-      timedNextBell = now + AMBIENT_BELL_MIN_MS + Math.random() * (AMBIENT_BELL_MAX_MS - AMBIENT_BELL_MIN_MS);
-    }
+    // No bells mid-sit (v1.66): the bell sounds only at the open and the
+    // close. The continuous element is the ambient noise bed, started in
+    // the begin handler.
 
     requestAnimationFrame(timedLoop);
   } catch (err) {
@@ -2830,12 +2880,17 @@ timedBeginBtn.addEventListener('click', () => {
   startScreen.style.display = 'none';
   meditScreen.style.display = 'flex';
 
-  // Bells route through master gain (triggerBell → reverb/dry → master),
-  // gated by setRoundAudible. Open the gate so bells are audible; the
-  // drone never sounds because update() is never called in timed mode.
-  // silenceDrone() zeros the dissonance oscillator's _build() baseline so
-  // only bell strikes are heard.
-  if (audioEngine) { audioEngine.silenceDrone(); audioEngine.setRoundAudible(true); }
+  // Bells + noise route through master gain (→ reverb/dry → master), gated
+  // by setRoundAudible. Open the gate so they're audible; the drone never
+  // sounds because update() is never called in timed mode. silenceDrone()
+  // zeros the dissonance oscillator's _build() baseline. Then start the
+  // ambient noise bed and ring a single opening bell.
+  if (audioEngine) {
+    audioEngine.silenceDrone();
+    audioEngine.setRoundAudible(true);
+    audioEngine.startAmbientNoise();
+    audioEngine.triggerBell(TIMED_OPEN_BELL, 0.8);
+  }
 
   // Usage log — one meditation/day, shared flag with the stillness path.
   if (!hcLoggedToday) { markUsage('meditate'); hcLoggedToday = true; }
@@ -2843,7 +2898,7 @@ timedBeginBtn.addEventListener('click', () => {
   acquireWakeLock();
 
   // Calm orientation copy + visible countdown.
-  stateText.textContent = 'Rest. The bell will close the sit.';
+  stateText.textContent = 'Rest. A bell opens and closes the sit.';
   calibText.textContent = '';
   scoreNumber.textContent = '';
   actionBtn.textContent = '■';
@@ -2854,7 +2909,6 @@ timedBeginBtn.addEventListener('click', () => {
   // Start the dedicated loop.
   timedDurationSecs = timedMinutes * 60;
   timedStart = performance.now();
-  timedNextBell = timedStart + AMBIENT_BELL_MIN_MS;
   ringProgress.style.strokeDashoffset = CIRCUMF; // empty
   roundTimer.textContent = fmtSecs(timedDurationSecs);
   timedRunning = true;
@@ -3051,7 +3105,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.65 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.66 · t${TIER}`;
 </script>
 </body>
 </html>
