@@ -896,13 +896,17 @@
     <!-- Mode picker (v1.65). Two ways to sit: a camera-guided stillness
          practice (the original game) and a quiet timed countdown. The
          timed card reveals an inline duration row + Begin button.
-         v1.67: the camera-guided Stillness card is temporarily hidden
-         (display:none) while its technical issues are worked out. The
-         button element is intentionally left in the DOM — endTimedSit()
-         and the timed-mode handler still reference modeStillnessBtn, so
-         removing it would throw at load. To restore: delete the inline
-         style below and remove this note. -->
-    <div id="mode-picker">
+         v1.67: the camera-guided Stillness card was temporarily hidden
+         while its technical issues are worked out.
+         v1.68: with Timed the only practice, the whole picker is hidden
+         (display:none) and the duration row + Begin show directly — no
+         redundant card to click. Both buttons are intentionally left in
+         the DOM: endTimedSit() and the timed-mode handler reference
+         modeStillnessBtn / modeTimedBtn, so removing them would throw at
+         load. To restore the picker: delete the inline display:none on
+         #mode-picker, re-add `hidden` to #timed-options, delete the
+         display:none on #mode-stillness, and remove this note. -->
+    <div id="mode-picker" style="display:none">
       <button id="mode-stillness" class="mode-card" style="display:none" aria-label="Stillness — camera-guided">
         <span class="mode-card-title">Stillness</span>
         <span class="mode-card-sub">camera-guided</span>
@@ -912,7 +916,7 @@
         <span class="mode-card-sub">quiet countdown</span>
       </button>
     </div>
-    <div id="timed-options" hidden>
+    <div id="timed-options">
       <div id="timed-pills" role="group" aria-label="Session length">
         <button class="timed-pill" data-minutes="5">5</button>
         <button class="timed-pill" data-minutes="10">10</button>
@@ -1014,7 +1018,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.67</p>
+    <p id="version-label">v1.68</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1360,7 +1364,7 @@ let hcLoggedToday = false; // count one meditation/day; settling fires once per 
 // game) or 'timed' (a quiet countdown with ambient bells, no camera).
 // The camera loop() runs only in stillness mode.
 // ─────────────────────────────────────────────
-let meditationMode = 'stillness';
+let meditationMode = 'timed'; // v1.68: timed is the only reachable mode
 const TIMED_MINUTES_KEY = 'hill-climbing-timed-minutes';
 let timedMinutes   = 10;          // selected duration; overwritten on load
 let timedStart     = 0;           // performance.now() when the sit began
@@ -2824,15 +2828,15 @@ function endTimedSit(message) {
   roundTimer.classList.remove('show');
   if (audioEngine) { audioEngine.stopAmbientNoise(); audioEngine.setRoundAudible(false); } // fade out
   releaseWakeLock();
-  meditationMode = 'stillness'; // back to default for the next entry
+  meditationMode = 'timed'; // v1.68: timed is the only mode
   if (message) stateText.textContent = message;
-  // Return to the picker so the user can sit again.
+  // Return to the start screen so the user can sit again. The duration row
+  // stays visible (v1.68: no picker to return to); leave its selection as-is.
   meditScreen.style.display = 'none';
   startScreen.style.display = 'flex';
   modeStillnessBtn.disabled = false;
   modeStillnessBtn.classList.remove('sel');
   modeTimedBtn.classList.remove('sel');
-  timedOptions.hidden = true;
 }
 
 function timedLoop() {
@@ -3104,7 +3108,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.67 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.68 · t${TIER}`;
 </script>
 </body>
 </html>
