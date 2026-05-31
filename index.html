@@ -310,6 +310,7 @@
   // ── Install banner ──────────────────────────────────────────────────────
   (function () {
     const DISMISS_KEY = 'hill-climbing-install-dismissed';
+    const RESHOW_AFTER_MS = 5 * 24 * 60 * 60 * 1000;  // re-prompt 5 days after a dismissal
     const banner  = document.getElementById('install-banner');
     const sub     = document.getElementById('ib-sub');
     const btn     = document.getElementById('ib-install');
@@ -319,12 +320,15 @@
     const standalone = window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
     let dismissed = false;
-    try { dismissed = localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) {}
+    try {
+      const at = parseInt(localStorage.getItem(DISMISS_KEY), 10);
+      dismissed = at > 0 && (Date.now() - at) < RESHOW_AFTER_MS;
+    } catch (e) {}
     if (standalone || dismissed) return;
 
     function dismiss() {
       banner.classList.remove('show');
-      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
+      try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) {}
     }
     close.addEventListener('click', dismiss);
 
