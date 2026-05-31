@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
+       background-sampling) matches the dark page like iOS Safari does. -->
+  <meta name="theme-color" content="#0a0b12">
   <title>Reflect · Hill Climbing</title>
   <style>
     :root {
@@ -199,7 +202,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · reflect</div>
+<div class="corner" id="version-label">v0.4 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -251,7 +254,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.3 · reflect';
+const VERSION    = 'v0.4 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SCALE_MAX  = 7;

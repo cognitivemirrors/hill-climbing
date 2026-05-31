@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
+       background-sampling) matches the dark page like iOS Safari does. -->
+  <meta name="theme-color" content="#0a0b12">
   <title>Breathe · Hill Climbing</title>
   <style>
     :root {
@@ -209,7 +212,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · breathe</div>
+<div class="corner" id="version-label">v0.6 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 
