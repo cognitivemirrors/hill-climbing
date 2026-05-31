@@ -1,6 +1,6 @@
 {
-  "name": "Hill Climbing — Stillness",
-  "short_name": "Stillness",
+  "name": "Hill Climbing",
+  "short_name": "Hill Climbing",
   "description": "A stillness-meditation practice: Meditate, Breathe, and Reflect.",
   "id": "/",
   "start_url": "/?source=pwa",
