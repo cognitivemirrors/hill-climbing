@@ -156,7 +156,10 @@
     @media (max-width: 600px) {
       h1 { font-size: 1.6rem; letter-spacing: 0.34em; text-indent: 0.34em; }
       header { margin-bottom: 40px; }
-      nav { flex-direction: column; align-items: stretch; max-width: 340px; }
+      /* Grid (not flex column) so grid-auto-rows: 1fr forces every stacked
+         card to the tallest card's height — flex column would let each card
+         size to its own content, leaving 2-line vs 3-line subheadings uneven. */
+      nav { display: grid; grid-template-columns: 1fr; grid-auto-rows: 1fr; max-width: 340px; }
       .card { max-width: none; flex-basis: auto; flex-direction: row; gap: 18px; text-align: left; padding: 20px 22px; align-items: center; }
       .glyph { width: 34px; height: 34px; margin-bottom: 0; flex: none; }
       .dashboard { max-width: 340px; }
