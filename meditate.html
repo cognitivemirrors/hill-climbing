@@ -73,23 +73,64 @@
       letter-spacing: 0.04em; line-height: 1.7;
     }
 
-    #begin-btn {
-      margin-top: 8px;
+    /* ── Mode picker (v1.65) — two ways to sit. ── */
+    #mode-picker {
+      display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
+    }
+    .mode-card {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-width: 150px; padding: 18px 26px;
+      border: 1px solid rgba(200, 184, 255, 0.28);
+      border-radius: 18px; background: transparent;
+      cursor: pointer; transition: all 0.4s ease;
+    }
+    .mode-card:hover, .mode-card.sel {
+      background: rgba(200, 184, 255, 0.06);
+      border-color: rgba(200, 184, 255, 0.6);
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+    .mode-card:disabled { opacity: 0.5; cursor: wait; }
+    .mode-card-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem; color: var(--accent); letter-spacing: 0.04em;
+    }
+    .mode-card-sub {
+      font-family: var(--font-ui);
+      font-size: 0.7rem; color: var(--accent-soft);
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    #timed-options {
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+      animation: fadeIn 0.6s ease;
+    }
+    #timed-options[hidden] { display: none; }
+    #timed-pills {
+      display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    }
+    .timed-pill {
+      min-width: 44px; padding: 8px 14px;
+      border: 1.5px solid rgba(200, 184, 255, 0.2);
+      border-radius: 16px; background: transparent;
+      color: var(--accent-soft);
+      font-family: var(--font-ui); font-size: 0.85rem; letter-spacing: 0.04em;
+      cursor: pointer; transition: border-color 0.2s, color 0.2s;
+    }
+    .timed-pill:hover { border-color: rgba(200, 184, 255, 0.42); color: var(--text); }
+    .timed-pill.sel   { border-color: var(--accent); color: var(--accent); }
+    #timed-begin {
       padding: 0 34px; height: 50px;
-      flex: 0 0 auto;
       display: flex; align-items: center; justify-content: center;
       border: 1px solid rgba(200, 184, 255, 0.4);
-      border-radius: 25px; background: transparent;
-      color: #c8b8ff;
+      border-radius: var(--radius-pill); background: transparent;
+      color: var(--accent);
       font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase;
       cursor: pointer; transition: all 0.4s ease;
     }
-    #begin-btn:hover {
+    #timed-begin:hover {
       background: rgba(200, 184, 255, 0.08);
       border-color: rgba(200, 184, 255, 0.65);
-      box-shadow: 0 0 40px rgba(160, 120, 255, 0.2);
+      box-shadow: 0 0 40px var(--accent-glow);
     }
-    #begin-btn:disabled { opacity: 0.4; cursor: wait; }
 
     /* ── Meditation screen ── */
     #meditation-screen {
@@ -852,7 +893,29 @@
       </svg>
     </div>
     <p id="start-prompt">Find a comfortable position.</p>
-    <button id="begin-btn" aria-label="Get started">Get started</button>
+    <!-- Mode picker (v1.65). Two ways to sit: a camera-guided stillness
+         practice (the original game) and a quiet timed countdown. The
+         timed card reveals an inline duration row + Begin button. -->
+    <div id="mode-picker">
+      <button id="mode-stillness" class="mode-card" aria-label="Stillness — camera-guided">
+        <span class="mode-card-title">Stillness</span>
+        <span class="mode-card-sub">camera-guided</span>
+      </button>
+      <button id="mode-timed" class="mode-card" aria-label="Timed — quiet countdown">
+        <span class="mode-card-title">Timed</span>
+        <span class="mode-card-sub">quiet countdown</span>
+      </button>
+    </div>
+    <div id="timed-options" hidden>
+      <div id="timed-pills" role="group" aria-label="Session length">
+        <button class="timed-pill" data-minutes="5">5</button>
+        <button class="timed-pill" data-minutes="10">10</button>
+        <button class="timed-pill" data-minutes="20">20</button>
+        <button class="timed-pill" data-minutes="30">30</button>
+        <button class="timed-pill" data-minutes="45">45</button>
+      </div>
+      <button id="timed-begin" aria-label="Begin timed sit">Begin</button>
+    </div>
     <div class="corner-icons">
       <div id="about-link" title="About this practice">?</div>
       <div id="safety-link" title="Safety notice">ⓘ</div>
@@ -945,7 +1008,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.64</p>
+    <p id="version-label">v1.65</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1275,6 +1338,26 @@ function markUsage(app) {
 }
 let hcLoggedToday = false; // count one meditation/day; settling fires once per round
 
+// ─────────────────────────────────────────────
+// Meditation mode (v1.65) — 'stillness' (camera-guided, the original
+// game) or 'timed' (a quiet countdown with ambient bells, no camera).
+// The camera loop() runs only in stillness mode.
+// ─────────────────────────────────────────────
+let meditationMode = 'stillness';
+const TIMED_MINUTES_KEY = 'hill-climbing-timed-minutes';
+let timedMinutes   = 10;          // selected duration; overwritten on load
+let timedStart     = 0;           // performance.now() when the sit began
+let timedDurationSecs = 0;
+let timedRunning   = false;       // guards the dedicated timed rAF chain
+let timedNextBell  = 0;           // ms timestamp for the next ambient bell
+function readStoredTimedMinutes() {
+  try {
+    const stored = parseInt(localStorage.getItem(TIMED_MINUTES_KEY), 10);
+    if (stored > 0) timedMinutes = stored;
+  } catch {}
+}
+readStoredTimedMinutes();
+
 let phase = 'idle';   // idle | settling | active | won | lost | interlude
 let roundMode = 'stillness'; // 'stillness' | 'smoothness' — mode of next round
 let roundStart = 0;   // performance.now() at active-phase start
@@ -1294,7 +1377,7 @@ function releaseWakeLock() {
 
 // Re-acquire after returning to the tab (iOS releases on hide)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && loopRunning) acquireWakeLock();
+  if (document.visibilityState === 'visible' && (loopRunning || timedRunning)) acquireWakeLock();
 });
 
 // v1.52: gradient accumulator. Integrates per frame during active rounds:
@@ -1343,7 +1426,12 @@ const analysisCanvas = document.getElementById('analysis-canvas');
 const analysisCtx    = analysisCanvas.getContext('2d', { willReadFrequently: true });
 const startScreen    = document.getElementById('start-screen');
 const meditScreen    = document.getElementById('meditation-screen');
-const beginBtn       = document.getElementById('begin-btn');
+// v1.65: the single #begin-btn was replaced by a mode picker.
+const modeStillnessBtn = document.getElementById('mode-stillness');
+const modeTimedBtn     = document.getElementById('mode-timed');
+const timedOptions     = document.getElementById('timed-options');
+const timedPills       = document.getElementById('timed-pills');
+const timedBeginBtn    = document.getElementById('timed-begin');
 const cameraPreview  = document.getElementById('camera-preview');
 const ringProgress   = document.getElementById('ring-progress');
 const innerMandala   = document.getElementById('inner-mandala');
@@ -1595,6 +1683,17 @@ class AudioEngine {
   setRoundAudible(on) {
     this.roundAudible = on;
     this._applyGain(on ? 0.7 : 0.4);
+  }
+
+  // Timed mode (v1.65): bells-only, no stillness-reactive drone. update()
+  // is the only thing that raises the layer oscillators; it's never called
+  // in timed mode, but the dissonance oscillator carries a non-zero baseline
+  // gain from _build(). Zero every drone source here so that — with master
+  // gain up for bells — only triggerBell() output is audible.
+  silenceDrone() {
+    const t = this.ctx.currentTime;
+    this.oscs.forEach(L => L.gain.gain.setTargetAtTime(0, t, 0.4));
+    this.discGain.gain.setTargetAtTime(0, t, 0.4);
   }
 
   // Single source of truth for the master gain: audible only when in a round
@@ -2233,6 +2332,8 @@ function abortRound() {
 }
 
 actionBtn.addEventListener('click', () => {
+  // Timed mode: the stop button ends the sit cleanly (no win/loss).
+  if (timedRunning) { endTimedSit('Ended. Rest a moment.'); return; }
   if (phase === 'replay') {
     endReplay();
     return;
@@ -2268,6 +2369,7 @@ setPhase = function(next) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (timedRunning) { endTimedSit('Ended. Rest a moment.'); return; }
     if (phase === 'interlude') {
       ringContainer.classList.remove('breathing');
       stillnessSvg.classList.remove('won', 'lost');
@@ -2534,8 +2636,14 @@ function enterMeditation() {
   }
 }
 
-beginBtn.addEventListener('click', async () => {
-  beginBtn.disabled = true;
+// ── Stillness mode (the original camera-guided flow, unchanged) ──
+modeStillnessBtn.addEventListener('click', async () => {
+  meditationMode = 'stillness';
+  modeStillnessBtn.classList.add('sel');
+  modeStillnessBtn.disabled = true;
+  // Restore camera-only chrome in case a timed sit hid it earlier.
+  reframeBtn.style.display = '';
+  cameraPreview.style.display = '';
 
   // iOS audio unlock — AudioEngine constructor and ctx.resume() must both
   // execute inside this user gesture, synchronously, before any await.
@@ -2583,7 +2691,7 @@ beginBtn.addEventListener('click', async () => {
     startScreen.style.display = 'none';
     enterMeditation();
   } catch (err) {
-    beginBtn.disabled = false; beginBtn.textContent = 'Get started';
+    modeStillnessBtn.disabled = false; modeStillnessBtn.classList.remove('sel');
     alert('Camera access is required.\n\nPlease allow camera access and try again.');
     console.error(err);
   }
@@ -2613,6 +2721,144 @@ reframeBtn.addEventListener('click', () => {
   if (phase === 'interlude') ringContainer.classList.remove('breathing');
   meditScreen.style.display = 'none';
   positioningScreen.classList.add('show');
+});
+
+// ─────────────────────────────────────────────
+// Timed mode (v1.65) — a quiet countdown, no camera
+// ─────────────────────────────────────────────
+// The "Timed" card reveals a duration row; "Begin" starts a dedicated
+// rAF loop (independent of the camera loop, so motion detection never
+// runs) that fills the ring as time elapses and rings ambient pentatonic
+// bells. A single closing bell ends the sit. No win/loss is recorded.
+
+// Reflect the saved/default duration as the selected pill.
+function syncTimedPills() {
+  timedPills.querySelectorAll('.timed-pill').forEach(p => {
+    p.classList.toggle('sel', parseInt(p.dataset.minutes, 10) === timedMinutes);
+  });
+}
+syncTimedPills();
+
+modeTimedBtn.addEventListener('click', () => {
+  meditationMode = 'timed';
+  modeTimedBtn.classList.add('sel');
+  modeStillnessBtn.classList.remove('sel');
+  timedOptions.hidden = false;
+  syncTimedPills();
+});
+
+timedPills.addEventListener('click', e => {
+  const pill = e.target.closest('.timed-pill');
+  if (!pill) return;
+  timedMinutes = parseInt(pill.dataset.minutes, 10);
+  try { localStorage.setItem(TIMED_MINUTES_KEY, String(timedMinutes)); } catch {}
+  syncTimedPills();
+});
+
+// Tear down a timed sit cleanly: stop the loop, fade audio via the
+// existing gain path, release the wake lock, return to the start screen.
+// Mirrors abortRound()'s spirit but never touches game win/loss stats.
+function endTimedSit(message) {
+  timedRunning = false;
+  roundTimer.classList.remove('show');
+  if (audioEngine) audioEngine.setRoundAudible(false); // fades master to 0
+  releaseWakeLock();
+  meditationMode = 'stillness'; // back to default for the next entry
+  if (message) stateText.textContent = message;
+  // Return to the picker so the user can sit again.
+  meditScreen.style.display = 'none';
+  startScreen.style.display = 'flex';
+  modeStillnessBtn.disabled = false;
+  modeStillnessBtn.classList.remove('sel');
+  modeTimedBtn.classList.remove('sel');
+  timedOptions.hidden = true;
+}
+
+function timedLoop() {
+  if (!timedRunning) return;
+  try {
+    const now = performance.now();
+    const elapsed = (now - timedStart) / 1000;
+
+    if (elapsed >= timedDurationSecs) {
+      // Completion — fill the ring, ring a single calming closing bell,
+      // and return to a restartable state. 220 Hz is the calm low tone
+      // the loss path already uses; here it reads as a gentle close.
+      ringProgress.style.strokeDashoffset = 0;
+      if (audioEngine) audioEngine.triggerBell(220, 0.8);
+      endTimedSit('The sit is complete. Rest a moment.');
+      return;
+    }
+
+    // Ring fills empty → full as time elapses (same dashoffset formula
+    // the stillness ring uses, with value = progress).
+    const progress = Math.max(0, Math.min(1, elapsed / timedDurationSecs));
+    ringProgress.style.strokeDashoffset = CIRCUMF * (1 - progress);
+
+    // Countdown timer.
+    roundTimer.textContent = fmtSecs(Math.ceil(timedDurationSecs - elapsed));
+
+    // Ambient pentatonic bells on a gentle random interval — the same
+    // temple-atmosphere palette as the stillness reward, but unconditional
+    // (there's no stillness gate in timed mode).
+    if (now > timedNextBell) {
+      const f = AMBIENT_BELL_SCALE[Math.floor(Math.random() * AMBIENT_BELL_SCALE.length)];
+      if (audioEngine) audioEngine.triggerBell(f, AMBIENT_BELL_VOL);
+      timedNextBell = now + AMBIENT_BELL_MIN_MS + Math.random() * (AMBIENT_BELL_MAX_MS - AMBIENT_BELL_MIN_MS);
+    }
+
+    requestAnimationFrame(timedLoop);
+  } catch (err) {
+    // Keep the safety net alive: log, end the sit gracefully.
+    console.error('timed loop error', err);
+    endTimedSit('Something interrupted the sit. You can begin again.');
+  }
+}
+
+timedBeginBtn.addEventListener('click', () => {
+  meditationMode = 'timed';
+
+  // iOS audio unlock on this gesture (mirror the stillness flow). No camera.
+  if (!audioEngine) audioEngine = new AudioEngine();
+  audioEngine.ctx.resume();
+
+  // Hide camera-only chrome; keep the mute button.
+  reframeBtn.style.display = 'none';
+  cameraPreview.style.display = 'none';
+
+  // Swap screens.
+  startScreen.style.display = 'none';
+  meditScreen.style.display = 'flex';
+
+  // Bells route through master gain (triggerBell → reverb/dry → master),
+  // gated by setRoundAudible. Open the gate so bells are audible; the
+  // drone never sounds because update() is never called in timed mode.
+  // silenceDrone() zeros the dissonance oscillator's _build() baseline so
+  // only bell strikes are heard.
+  if (audioEngine) { audioEngine.silenceDrone(); audioEngine.setRoundAudible(true); }
+
+  // Usage log — one meditation/day, shared flag with the stillness path.
+  if (!hcLoggedToday) { markUsage('meditate'); hcLoggedToday = true; }
+
+  acquireWakeLock();
+
+  // Calm orientation copy + visible countdown.
+  stateText.textContent = 'Rest. The bell will close the sit.';
+  calibText.textContent = '';
+  scoreNumber.textContent = '';
+  actionBtn.textContent = '■';
+  actionBtn.classList.add('stop', 'show');
+  actionBtn.disabled = false;
+  roundTimer.classList.add('show');
+
+  // Start the dedicated loop.
+  timedDurationSecs = timedMinutes * 60;
+  timedStart = performance.now();
+  timedNextBell = timedStart + AMBIENT_BELL_MIN_MS;
+  ringProgress.style.strokeDashoffset = CIRCUMF; // empty
+  roundTimer.textContent = fmtSecs(timedDurationSecs);
+  timedRunning = true;
+  requestAnimationFrame(timedLoop);
 });
 
 // ─────────────────────────────────────────────
@@ -2805,7 +3051,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.64 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.65 · t${TIER}`;
 </script>
 </body>
 </html>
