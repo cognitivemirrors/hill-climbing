@@ -167,7 +167,9 @@
     .info-block.tell p { color: var(--text); }
     .info-block.tell .block-label { color: var(--accent); }
 
-    .card-actions { display: flex; align-items: center; gap: 18px; margin-top: 26px; }
+    .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 26px; }
+    #too-easy-btn { color: var(--faint); }
+    #too-easy-btn:hover:not(:disabled) { color: var(--accent); }
 
     /* ── cooking / report panel ─────────────────────────────────── */
     #cooking-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 8px; }
@@ -263,7 +265,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · nourish</div>
+<div class="corner" id="version-label">v0.2 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="progress">Progress</button>
@@ -318,7 +320,8 @@
       </div>
       <div class="card-actions">
         <button class="btn primary" id="start-cooking-btn">START COOKING</button>
-        <button class="btn ghost" id="skip-btn">skip · show another</button>
+        <button class="btn ghost" id="skip-btn">show another</button>
+        <button class="btn ghost" id="too-easy-btn">too easy ↑</button>
       </div>
     </div>
 
@@ -368,7 +371,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.1 · nourish';
+const VERSION  = 'v0.2 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 
@@ -728,6 +731,8 @@ function showChallenge(ch) {
   document.getElementById('ch-meal').textContent = ch.meal;
   document.getElementById('ch-teaches').textContent = ch.teaches;
   document.getElementById('ch-tell').textContent  = ch.tell;
+  // "too easy" has nowhere to climb at the top of the ladder — hide it there
+  document.getElementById('too-easy-btn').classList.toggle('hidden', state.level >= LVL_MAX);
   swapPanel(challengePanel);
 }
 
@@ -805,11 +810,17 @@ function newChallenge() {
   if (state.active) { const ac = byId(state.active.id); if (ac) return showCooking(ac); }
   showChallenge(pickChallenge());
 }
-function skipChallenge() {
+function skipChallenge() {                          // "show another" — neutral reshuffle, same rung
   if (served) state.recent.push(served.id);
   state.recent = state.recent.slice(-4);
   save();
   showChallenge(pickChallenge(served && served.id));
+}
+function tooEasy() {                                // "too easy ↑" — the dish is beneath you; climb a rung
+  if (state.level < LVL_MAX) { state.level++; state.streak = 0; }  // self-calibrate the ladder upward; fresh footing
+  if (served) { state.recent.push(served.id); state.recent = state.recent.slice(-4); }
+  save();
+  showChallenge(pickChallenge(served && served.id));               // now targets the higher level
 }
 function startCooking() {
   if (!served) return;
@@ -915,6 +926,7 @@ async function importData(file) {
 document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
 document.getElementById('skip-btn').addEventListener('click', skipChallenge);
+document.getElementById('too-easy-btn').addEventListener('click', tooEasy);
 document.getElementById('start-cooking-btn').addEventListener('click', startCooking);
 document.getElementById('leave-btn').addEventListener('click', leaveCooking);
 document.getElementById('next-challenge-btn').addEventListener('click', newChallenge);
