@@ -202,6 +202,7 @@
 
     /* ── cooking / report panel ─────────────────────────────────── */
     #cooking-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 8px; }
+    .cook-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; }
     .cook-title {
       font-family: var(--font-display); font-weight: 400; font-size: 1.7rem;
       line-height: 1.25; color: var(--text); margin: 14px 0 20px; max-width: 460px;
@@ -387,7 +388,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.7 · nourish</div>
+<div class="corner" id="version-label">v0.8 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -457,7 +458,7 @@
         </div>
       </div>
       <div class="card-actions">
-        <button class="btn primary" id="start-cooking-btn">START COOKING</button>
+        <button class="btn primary" id="finish-cooking-btn">FINISHED COOKING</button>
         <button class="btn ghost" id="skip-btn">show another</button>
         <button class="btn ghost" id="too-easy-btn">too easy ↑</button>
       </div>
@@ -465,13 +466,16 @@
 
     <!-- committed: cooking IRL, then report -->
     <div id="cooking-panel" class="panel hidden">
-      <div class="kicker">Cooking</div>
+      <div class="kicker">Finished</div>
       <div class="cook-title" id="cook-title">title</div>
       <div class="cook-tell" id="cook-tell">tell</div>
-      <div class="report-q">When you're done — how did it go?</div>
+      <div class="report-q">How did it go?</div>
       <div class="outcomes" id="outcomes"></div>
       <div class="cook-note">Honest answers tune the difficulty.</div>
-      <button class="btn ghost" id="leave-btn" style="margin-top:18px;">leave without recording</button>
+      <div class="cook-actions">
+        <button class="btn ghost" id="back-to-instructions-btn">‹ back to instructions</button>
+        <button class="btn ghost" id="leave-btn">leave without recording</button>
+      </div>
     </div>
 
     <!-- result after reporting -->
@@ -544,7 +548,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.7 · nourish';
+const VERSION  = 'v0.8 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -1106,13 +1110,19 @@ function tooEasy() {                                // "too easy ↑" — the di
   save();
   showChallenge(pickChallenge(served && served.id));               // now targets the higher level
 }
-function startCooking() {
+function finishCooking() {                       // pressed after cooking — go record the result
   if (!served) return;
-  markUsage();                                  // the practice begins the moment you commit to cook
+  markUsage();                                  // you cooked today — log it
   state.active = { id: served.id, ts: Date.now() };
   state.recent.push(served.id); state.recent = state.recent.slice(-4);
   save();
   showCooking(served);
+}
+// Back to the recipe from the record-result screen (works whether served is set
+// from this session or resolved from a resumed active cook).
+function backToChallenge() {
+  const ch = (state.active && byId(state.active.id)) || served;
+  if (ch) showChallenge(ch);
 }
 function report(outcomeKey) {
   const res = recordOutcome(outcomeKey);
@@ -1342,7 +1352,8 @@ document.querySelectorAll('.serve-btn').forEach(b => b.addEventListener('click',
 document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
 document.getElementById('skip-btn').addEventListener('click', skipChallenge);
 document.getElementById('too-easy-btn').addEventListener('click', tooEasy);
-document.getElementById('start-cooking-btn').addEventListener('click', startCooking);
+document.getElementById('finish-cooking-btn').addEventListener('click', finishCooking);
+document.getElementById('back-to-instructions-btn').addEventListener('click', backToChallenge);
 document.getElementById('leave-btn').addEventListener('click', leaveCooking);
 document.getElementById('next-challenge-btn').addEventListener('click', newChallenge);
 document.getElementById('done-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
