@@ -280,6 +280,22 @@
     .shop-dish { font-family: var(--font-display); font-style: italic; font-size: 13px; color: var(--mid); }
     .shop-dish:not(:last-child)::after { content: '·'; margin: 0 9px; color: var(--faint); }
     .shop-count { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); text-align: center; margin-bottom: 16px; }
+    /* serves 1 / 2 / 4 selector — scales the quantities */
+    .serve-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; }
+    .serve-label { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-right: 2px; }
+    .serve-btn {
+      min-width: 36px; padding: 5px 13px; border-radius: 14px;
+      border: 1.5px solid rgba(255,255,255,0.14); background: transparent; color: var(--dim);
+      font-family: var(--font-ui); font-size: 13px; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .serve-btn:hover { border-color: rgba(255,255,255,0.32); color: var(--text); }
+    .serve-btn.sel { border-color: var(--accent); color: var(--accent); }
+    .ing-qty {
+      margin-left: auto; padding-left: 12px; color: var(--dim); font-size: 13px;
+      letter-spacing: 0.01em; white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .ing-row.have .ing-qty { color: var(--faint); }
     .shop-list { display: flex; flex-direction: column; gap: 2px; max-width: 420px; margin: 0 auto; }
     .ing-row {
       display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
@@ -371,7 +387,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.6 · nourish</div>
+<div class="corner" id="version-label">v0.7 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -497,6 +513,12 @@
     <!-- recommended: churns as you climb -->
     <div class="shop-label">For what's ahead</div>
     <div class="shop-dishes" id="shop-dishes" aria-label="Upcoming dishes"></div>
+    <div class="serve-row" role="group" aria-label="Serving size">
+      <span class="serve-label">Feeds</span>
+      <button class="serve-btn" type="button" data-serves="1">1</button>
+      <button class="serve-btn" type="button" data-serves="2">2</button>
+      <button class="serve-btn" type="button" data-serves="4">4</button>
+    </div>
     <div class="shop-count" id="shop-count"></div>
     <div class="shop-list" id="shop-list"></div>
     <div id="shop-empty" class="shop-note hidden">You've cooked the whole ladder — no recommendations right now.</div>
@@ -522,7 +544,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.6 · nourish';
+const VERSION  = 'v0.7 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -729,6 +751,76 @@ const CHALLENGE_INGREDIENTS = {
   'cook-for-someone': ['a main you have practised', 'a simple starter', 'dessert'],
 };
 
+// Indicative per-person quantities for the recommended ingredients, scaled by the
+// chosen serving size (1 / 2 / 4). A *sense* of how much to buy, not precise recipe
+// maths; things that don't scale (seasonings, a whole bird, a batch of oil for mayo)
+// carry a fixed `note` instead. Ingredients with no entry show no quantity.
+const INGREDIENT_QTY = {
+  'pasta':                  { qty: 90,  unit: 'g' },
+  'spaghetti':              { qty: 90,  unit: 'g' },
+  'salt':                   { note: 'to taste' },
+  'butter':                 { qty: 15,  unit: 'g' },
+  'parmesan':               { qty: 20,  unit: 'g' },
+  'cheese':                 { qty: 30,  unit: 'g' },
+  'gruyère':                { qty: 30,  unit: 'g' },
+  'feta':                   { qty: 30,  unit: 'g' },
+  'salad greens':           { qty: 1,   unit: 'handful' },
+  'leafy greens':           { qty: 1,   unit: 'handful' },
+  'olive oil':              { note: 'a few glugs' },
+  'neutral oil':            { note: '~150 ml' },
+  'vinegar':                { qty: 1,   unit: 'tbsp' },
+  'dijon mustard':          { qty: 1,   unit: 'tsp' },
+  'soy sauce':              { note: 'to taste' },
+  'bread':                  { qty: 2,   unit: 'slice' },
+  'nuts or seeds':          { qty: 20,  unit: 'g' },
+  'yogurt':                 { qty: 100, unit: 'g' },
+  'yogurt or hummus':       { qty: 50,  unit: 'g' },
+  'honey':                  { note: 'to drizzle' },
+  'eggs':                   { qty: 2,   unit: '' },
+  'cherry tomatoes':        { qty: 5,   unit: '' },
+  'canned tomatoes':        { qty: 0.5, unit: 'can' },
+  'rice':                   { qty: 75,  unit: 'g' },
+  'rice or polenta':        { qty: 75,  unit: 'g' },
+  'couscous or farro':      { qty: 60,  unit: 'g' },
+  'plain or 00 flour':      { qty: 100, unit: 'g' },
+  'lemon':                  { qty: 0.5, unit: 'lemon' },
+  'green beans or broccoli':{ qty: 100, unit: 'g' },
+  'green vegetable':        { qty: 100, unit: 'g' },
+  'mushrooms':              { qty: 80,  unit: 'g' },
+  'garlic':                 { qty: 1,   unit: 'clove' },
+  'onions':                 { qty: 1,   unit: 'onion' },
+  'potatoes':               { qty: 150, unit: 'g' },
+  'vegetables':             { qty: 150, unit: 'g' },
+  'mixed vegetables':       { qty: 200, unit: 'g' },
+  'bone-in chicken thighs': { qty: 2,   unit: 'thigh' },
+  'chicken thighs':         { qty: 2,   unit: 'thigh' },
+  'fish fillets':           { qty: 1,   unit: 'fillet' },
+  'steak or pork chop':     { qty: 1,   unit: '' },
+  'whole chicken':          { note: '1 (serves ~4)' },
+  'stock':                  { qty: 200, unit: 'ml' },
+  'stock or wine':          { note: 'a splash' },
+  'dried beans':            { qty: 80,  unit: 'g' },
+  'parsley':                { note: 'a few sprigs' },
+  'fresh herbs':            { note: 'a few sprigs' },
+  'chili flakes':           { note: 'a pinch' },
+};
+// Scaled quantity string for an ingredient, or '' if it has none.
+function fmtNum(n) {
+  const whole = Math.floor(n + 1e-9), frac = n - whole;
+  if (Math.abs(frac - 0.5) < 0.05) return whole === 0 ? '½' : whole + '½';
+  return String(Math.round(n));
+}
+function fmtQty(name, servings) {
+  const item = INGREDIENT_QTY[name];
+  if (!item) return '';
+  if (item.note) return item.note;
+  const n = item.qty * servings, u = item.unit || '', num = fmtNum(n);
+  if (u === '') return num;                                  // count item — the name carries the noun
+  if (u === 'g' || u === 'ml') return num + u;               // 180g, 200ml
+  if (u === 'tbsp' || u === 'tsp') return num + ' ' + u;
+  return num + ' ' + (n > 1.001 ? u + 's' : u);             // ½ lemon, 1 onion, 2 cloves
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 // Persisted as one small JSON blob in localStorage (right-sized for this; the
 // records are tiny flags, not long text — cf. Reflect, which earns IndexedDB).
@@ -742,6 +834,7 @@ const state = {
   recent: [],          // last few served ids, so "skip" rotates instead of repeating
   pantry: {},          // shopping list: { ingredientName: 1 } for items the user already has
   extras: [],          // user's own additions: [{ name, have }] — persist until removed (never auto-churn)
+  servings: 2,         // shopping-list serving size (1 / 2 / 4) — scales the recommended quantities
 };
 
 function load() {
@@ -756,6 +849,7 @@ function load() {
       if (Array.isArray(raw.recent)) state.recent = raw.recent;
       if (raw.pantry && typeof raw.pantry === 'object') state.pantry = raw.pantry;
       if (Array.isArray(raw.extras)) state.extras = raw.extras.filter(e => e && typeof e.name === 'string');
+      if ([1, 2, 4].includes(raw.servings)) state.servings = raw.servings;
     }
   } catch (e) { /* corrupt / private mode — start fresh, never throw */ }
 }
@@ -1108,6 +1202,12 @@ function toggleHave(ing) {
   save();
   renderShop();
 }
+function setServings(n) {
+  if (![1, 2, 4].includes(n)) return;
+  state.servings = n;
+  save();
+  renderRecommended();   // quantities + selected pill update; extras unaffected
+}
 function renderShop() {
   renderRecommended();
   renderExtras();
@@ -1121,6 +1221,8 @@ function renderRecommended() {
   const listEl   = document.getElementById('shop-list');
   const countEl  = document.getElementById('shop-count');
   const emptyEl  = document.getElementById('shop-empty');
+
+  document.querySelectorAll('.serve-btn').forEach(b => b.classList.toggle('sel', +b.dataset.serves === state.servings));
 
   if (!dishes.length) {                       // whole ladder cooked — nothing ahead (extras still render)
     dishesEl.innerHTML = ''; listEl.innerHTML = ''; countEl.textContent = '';
@@ -1147,6 +1249,8 @@ function renderRecommended() {
     const check = document.createElement('span'); check.className = 'ing-check'; check.setAttribute('aria-hidden', 'true');
     const name  = document.createElement('span'); name.className = 'ing-name'; name.textContent = ing;
     row.append(check, name);
+    const qtyStr = fmtQty(ing, state.servings);
+    if (qtyStr) { const qty = document.createElement('span'); qty.className = 'ing-qty'; qty.textContent = qtyStr; row.append(qty); }
     row.addEventListener('click', () => toggleHave(ing));
     listEl.appendChild(row);
   });
@@ -1222,6 +1326,7 @@ async function importData(file) {
     if (Array.isArray(incoming.history)) state.history = incoming.history;
     if (incoming.pantry && typeof incoming.pantry === 'object') state.pantry = incoming.pantry;
     if (Array.isArray(incoming.extras)) state.extras = incoming.extras.filter(e => e && typeof e.name === 'string');
+    if ([1, 2, 4].includes(incoming.servings)) state.servings = incoming.servings;
     state.active = null;
     save();
     switchView('progress');
@@ -1233,6 +1338,7 @@ async function importData(file) {
 
 // ── Events ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.querySelectorAll('.serve-btn').forEach(b => b.addEventListener('click', () => setServings(+b.dataset.serves)));
 document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
 document.getElementById('skip-btn').addEventListener('click', skipChallenge);
 document.getElementById('too-easy-btn').addEventListener('click', tooEasy);
