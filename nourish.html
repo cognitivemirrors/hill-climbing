@@ -272,6 +272,7 @@
     .empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 60px; line-height: 1.9; }
 
     /* ── shopping list ──────────────────────────────────────────── */
+    #shop-view { padding-bottom: 84px; }   /* clearance for the fixed add-item bar */
     .shop-head { text-align: center; }
     .shop-title { font-family: var(--font-display); font-weight: 400; font-size: 1.5rem; color: var(--text); }
     .shop-sub { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-top: 5px; }
@@ -305,12 +306,19 @@
       padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .shop-label.second { margin-top: 36px; }
-    /* manual add */
-    .extra-add { display: flex; gap: 8px; max-width: 420px; margin: 0 auto 6px; }
+    /* manual add — a composer fixed to the bottom of the Shop view. Lives inside
+       #shop-view, so it shows only on Shop (display:none hides it on Cook/Progress)
+       and #shop-view's bottom padding keeps the list clear of it. */
+    .extra-add {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+      padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(to top, var(--bg-base) 0%, var(--bg-base) 70%, rgba(10,11,18,0) 100%);
+    }
+    .extra-add-inner { display: flex; gap: 8px; max-width: 420px; margin: 0 auto; }
     .extra-add input {
       flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line);
       border-radius: 10px; color: var(--text); font-family: var(--font-ui); font-size: 14px;
-      padding: 10px 14px; outline: none; transition: border-color 0.2s;
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
     }
     .extra-add input:focus { border-color: var(--accent-soft); }
     .extra-add input::placeholder { color: var(--faint); }
@@ -362,7 +370,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.4 · nourish</div>
+<div class="corner" id="version-label">v0.5 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -494,14 +502,18 @@
 
     <!-- additional: the user's own list, persists until removed -->
     <div class="shop-label second">Additional ingredients</div>
-    <form class="extra-add" id="extra-add">
-      <input type="text" id="extra-input" placeholder="Add an item…" maxlength="40" autocomplete="off" aria-label="Add an ingredient">
-      <button type="submit" class="extra-add-btn">add</button>
-    </form>
     <div class="shop-list" id="extra-list"></div>
     <div id="extra-empty" class="shop-note hidden">Anything you add stays here as you climb.</div>
 
     <div class="shop-hint">Tap an item to check off what you have. Recommendations refresh as you climb; your own additions stay put until you remove them.</div>
+
+    <!-- add-item composer, fixed to the bottom of the Shop view -->
+    <form class="extra-add" id="extra-add">
+      <div class="extra-add-inner">
+        <input type="text" id="extra-input" placeholder="Add an item…" maxlength="40" autocomplete="off" aria-label="Add an ingredient">
+        <button type="submit" class="extra-add-btn">add</button>
+      </div>
+    </form>
   </section>
 </main>
 
@@ -509,7 +521,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.4 · nourish';
+const VERSION  = 'v0.5 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
