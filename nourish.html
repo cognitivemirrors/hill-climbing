@@ -195,6 +195,10 @@
     .info-block p { font-size: 13.5px; line-height: 1.62; color: var(--mid); }
     .info-block.tell p { color: var(--text); }
     .info-block.tell .block-label { color: var(--accent); }
+    .info-block.steps ol { margin: 0; padding-left: 22px; }
+    .info-block.steps li { font-size: 13.5px; line-height: 1.6; color: var(--mid); margin-bottom: 8px; padding-left: 4px; }
+    .info-block.steps li:last-child { margin-bottom: 0; }
+    .info-block.steps li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
 
     .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 26px; }
     #too-easy-btn { color: var(--faint); }
@@ -388,7 +392,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.8 · nourish</div>
+<div class="corner" id="version-label">v0.9 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -444,6 +448,10 @@
         <div class="card-title" id="ch-title">title</div>
         <div class="block-label">The challenge</div>
         <div class="challenge-brief" id="ch-brief">brief</div>
+        <div class="info-block steps" id="ch-steps-block">
+          <div class="block-label">How to do it</div>
+          <ol id="ch-steps"></ol>
+        </div>
         <div class="info-block meal">
           <div class="block-label">Make it a meal</div>
           <p id="ch-meal">meal</p>
@@ -548,7 +556,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.8 · nourish';
+const VERSION  = 'v0.9 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -753,6 +761,155 @@ const CHALLENGE_INGREDIENTS = {
   'fresh-pasta':      ['plain or 00 flour', 'eggs', 'butter', 'parmesan', 'salad greens'],
   'full-plate':       ['a protein', 'a vegetable', 'a starch'],
   'cook-for-someone': ['a main you have practised', 'a simple starter', 'dessert'],
+};
+
+// Plain, beginner-friendly "how to do it" steps for each challenge — explicit
+// enough to follow with no prior cooking knowledge. Separate map so the
+// CHALLENGES array stays readable; rendered as a numbered list on the card.
+const CHALLENGE_STEPS = {
+  'salt-water': [
+    'Fill a large pot with water and bring it to a rolling boil over high heat.',
+    'Add a big amount of salt — about 1 tablespoon per litre — and stir to dissolve. Taste the water: it should taste like mild seawater.',
+    'Add the pasta, stir so it doesn’t stick, and cook for the time on the packet (usually 8–11 min).',
+    'Just before draining, lift out one noodle, let it cool a second, and taste it plain — it should already taste seasoned.',
+  ],
+  'vinaigrette': [
+    'In a small bowl, whisk 1 teaspoon of mustard with a pinch of salt and 1 tablespoon of vinegar.',
+    'Slowly drizzle in 3 tablespoons of oil while whisking, until it looks creamy and a little thick.',
+    'Dip a leaf in and taste; adjust with more salt or a splash more vinegar.',
+    'Toss it through your salad leaves just before serving so they don’t go soggy.',
+  ],
+  'toast-nuts': [
+    'Put a dry pan (no oil) over medium heat and add the nuts or seeds in a single layer.',
+    'Stir or shake every 20–30 seconds so they colour evenly.',
+    'Watch and smell closely — pull them off the heat the moment they smell nutty and look golden (about 3–6 min).',
+    'Tip them straight onto a plate so the hot pan doesn’t keep cooking them.',
+  ],
+  'soft-scramble': [
+    'Crack 2–3 eggs into a bowl, add a pinch of salt, and beat with a fork until fully blended.',
+    'Melt a knob of butter in a non-stick pan over low-to-medium heat.',
+    'Pour in the eggs and stir slowly and constantly, scraping the bottom of the pan.',
+    'While they still look soft and a little glossy, take the pan off the heat — they finish cooking on their own. Serve straight away.',
+  ],
+  'fried-egg': [
+    'Heat a little oil or butter in a non-stick pan over medium-low heat.',
+    'Crack the egg into a cup first, then gently slide it into the pan.',
+    'Let it cook without touching it; when the white is nearly set, put a lid on for about 30 seconds to set the top.',
+    'The white should be fully opaque with no clear jelly, the yolk still soft. Lift it out with a spatula.',
+  ],
+  'taste-adjust': [
+    'Cook something simple — eggs, a soup, or a pot of rice.',
+    'Before serving, take a clean spoon and actually taste it.',
+    'Ask: does it taste flat (needs salt) or dull (needs acid — a squeeze of lemon or splash of vinegar)? Add a little.',
+    'Taste again, and repeat until it tastes lively, then serve.',
+  ],
+  'blister-greens': [
+    'Pat the green beans or broccoli dry. Heat a frying pan over medium-high for a minute, then add a little oil.',
+    'Add the vegetables in a single layer — don’t crowd the pan (do two batches if needed).',
+    'Leave them mostly alone for 1–2 min to char, then toss and char the other side. They should be blistered but still crisp.',
+    'Finish with a pinch of salt and a squeeze of lemon.',
+  ],
+  'golden-mushrooms': [
+    'Wipe the mushrooms clean and slice them. Heat a little oil in a wide pan over medium-high.',
+    'Add the mushrooms in a single layer and don’t stir for 2–3 min — let them brown.',
+    'They’ll release water and look wet; keep cooking and stirring now and then until the water cooks off and they turn deep golden.',
+    'Add a knob of butter and a pinch of salt at the very end.',
+  ],
+  'even-dice': [
+    'Cut the onion in half through the root and peel it. Lay a half flat-side down.',
+    'Make a few horizontal cuts toward (not through) the root, then several vertical cuts the same way.',
+    'Slice down across those cuts — the onion falls into small, even dice.',
+    'Keep your fingertips curled back, away from the blade, the whole time.',
+  ],
+  'crisp-thigh': [
+    'Pat the chicken thigh very dry and season the skin with salt.',
+    'Lay it skin-side down in a cold oven-proof pan, then turn the heat to medium — starting cold renders more fat.',
+    'Cook mostly undisturbed for 10–15 min; don’t move it. The skin crisps and releases on its own.',
+    'Flip and cook another 5–8 min until cooked through (the juices run clear).',
+  ],
+  'sear-fish': [
+    'Pat the fish very dry and season with salt — a dry surface is what gives you a crust.',
+    'Heat a little oil in a non-stick pan over medium-high until it shimmers.',
+    'Lay the fish in away from you and don’t move it for 2–3 min, until the edges turn opaque and it releases easily.',
+    'Flip once and cook 1–2 min more, until just opaque all the way through.',
+  ],
+  'rest-meat': [
+    'Cook any piece of meat — a steak, chop, or chicken breast — however you like it.',
+    'Move it to a board or warm plate and leave it completely alone: about 5 min for a small cut, 10 for a large one.',
+    'Tent it loosely with foil if you want to keep it warm.',
+    'Then slice, and notice how the board stays fairly dry and the meat is juicy.',
+  ],
+  'pan-sauce': [
+    'After searing meat, move it to rest and pour off most of the fat, leaving the browned bits stuck to the pan.',
+    'Put the pan on medium heat and add a splash of stock, wine, or water — it will sizzle.',
+    'Scrape the browned bits loose with a spatula while the liquid bubbles and reduces by about half.',
+    'Take it off the heat and swirl in a knob of cold butter until glossy, then spoon it over the meat.',
+  ],
+  'aglio-olio': [
+    'Start the pasta in well-salted boiling water. Meanwhile, thinly slice 2–3 garlic cloves.',
+    'In a wide pan, warm a generous glug of olive oil over low heat and cook the garlic gently until pale gold — don’t let it brown.',
+    'Before draining, scoop out a mug of the starchy pasta water.',
+    'Add the drained pasta and a splash of that water to the pan and toss hard for a minute, until the sauce turns creamy and clings.',
+  ],
+  'omelette': [
+    'Beat 2–3 eggs with a pinch of salt until fully blended.',
+    'Melt butter in a non-stick pan over medium-low heat, then pour in the eggs.',
+    'As they set, push the edges gently to the centre and tilt the pan so raw egg flows to the gaps. Stop while the top is still a little wet.',
+    'Add any filling, fold it in half, and slide it onto a plate — with no browning.',
+  ],
+  'caramel-onions': [
+    'Thinly slice 2–3 onions. Heat a little oil and butter in a wide pan over medium-low.',
+    'Add the onions with a pinch of salt and stir to coat.',
+    'Cook low and slow, stirring every few minutes, for 30–45 min. If they start to catch, add a splash of water and scrape.',
+    'They’re done when deep amber, soft, and sweet — not crunchy or scorched.',
+  ],
+  'braise-thighs': [
+    'Pat the thighs dry, season, and brown them skin-side down in a little oil in a heavy pot. Remove and set aside.',
+    'Soften a sliced onion (and some garlic) in the same pot.',
+    'Return the thighs and add liquid — stock and/or tomatoes — until they’re about two-thirds submerged, then bring to a gentle simmer.',
+    'Cover and cook low (on the hob or in a 160°C oven) for 45–60 min, until the meat is fork-tender.',
+  ],
+  'beans-scratch': [
+    'Soak the dried beans in plenty of water overnight, then drain (or quick-soak: boil 2 min, then leave to sit 1 hr).',
+    'Put them in a pot with fresh water to cover by a few centimetres, plus aromatics like onion, garlic, and a bay leaf.',
+    'Bring to a bare, lazy simmer — not a hard boil — and cook 1–1.5 hr, topping up the water as needed.',
+    'When they’re creamy and tender, season well with salt.',
+  ],
+  'roast-chicken': [
+    'Heat the oven to 220°C. Pat the chicken very dry and rub the skin with salt. (To spatchcock: cut out the backbone with scissors and press the bird flat.)',
+    'Sit it skin-side up in a roasting tray.',
+    'Roast 45–60 min (less if spatchcocked), until the skin is browned and the juices run clear at the thigh joint.',
+    'Let it rest 10 min before carving.',
+  ],
+  'roast-veg': [
+    'Heat the oven to 220°C. Chop the vegetables into even, bite-size pieces.',
+    'Toss them with oil and salt, then spread out in a single layer on a tray — don’t crowd them (use two trays if needed).',
+    'Roast 25–40 min, turning once halfway, until browned and crisp at the edges.',
+  ],
+  'mayo': [
+    'In a bowl, whisk 1 egg yolk with 1 teaspoon of mustard and a pinch of salt.',
+    'Add neutral oil one drop at a time at first, whisking constantly, until the mixture starts to thicken.',
+    'Once it’s holding together, pour the rest of the oil in a slow, thin stream while whisking, until thick and pale.',
+    'Loosen with a few drops of lemon or water if it gets too stiff. (Grate in a little garlic to make aioli.)',
+  ],
+  'fresh-pasta': [
+    'Mound about 100g of flour per person on a board and make a well in the middle; crack in 1 egg per 100g.',
+    'Beat the egg with a fork, slowly pulling in the flour, then knead by hand for 8–10 min until smooth and elastic.',
+    'Wrap it and rest 30 min, then roll it thin (with a machine or rolling pin) and cut into noodles.',
+    'Cook in boiling salted water for just 1–3 min — fresh pasta is fast.',
+  ],
+  'full-plate': [
+    'Choose a protein, a vegetable, and a starch, and note roughly how long each takes to cook.',
+    'Prep everything first — chop, season, measure (this is called mise en place).',
+    'Work backwards from when you want to eat, and start the longest task first.',
+    'Time it so all three finish together and land hot on the plate.',
+  ],
+  'cook-for-someone': [
+    'Pick a small meal you’ve cooked before — don’t experiment on a guest.',
+    'Write a simple plan and shopping list, and prep whatever you can ahead of time.',
+    'Cook it start to finish without the recipe open mid-cook, leaning on what you’ve practised.',
+    'Plate it, serve, and afterwards note what felt smooth and what you’d change.',
+  ],
 };
 
 // Indicative per-person quantities for the recommended ingredients, scaled by the
@@ -1015,6 +1172,11 @@ function showChallenge(ch) {
   document.getElementById('ch-time').textContent  = ch.time === '—' ? 'any dish' : '~ ' + ch.time;
   document.getElementById('ch-title').textContent = ch.title;
   document.getElementById('ch-brief').textContent = ch.brief;
+  const steps = CHALLENGE_STEPS[ch.id] || [];
+  const stepsEl = document.getElementById('ch-steps');
+  stepsEl.innerHTML = '';
+  steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsEl.appendChild(li); });
+  document.getElementById('ch-steps-block').classList.toggle('hidden', steps.length === 0);
   document.getElementById('ch-meal').textContent = ch.meal;
   document.getElementById('ch-teaches').textContent = ch.teaches;
   document.getElementById('ch-tell').textContent  = ch.tell;
