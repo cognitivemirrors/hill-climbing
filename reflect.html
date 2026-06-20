@@ -64,7 +64,40 @@
       letter-spacing: 0.06em; z-index: 11;
     }
     #version-label { top: 22px; left: 62px; }
-    #data-controls { right: 20px; display: flex; gap: 16px; }
+
+    /* Corner menu — a single icon that opens a small data-management dropdown.
+       Mirrors #home-link's round button on the right (ported from nourish). */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
 
     /* Home / all-practices link — returns to the hub. Top-left; the version
        label sits to its right. z-index above the topbar + corners. */
@@ -80,11 +113,6 @@
     }
     #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
     #home-link svg { width: 16px; height: 16px; display: block; }
-    #data-controls button {
-      background: none; border: none; color: var(--dim);
-      font-size: 11px; letter-spacing: 0.06em; cursor: pointer; transition: color 0.2s;
-    }
-    #data-controls button:hover { color: var(--text); }
 
     #mode-nav {
       position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
@@ -211,14 +239,29 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.4 · reflect</div>
+<div class="corner" id="version-label">v0.5 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
 </nav>
-<div class="corner" id="data-controls">
-  <button id="export-btn">export</button>
-  <button id="import-btn">import</button>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download your journal</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <div class="menu-note">Your entries live only on this device.</div>
+  </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
 
@@ -263,7 +306,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.4 · reflect';
+const VERSION    = 'v0.5 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SCALE_MAX  = 7;
@@ -592,8 +635,21 @@ cancelEdit.addEventListener('click', () => { resetDraft(); switchView('history')
 textEl.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!saveBtn.disabled) save(); }
 });
-document.getElementById('export-btn').addEventListener('click', exportData);
-document.getElementById('import-btn').addEventListener('click', () => importFile.click());
+// Corner data menu — open/close, close on outside-click or Esc (ported from nourish).
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
 importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
 // ── Init ────────────────────────────────────────────────────────────────────
