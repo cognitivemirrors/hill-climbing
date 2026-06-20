@@ -24,10 +24,11 @@ This is a working solo-developer project. The user is building a stillness-medit
 
 | File | Purpose | Read first? |
 |---|---|---|
-| `index.html` | **Hub/landing page** (~290 lines) — three cards + weekly usage dashboard (added v1.64). Added 2026-05-30. | Yes (quick skim) |
+| `index.html` | **Hub/landing page** (~340 lines) — four cards + weekly usage dashboard (added v1.64; Nourish row added v1.77). Added 2026-05-30. | Yes (quick skim) |
 | `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~2720 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
 | `breathe.html` | Breathwork + nervous-system training app (~645 lines). Was `nervous-system.html`. | If relevant |
 | `reflect.html` | Journal app, IndexedDB-backed (~570 lines). Was `journal.html`. | If relevant |
+| `nourish.html` | Cooking app (~620 lines). Adaptive 2-up/1-down staircase over a 10-level ladder of cooking challenges; success is self-reported. State in `hill-climbing-nourish` localStorage. Added v1.77 (2026-06-20). | If relevant |
 | `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. Contains `[DECISION]` markers for unresolved values. | Yes |
 | `REQUIREMENTS.md` | Auditable specifics: data inventory, adverse-event runbook, tier transition criteria, verification procedures, decision register | Yes |
 | `BACKLOG.md` | Work tracking. Categorised by Bugs / Features / Tuning / Design Questions / Done | Yes |

@@ -64,7 +64,7 @@
     /* ── Cards ────────────────────────────────────────────────── */
     nav {
       display: flex; gap: 18px; flex-wrap: wrap;
-      justify-content: center; max-width: 720px; width: 100%;
+      justify-content: center; max-width: 460px; width: 100%;
     }
     .card {
       flex: 1 1 200px; max-width: 220px; min-width: 0;
@@ -81,6 +81,7 @@
     .card:nth-child(1) { animation-delay: 0.06s; }
     .card:nth-child(2) { animation-delay: 0.13s; }
     .card:nth-child(3) { animation-delay: 0.20s; }
+    .card:nth-child(4) { animation-delay: 0.27s; }
     .card:hover, .card:focus-visible {
       transform: translateY(-4px);
       background: rgba(255,255,255,0.055);
@@ -108,6 +109,7 @@
     .card.meditate { --accent: #b9a8f0; --accent-soft: rgba(160,140,220,0.45); --accent-glow: rgba(140,120,210,0.16); }
     .card.breathe  { --accent: hsl(200,76%,68%); --accent-soft: hsla(200,76%,66%,0.45); --accent-glow: hsla(200,76%,60%,0.16); }
     .card.reflect  { --accent: hsl(38,80%,66%);  --accent-soft: hsla(38,75%,64%,0.45);  --accent-glow: hsla(38,75%,58%,0.15); }
+    .card.nourish  { --accent: hsl(150,45%,60%); --accent-soft: hsla(150,43%,58%,0.45); --accent-glow: hsla(150,52%,46%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
@@ -145,6 +147,7 @@
     .dash-row.meditate { --accent: #b9a8f0; }
     .dash-row.breathe  { --accent: hsl(200,76%,68%); }
     .dash-row.reflect  { --accent: hsl(38,80%,66%); }
+    .dash-row.nourish  { --accent: hsl(150,45%,60%); }
     .dash-streak {
       margin-top: 9px; display: flex; align-items: baseline;
       justify-content: center; gap: 9px;
@@ -271,7 +274,7 @@
 
   <header>
     <h1>Hill Climbing</h1>
-    <p>three practices for coming back to yourself</p>
+    <p>four practices for coming back to yourself</p>
   </header>
 
   <nav>
@@ -308,6 +311,20 @@
       <h2>Reflect</h2>
       <p>Notice what's present and write it down.</p>
     </a>
+
+    <a class="card nourish" href="nourish.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 25h30"/>
+          <path d="M11 25a13 13 0 0 0 26 0"/>
+          <path d="M19 18c-1.6-1.8-1.6-3.4 0-5.2"/>
+          <path d="M24 18c-1.6-1.8-1.6-3.4 0-5.2"/>
+          <path d="M29 18c-1.6-1.8-1.6-3.4 0-5.2"/>
+        </svg>
+      </span>
+      <h2>Nourish</h2>
+      <p>Learn to cook, one skill at a time.</p>
+    </a>
   </nav>
 
   <section class="dashboard" aria-label="This week">
@@ -326,6 +343,11 @@
       <span class="dash-label">Reflect</span>
       <span class="dash-strip" data-strip="reflect" aria-hidden="true"></span>
       <span class="dash-count" data-count="reflect">·</span>
+    </div>
+    <div class="dash-row nourish">
+      <span class="dash-label">Nourish</span>
+      <span class="dash-strip" data-strip="nourish" aria-hidden="true"></span>
+      <span class="dash-count" data-count="nourish">·</span>
     </div>
     <div class="dash-streak">
       <span class="streak-num" id="streak-num">0</span>
@@ -428,7 +450,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'reflect'];
+    const APPS = ['meditate', 'breathe', 'reflect', 'nourish'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -505,7 +527,7 @@
     function weekIsActive(weekKeys, sets) {
       let n = 0;
       for (const k of weekKeys) {
-        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k)) n++;
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k)) n++;
       }
       return n >= STREAK_MIN_DAYS;
     }
@@ -544,6 +566,7 @@
       meditate: logDaySet(log, 'meditate'),
       breathe:  logDaySet(log, 'breathe'),
       reflect:  new Set(),   // filled async from the journal IndexedDB
+      nourish:  logDaySet(log, 'nourish'),
     };
     render(sets);            // instant: meditate + breathe (+ partial streak), even if IDB is unavailable
     journalDaySet().then(function (js) { sets.reflect = js; render(sets); });

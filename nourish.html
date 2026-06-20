@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
+       background-sampling) matches the dark page like iOS Safari does. -->
+  <meta name="theme-color" content="#0a0b12">
+  <title>Nourish · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Nourish">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Nourish (herb green) ───────────────
+         Fills the empty arc between Breathe (blue 200°) and Reflect
+         (amber 38°); reads as fresh / food / nourishment and is clearly
+         distinct from the other three siblings. */
+      --accent:      hsl(150,45%,58%);
+      --accent-soft: hsla(150,43%,56%,0.5);
+      --accent-glow: hsla(150,52%,44%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+    #data-controls { right: 20px; display: flex; gap: 16px; }
+    #data-controls button {
+      background: none; border: none; color: var(--dim);
+      font-size: 11px; letter-spacing: 0.06em; cursor: pointer; transition: color 0.2s;
+    }
+    #data-controls button:hover { color: var(--text); }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 16px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+
+    /* ── home panel ─────────────────────────────────────────────── */
+    #home-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+
+    /* the climb — ten rungs, current highlighted, climbed ones filled */
+    .ladder { display: flex; gap: 6px; align-items: flex-end; height: 48px; margin-bottom: 28px; }
+    .rung {
+      width: 16px; border-radius: 4px; background: var(--faint);
+      transition: background 0.4s ease, height 0.4s ease;
+    }
+    .rung.climbed { background: var(--accent-soft); }
+    .rung.current { background: var(--accent); box-shadow: 0 0 18px var(--accent-glow); }
+
+    .level-num {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 3.1rem; line-height: 1; color: var(--text);
+      text-shadow: 0 0 36px var(--accent-glow); margin-bottom: 8px;
+    }
+    .level-theme {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1.05rem; color: var(--mid); margin-bottom: 22px;
+    }
+    .home-stats { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 6px; }
+    .home-ahead { font-size: 11px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 34px; }
+    .home-ahead b { color: var(--accent); font-weight: 400; }
+    .home-hint { margin-top: 22px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 320px; }
+
+    /* ── challenge card ─────────────────────────────────────────── */
+    .card {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 22px 24px 24px; animation: fadeUp 0.35s ease;
+    }
+    .card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .skill-tag {
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 999px; padding: 4px 11px;
+    }
+    .time-chip { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; white-space: nowrap; }
+    .card-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.55rem;
+      line-height: 1.25; color: var(--text); margin-bottom: 18px;
+    }
+    .block-label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+    .challenge-brief { font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 20px; }
+    .info-block { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+    .info-block p { font-size: 13.5px; line-height: 1.62; color: var(--mid); }
+    .info-block.tell p { color: var(--text); }
+    .info-block.tell .block-label { color: var(--accent); }
+
+    .card-actions { display: flex; align-items: center; gap: 18px; margin-top: 26px; }
+
+    /* ── cooking / report panel ─────────────────────────────────── */
+    #cooking-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 8px; }
+    .cook-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.7rem;
+      line-height: 1.25; color: var(--text); margin: 14px 0 20px; max-width: 460px;
+    }
+    .cook-tell {
+      font-family: var(--font-display); font-style: italic; font-size: 1.02rem;
+      line-height: 1.6; color: var(--mid); max-width: 420px;
+      border-left: 2px solid var(--accent-soft); padding-left: 16px; text-align: left; margin-bottom: 38px;
+    }
+    .report-q { font-size: 13px; letter-spacing: 0.04em; color: var(--text); margin-bottom: 18px; }
+    .outcomes { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+    .outcome-btn {
+      display: flex; align-items: center; gap: 14px; width: 100%;
+      padding: 15px 18px; border-radius: 14px; cursor: pointer; text-align: left;
+      background: var(--panel); border: 1px solid var(--line); color: var(--text);
+      font-family: var(--font-ui); font-size: 14.5px; letter-spacing: 0.02em;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .outcome-btn:hover { background: rgba(255,255,255,0.06); border-color: var(--oc); }
+    .outcome-swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--oc); }
+    .outcome-sub { color: var(--dim); font-size: 12px; letter-spacing: 0.02em; margin-left: auto; }
+    .cook-note { margin-top: 26px; font-size: 11px; color: var(--faint); letter-spacing: 0.04em; }
+
+    /* ── result panel ───────────────────────────────────────────── */
+    #result-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 26px; }
+    .result-line {
+      font-family: var(--font-display); font-size: 1.5rem; line-height: 1.45;
+      color: var(--text); max-width: 440px; margin-bottom: 16px;
+    }
+    .result-sub { font-size: 13px; color: var(--mid); letter-spacing: 0.03em; max-width: 380px; margin-bottom: 36px; line-height: 1.6; }
+    .result-sub b { color: var(--accent); font-weight: 400; }
+    .result-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+    /* ── progress view ──────────────────────────────────────────── */
+    .prog-summary {
+      display: flex; gap: 14px; margin-bottom: 30px; flex-wrap: wrap;
+    }
+    .stat {
+      flex: 1; min-width: 96px; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 16px 18px; text-align: center;
+    }
+    .stat-num { font-family: var(--font-display); font-size: 1.8rem; color: var(--text); line-height: 1; }
+    .stat-cap { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-top: 8px; }
+
+    .section-label {
+      font-family: var(--font-display); font-size: 13px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 14px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 34px; }
+    .skill-chip {
+      font-size: 12px; letter-spacing: 0.03em; padding: 6px 12px; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--faint); background: var(--panel);
+    }
+    .skill-chip.learned { color: var(--accent); border-color: var(--accent-soft); }
+    .skill-chip .n { color: var(--dim); }
+
+    .hist-day { margin-bottom: 22px; }
+    .hist-day-h {
+      font-family: var(--font-display); font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+    }
+    .hist-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hist-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .hist-title { font-size: 13.5px; color: var(--text); flex: 1; }
+    .hist-outcome { font-size: 11px; letter-spacing: 0.04em; color: var(--dim); white-space: nowrap; }
+
+    .empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 60px; line-height: 1.9; }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .level-num { font-size: 2.6rem; }
+      .card-title { font-size: 1.4rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .card { animation: none; }
+      .rung { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · nourish</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="cook">Cook</button>
+  <button class="mode-btn"        data-view="progress">Progress</button>
+</nav>
+<div class="corner" id="data-controls">
+  <button id="export-btn">export</button>
+  <button id="import-btn">import</button>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- ══ COOK ══════════════════════════════════════════════════ -->
+  <section id="cook-view">
+
+    <!-- home / idle -->
+    <div id="home-panel" class="panel">
+      <div class="kicker">Your kitchen ladder</div>
+      <div class="ladder" id="ladder" aria-hidden="true"></div>
+      <div class="level-num" id="home-level">1</div>
+      <div class="level-theme" id="home-theme">the basics</div>
+      <div class="home-stats" id="home-stats">nothing cooked yet</div>
+      <div class="home-ahead" id="home-ahead"></div>
+      <button class="btn primary" id="new-challenge-btn">NEW CHALLENGE</button>
+      <div class="home-hint" id="home-hint">
+        Cook the dish in your own kitchen, then tell me how it went.
+        It adapts — clear two and you climb, struggle and it eases back.
+      </div>
+    </div>
+
+    <!-- a served challenge, pre-cook -->
+    <div id="challenge-panel" class="panel hidden">
+      <div class="card">
+        <div class="card-top">
+          <span class="skill-tag" id="ch-skill">skill</span>
+          <span class="time-chip" id="ch-time">~ min</span>
+        </div>
+        <div class="card-title" id="ch-title">title</div>
+        <div class="block-label">The challenge</div>
+        <div class="challenge-brief" id="ch-brief">brief</div>
+        <div class="info-block meal">
+          <div class="block-label">Make it a meal</div>
+          <p id="ch-meal">meal</p>
+        </div>
+        <div class="info-block why">
+          <div class="block-label">Why it works</div>
+          <p id="ch-teaches">teaches</p>
+        </div>
+        <div class="info-block tell">
+          <div class="block-label">You've nailed it when</div>
+          <p id="ch-tell">tell</p>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn primary" id="start-cooking-btn">START COOKING</button>
+        <button class="btn ghost" id="skip-btn">skip · show another</button>
+      </div>
+    </div>
+
+    <!-- committed: cooking IRL, then report -->
+    <div id="cooking-panel" class="panel hidden">
+      <div class="kicker">Cooking</div>
+      <div class="cook-title" id="cook-title">title</div>
+      <div class="cook-tell" id="cook-tell">tell</div>
+      <div class="report-q">When you're done — how did it go?</div>
+      <div class="outcomes" id="outcomes"></div>
+      <div class="cook-note">Honest answers tune the difficulty.</div>
+      <button class="btn ghost" id="leave-btn" style="margin-top:18px;">leave without recording</button>
+    </div>
+
+    <!-- result after reporting -->
+    <div id="result-panel" class="panel hidden">
+      <div class="result-line" id="result-line">—</div>
+      <div class="result-sub" id="result-sub"></div>
+      <div class="result-actions">
+        <button class="btn primary" id="next-challenge-btn">NEXT CHALLENGE</button>
+        <button class="btn ghost" id="done-btn">done for now</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ PROGRESS ══════════════════════════════════════════════ -->
+  <section id="progress-view" class="hidden">
+    <div class="prog-summary">
+      <div class="stat"><div class="stat-num" id="p-level">1</div><div class="stat-cap">level</div></div>
+      <div class="stat"><div class="stat-num" id="p-cooked">0</div><div class="stat-cap">cooked</div></div>
+      <div class="stat"><div class="stat-num" id="p-skills">0</div><div class="stat-cap">skills</div></div>
+    </div>
+
+    <div class="section-label">Skills in hand</div>
+    <div class="skills-grid" id="skills-grid"></div>
+
+    <div class="section-label">History</div>
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty hidden">
+      No cooks logged yet.<br>Your first challenge will land here.
+    </div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const VERSION  = 'v0.1 · nourish';
+const STATE_KEY = 'hill-climbing-nourish';
+const LVL_MIN = 1, LVL_MAX = 10;
+
+// Human labels for each skill domain a challenge can teach.
+const SKILL_LABELS = {
+  season: 'Seasoning',  fat: 'Fats & dressings', heat: 'Heat & browning',
+  eggs: 'Eggs',         knife: 'Knife work',     sear: 'Searing',
+  rest: 'Resting meat', sauce: 'Sauces',         braise: 'Braising',
+  roast: 'Roasting',    dough: 'Dough',          plate: 'Putting it together',
+};
+
+// One-line theme shown under the big level number on the home screen.
+const LEVEL_THEMES = {
+  1: 'the basics — salt, fat, heat', 2: 'eggs & tasting as you go',
+  3: 'sautéing & browning',          4: 'searing & crusts',
+  5: 'pan sauces',                   6: 'low-heat texture',
+  7: 'braising',                     8: 'roasting & timing',
+  9: 'emulsions & dough',            10: 'putting it all together',
+};
+
+// Three honest self-reports. "nailed" and "came" both count as a clear for the
+// 2-up/1-down staircase; "struggled" is the single down-step. No red, no shame —
+// struggling is how the difficulty finds your edge.
+const OUTCOMES = {
+  nailed:    { label: 'Nailed it',     sub: 'clean and confident', success: true,  color: 'hsl(150,45%,58%)' },
+  came:      { label: 'Came together', sub: 'got there in the end', success: true,  color: 'hsl(205,55%,64%)' },
+  struggled: { label: 'Struggled',     sub: "didn't quite land",    success: false, color: 'hsl(38,48%,60%)' },
+};
+
+// The ladder. Each challenge teaches one real, transferable skill. Ordered by
+// difficulty (level 1–10, a few per level so skipping has somewhere to go).
+const CHALLENGES = [
+  // L1 — salt, fat, heat
+  { id:'salt-water', level:1, skill:'season', time:'15 min', title:'Salt like you mean it',
+    brief:'Cook any pasta. Salt the water until it tastes like mild seawater before the pasta goes in.',
+    teaches:'Pasta can only be seasoned from the water it cooks in. Under-salted water makes bland pasta that no amount of sauce can rescue.',
+    tell:'The plain, drained noodle tastes seasoned on its own — before any sauce.',
+    meal:'Toss the hot, drained pasta with butter and grated parmesan, or a jar of warmed tomato sauce — one bowl and you’re done.' },
+  { id:'vinaigrette', level:1, skill:'fat', time:'10 min', title:'A vinaigrette you whisk yourself',
+    brief:'Dress a salad with a dressing you make: 3 parts oil, 1 part vinegar, salt, and a dab of mustard, whisked together.',
+    teaches:'Mustard emulsifies the oil and acid so the dressing turns creamy and clings, instead of splitting into an oily slick.',
+    tell:'It coats every leaf evenly and there is no watery pool at the bottom of the bowl.',
+    meal:'Make it lunch: pile the dressed leaves next to bread and cheese, a tin of tuna, or a couple of boiled eggs.' },
+  { id:'toast-nuts', level:1, skill:'heat', time:'8 min', title:'Toast without burning',
+    brief:'Toast a handful of nuts or seeds in a dry pan over medium heat until golden and fragrant.',
+    teaches:'Toasting wakes up dormant oils and deepens flavour — and the line between toasted and burnt is about thirty seconds.',
+    tell:'Evenly golden, smells nutty, none gone dark — you pulled them the moment the smell peaked.',
+    meal:'Scatter them over yogurt and honey for breakfast, or over a simple green salad for crunch at dinner.' },
+
+  // L2 — eggs & tasting
+  { id:'soft-scramble', level:2, skill:'eggs', time:'8 min', title:'Soft scrambled eggs',
+    brief:'Scramble 2–3 eggs low and slow, stirring constantly, and take them off the heat before they look fully done.',
+    teaches:'Eggs keep cooking from residual heat after they leave the pan. Stop early or that carry-over turns them dry and rubbery.',
+    tell:'Soft, small, glossy curds that are just-set — not stiff, not weeping liquid.',
+    meal:'Eat them on buttered toast, with a few cherry tomatoes or some wilted spinach alongside for a proper plate.' },
+  { id:'fried-egg', level:2, skill:'eggs', time:'6 min', title:'An egg with a runny yolk',
+    brief:'Fry an egg so the white is completely set but the yolk still runs when you break it.',
+    teaches:'White and yolk set at different temperatures. Gentle heat (and a brief lid) cooks the white through without hardening the yolk.',
+    tell:'White is opaque all the way — no clear jelly — and the yolk breaks and flows.',
+    meal:'Lay it over rice with a splash of soy and any greens, or on avocado toast — the runny yolk is the sauce.' },
+  { id:'taste-adjust', level:2, skill:'season', time:'—', title:'Taste, then fix it',
+    brief:'Make any simple thing — eggs, soup, rice. Taste it before serving and adjust with salt or a squeeze of acid until it pops.',
+    teaches:'The one habit that separates a cook from a recipe-follower: taste, then correct. Salt and acid are your two main dials.',
+    tell:'You changed something after tasting — and it tasted better than before you did.',
+    meal:'Whatever you taste-and-fix — rice, soup, eggs — is already the meal; serve it with something green on the side.' },
+
+  // L3 — sauté & browning
+  { id:'blister-greens', level:3, skill:'heat', time:'12 min', title:'Blistered green vegetables',
+    brief:'Get a pan properly hot, add a little oil, and blister green beans or broccoli — charred in spots, still crisp.',
+    teaches:'A hot pan plus room to breathe gives browning, which is flavour. A cool or crowded pan steams the vegetables grey instead.',
+    tell:'Real char marks, colour still bright, and they keep their snap.',
+    meal:'Finish with lemon and flaky salt, and serve next to a fried egg or a sausage — a vegetable plus a protein is dinner.' },
+  { id:'golden-mushrooms', level:3, skill:'heat', time:'12 min', title:'Properly golden mushrooms',
+    brief:'Sauté mushrooms until deep golden-brown and meaty — not grey and watery. Do not crowd the pan.',
+    teaches:'Mushrooms are mostly water. Space and patience let that water evaporate so they brown instead of boiling in their own juice.',
+    tell:'Deeply browned, meaty bite, and no puddle of liquid left in the pan.',
+    meal:'Pile them on garlic-buttered toast, or fold them through pasta or scrambled eggs for a fast supper.' },
+  { id:'even-dice', level:3, skill:'knife', time:'8 min', title:'An even dice',
+    brief:'Dice an onion into pieces that are roughly all the same size.',
+    teaches:'Evenly cut pieces cook at the same rate. Uneven ones mean some bits scorch while others stay raw.',
+    tell:'Most pieces are about the same size — no giant chunks hiding among small ones.',
+    meal:'Put the onion to work as the base of the meal: soften it in oil, then build a quick tomato sauce, a soup, or fried rice on top.' },
+
+  // L4 — searing
+  { id:'crisp-thigh', level:4, skill:'sear', time:'25 min', title:'Crisp-skin chicken thigh',
+    brief:'Sear a bone-in, skin-on chicken thigh skin-side down until the skin is crisp and releases from the pan on its own.',
+    teaches:'Protein sticks to the pan until it has seared. When the crust is ready, it lets go by itself — forcing it early tears it.',
+    tell:'Skin is cracklingly crisp and deep golden, and it released without tearing.',
+    meal:'While the thigh rests, crisp some vegetables in the rendered fat and warm a starch (rice, bread, potatoes) — a whole plate built around one good piece of chicken.' },
+  { id:'sear-fish', level:4, skill:'sear', time:'12 min', title:'A seared fish fillet',
+    brief:'Sear a fish fillet to a golden crust and flip it without it falling apart.',
+    teaches:'Dry surface, hot pan, and don’t move it. Surface moisture is the enemy of a crust — pat the fish dry first.',
+    tell:'Golden crust on the face, and it flipped over in one clean piece.',
+    meal:'Have the sides ready first, since fish cooks fast: serve it on a swipe of lemony yogurt or mayo, with blistered greens or a simple salad.' },
+  { id:'rest-meat', level:4, skill:'rest', time:'—', title:'Rest the meat',
+    brief:'Cook any piece of meat, then let it rest off the heat for several minutes before you cut it.',
+    teaches:'Resting lets the juices, driven to the centre by heat, redistribute — so they stay in the meat instead of flooding the board.',
+    tell:'The cutting board stays fairly dry when you slice, and the meat is juicy throughout.',
+    meal:'While it rests, warm a starch and dress a quick salad, then slice the meat over the top and spoon the resting juices back on.' },
+
+  // L5 — pan sauces
+  { id:'pan-sauce', level:5, skill:'sauce', time:'12 min', title:'A pan sauce from the fond',
+    brief:'After searing meat, pour off excess fat, add a splash of stock or wine, scrape up the browned bits, and swirl in a knob of cold butter off the heat.',
+    teaches:'Those browned bits stuck to the pan (the fond) are concentrated flavour. Deglazing dissolves them into an instant sauce.',
+    tell:'Glossy, lightly thickened sauce, and the pan is wiped clean of stuck-on bits.',
+    meal:'Now it’s a restaurant plate: the seared meat under its pan sauce, with mash or crusty bread to catch it and a green vegetable alongside. Cook the sides first so the sauce goes straight to the table.' },
+  { id:'aglio-olio', level:5, skill:'sauce', time:'18 min', title:'Aglio e olio',
+    brief:'Make garlic-and-oil pasta: warm sliced garlic gently in olive oil, then toss with pasta and a splash of the starchy pasta water.',
+    teaches:'Starchy pasta water and fat emulsify into a silky sauce that clings. The cooking water is an ingredient, not waste.',
+    tell:'The oil turns creamy and coats the noodles, instead of sitting as a thin slick.',
+    meal:'It’s already dinner — finish with chopped parsley and chili flakes, and a green salad with your own vinaigrette rounds it into a full plate.' },
+
+  // L6 — low-heat texture
+  { id:'omelette', level:6, skill:'eggs', time:'10 min', title:'A tender folded omelette',
+    brief:'Make an omelette: beaten eggs into a buttery pan, stir gently as they set, then fold before any browning starts.',
+    teaches:'Low heat and gentle movement give a tender custard. Any browning means the heat was too high for an omelette.',
+    tell:'Pale yellow with no brown, tender all over, just-set and a little glossy inside.',
+    meal:'Fill it with cheese and herbs, or last night’s cooked vegetables, and serve with a dressed salad and toast — a complete light supper in fifteen minutes.' },
+  { id:'caramel-onions', level:6, skill:'heat', time:'40 min', title:'Caramelized onions, for real',
+    brief:'Cook sliced onions low and slow until deep amber and sweet. This genuinely takes 30–45 minutes — not ten.',
+    teaches:'Caramelization is slow chemistry. Cranking the heat to rush it just burns the edges before the sugars develop.',
+    tell:'Jammy, deep amber, and sweet all the way through — not crunchy, not scorched.',
+    meal:'Spin them three ways: melt over a steak or burger, stir through pasta with parmesan, or pile onto toast under bubbling gruyère for a French-onion tartine.' },
+
+  // L7 — braising
+  { id:'braise-thighs', level:7, skill:'braise', time:'70 min', title:'Braised chicken thighs',
+    brief:'Sear chicken thighs, then braise them partly submerged in liquid, covered and low, until fork-tender.',
+    teaches:'Braising is two moves: sear for flavour, then long, low, moist heat to melt tough connective tissue into tenderness.',
+    tell:'The meat pulls apart with gentle fork pressure and the sauce tastes rich.',
+    meal:'Serve the thighs and their sauce over something that drinks it up — rice, mash, polenta, or buttered noodles — with a sharp salad or a quick pickle to cut the richness.' },
+  { id:'beans-scratch', level:7, skill:'braise', time:'90 min', title:'Beans from scratch',
+    brief:'Simmer soaked dried beans gently with aromatics and salt until creamy and tender.',
+    teaches:'A bare, lazy simmer keeps beans intact and creamy. A hard rolling boil knocks them apart into mush.',
+    tell:'Creamy inside, mostly whole, sitting in a well-seasoned broth.',
+    meal:'Ladle the creamy beans and broth over garlic-rubbed toast, finish with good olive oil and grated cheese, and slide a fried egg on top — a complete, cheap, brilliant dinner.' },
+
+  // L8 — roasting & timing
+  { id:'roast-chicken', level:8, skill:'roast', time:'75 min', title:'Roast a whole chicken',
+    brief:'Roast a whole chicken — spatchcocked (backbone out, flattened) if you can — until the skin is browned and the juices run clear.',
+    teaches:'High heat and dry skin make it crisp; flattening the bird cooks it evenly so the breast and legs finish at the same time.',
+    tell:'Browned, crisp skin and clear (not pink) juices at the thigh joint.',
+    meal:'Build the meal around it: roast potatoes and vegetables on a lower oven shelf, make a quick pan sauce from the roasting juices (your L5 skill), and add a simple salad. One bird is two or three dinners — keep the carcass for stock.' },
+  { id:'roast-veg', level:8, skill:'roast', time:'40 min', title:'Caramelized roast vegetables',
+    brief:'Roast a tray of vegetables hot enough that they brown and caramelize rather than steam.',
+    teaches:'Space, oil, salt, and a hot oven. Crowding the tray traps steam and you get pale, soggy vegetables instead of browned ones.',
+    tell:'Browned, crisp-edged, with a concentrated sweet flavour — not limp or watery.',
+    meal:'Make them the centre of the plate: spoon over yogurt or hummus, scatter your toasted nuts and some herbs, add a grain like couscous or farro, and crumble over feta — a vegetarian meal that eats like a feast.' },
+
+  // L9 — emulsions & dough
+  { id:'mayo', level:9, skill:'sauce', time:'15 min', title:'Mayonnaise from scratch',
+    brief:'Make mayo by hand: egg yolk and mustard in a bowl, then drizzle oil in slowly while whisking until it thickens.',
+    teaches:'A true emulsion held together by the yolk. Add the oil too fast and it breaks — patience is literally the technique.',
+    tell:'Thick and pale, holds soft peaks, and it never split into a greasy mess.',
+    meal:'Turn it into aioli with a grated garlic clove and build a plate around it: the seared fish or crisp chicken you’ve already learned, with boiled potatoes and blanched vegetables for dipping. A bowl of real aioli makes simple things a meal.' },
+  { id:'fresh-pasta', level:9, skill:'dough', time:'70 min', title:'Fresh pasta dough',
+    brief:'Make a simple flour-and-egg pasta dough, rest it, roll it thin, and cook a small batch.',
+    teaches:'Hydration and kneading develop gluten. Too dry and it cracks; too wet and it sticks — you learn the dough by feel.',
+    tell:'Smooth, elastic dough, and the cooked pasta is tender with a little bite.',
+    meal:'Dress it simply — it has earned it: just butter and parmesan, or your aglio e olio, or a pan sauce from L5. Add bread and a salad and you’ve cooked something most restaurants charge a lot for.' },
+
+  // L10 — the whole plate
+  { id:'full-plate', level:10, skill:'plate', time:'45 min', title:'A full plate, all hot at once',
+    brief:'Cook a protein, a vegetable, and a starch so all three land ready and hot at the same moment.',
+    teaches:'Mise en place and working backward from the longest task. This timing is the real, hidden skill of cooking.',
+    tell:'Nothing went cold waiting for something else, and you weren’t frantic at the end.',
+    meal:'This challenge is the full meal — the work is the timing. To turn it into something you’d serve a guest, add a no-cook starter (bread and good oil, olives, sliced tomatoes) and a dessert you bought, so the kitchen stays calm when you sit down.' },
+  { id:'cook-for-someone', level:10, skill:'plate', time:'—', title:'Cook for someone else',
+    brief:'Plan and cook a small meal for another person, start to finish, without a recipe open mid-cook.',
+    teaches:'Holding it together under a little pressure, from memory, is where techniques stop being steps and become yours.',
+    tell:'You served it on time, it tasted good, and you’d happily make it again.',
+    meal:'Plan it in three parts you can mostly do ahead: a make-ahead or no-cook starter, one main you’ve already practised (a braise or roast reheats forgivingly), and a simple or bought dessert. Set the table before you start — hosting is 80% sequencing, 20% stove.' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// Persisted as one small JSON blob in localStorage (right-sized for this; the
+// records are tiny flags, not long text — cf. Reflect, which earns IndexedDB).
+const state = {
+  v: 1,
+  level: 1,            // current rung (integer, 1..10) — the staircase target
+  streak: 0,           // consecutive clears toward the next 2-up step
+  cleared: {},         // id -> best outcome key ('nailed'|'came') for cleared challenges
+  history: [],         // [{id, outcome, ts}], newest pushed to the end
+  active: null,        // {id, ts} for a challenge being cooked but not yet reported
+  recent: [],          // last few served ids, so "skip" rotates instead of repeating
+};
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, raw.level));
+      if (typeof raw.streak === 'number') state.streak = raw.streak;
+      if (raw.cleared && typeof raw.cleared === 'object') state.cleared = raw.cleared;
+      if (Array.isArray(raw.history)) state.history = raw.history;
+      if (raw.active && raw.active.id) state.active = raw.active;
+      if (Array.isArray(raw.recent)) state.recent = raw.recent;
+    }
+  } catch (e) { /* corrupt / private mode — start fresh, never throw */ }
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+}
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+// Same shared localStorage log meditate.html + breathe.html write. hcDayKey is
+// the canonical zero-padded key the hub reads — never reuse another app's date
+// helper here (their month formats differ on purpose).
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+let loggedThisLoad = false;   // one "cooked today" flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log.nourish ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+    loggedThisLoad = true;
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+
+// ── Derived helpers ──────────────────────────────────────────────────────────
+function byId(id) { return CHALLENGES.find(c => c.id === id); }
+function clearedIds() { return Object.keys(state.cleared); }
+function clearedCount() { return clearedIds().length; }
+function learnedSkills() {
+  const s = new Set();
+  clearedIds().forEach(id => { const c = byId(id); if (c) s.add(c.skill); });
+  return s;
+}
+
+// Pick the next challenge near the current rung. Prefer something uncleared at
+// the target level; widen by ±1, then to any uncleared, then (whole ladder
+// cooked) allow a replay. Avoid the just-served ids so "skip" actually moves on.
+function pickChallenge(excludeId) {
+  const target = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(state.level)));
+  const cleared = new Set(clearedIds());
+  const avoid = new Set([excludeId, ...state.recent.slice(-2)].filter(Boolean));
+
+  const tiers = [
+    c => c.level === target && !cleared.has(c.id),
+    c => Math.abs(c.level - target) <= 1 && !cleared.has(c.id),
+    c => !cleared.has(c.id),
+    () => true,                      // everything cleared — replay is fine
+  ];
+  for (const pred of tiers) {
+    let pool = CHALLENGES.filter(pred).filter(c => !avoid.has(c.id));
+    if (!pool.length) pool = CHALLENGES.filter(pred);   // relax the avoid set if it emptied us
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return CHALLENGES[0];
+}
+
+// The skill waiting a little further up — a gentle, non-spoiler teaser.
+function aheadSkill() {
+  const cleared = new Set(clearedIds());
+  const target = Math.round(state.level);
+  const next = CHALLENGES
+    .filter(c => !cleared.has(c.id) && c.level >= target)
+    .sort((a,b) => a.level - b.level)[0]
+    || CHALLENGES.filter(c => !cleared.has(c.id)).sort((a,b)=>a.level-b.level)[0];
+  return next ? SKILL_LABELS[next.skill] : null;
+}
+
+// ── The 2-up / 1-down staircase ──────────────────────────────────────────────
+// Two clears in a row step the level up; one struggle steps it down. This
+// converges on roughly a 71% success rate — the same psychophysics result the
+// Meditate practice uses to keep you at your learning edge (Levitt 1971).
+// Returns a description of what changed, for the result screen.
+function recordOutcome(outcomeKey) {
+  const oc = OUTCOMES[outcomeKey];
+  const ch = byId(state.active && state.active.id);
+  const result = { leveledUp: false, leveledDown: false, newSkill: null, fromLevel: state.level };
+
+  if (ch) {
+    const skillWasNew = oc.success && !learnedSkills().has(ch.skill);
+    if (oc.success) {
+      // record a clear (keep the strongest outcome seen for this dish)
+      if (!state.cleared[ch.id] || outcomeKey === 'nailed') state.cleared[ch.id] = outcomeKey;
+      if (skillWasNew) result.newSkill = SKILL_LABELS[ch.skill];
+    }
+    state.history.push({ id: ch.id, outcome: outcomeKey, ts: Date.now() });
+  }
+
+  if (oc.success) {
+    state.streak++;
+    if (state.streak >= 2) {
+      if (state.level < LVL_MAX) { state.level++; result.leveledUp = true; }
+      state.streak = 0;
+    }
+  } else {
+    if (state.level > LVL_MIN) { state.level--; result.leveledDown = true; }
+    state.streak = 0;
+  }
+
+  state.active = null;
+  save();
+  return result;
+}
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const cookView    = document.getElementById('cook-view');
+const progressView= document.getElementById('progress-view');
+const homePanel   = document.getElementById('home-panel');
+const challengePanel = document.getElementById('challenge-panel');
+const cookingPanel= document.getElementById('cooking-panel');
+const resultPanel = document.getElementById('result-panel');
+const importFile  = document.getElementById('import-file');
+
+let served = null;        // the challenge currently shown on the challenge panel
+
+// ── Rendering: home ────────────────────────────────────────────────────────────
+function renderLadder() {
+  const ladder = document.getElementById('ladder');
+  ladder.innerHTML = '';
+  for (let i = 1; i <= LVL_MAX; i++) {
+    const r = document.createElement('div');
+    r.className = 'rung' + (i < state.level ? ' climbed' : i === state.level ? ' current' : '');
+    r.style.height = (16 + i * 3) + 'px';     // gently rising rungs — a little hill to climb
+    ladder.appendChild(r);
+  }
+}
+function renderHome() {
+  renderLadder();
+  document.getElementById('home-level').textContent = state.level;
+  document.getElementById('home-theme').textContent = LEVEL_THEMES[state.level] || '';
+  const cooked = clearedCount(), skills = learnedSkills().size;
+  document.getElementById('home-stats').textContent = cooked
+    ? `${cooked} ${cooked === 1 ? 'dish' : 'dishes'} cooked · ${skills} ${skills === 1 ? 'skill' : 'skills'} in hand`
+    : 'nothing cooked yet';
+  const ahead = aheadSkill();
+  const aheadEl = document.getElementById('home-ahead');
+  aheadEl.innerHTML = ahead ? `Ahead on the ladder · <b>${ahead}</b>` : 'You’ve cooked the whole ladder — well done.';
+
+  // If a challenge is mid-cook, the home button resumes it.
+  const btn = document.getElementById('new-challenge-btn');
+  if (state.active) {
+    const ac = byId(state.active.id);
+    btn.textContent = 'RESUME CHALLENGE';
+    document.getElementById('home-hint').textContent = ac ? `"${ac.title}" is waiting for your verdict.` : '';
+  } else {
+    btn.textContent = clearedCount() ? 'NEXT CHALLENGE' : 'NEW CHALLENGE';
+    document.getElementById('home-hint').textContent =
+      'Cook the dish in your own kitchen, then tell me how it went. It adapts — clear two and you climb, struggle and it eases back.';
+  }
+}
+
+// ── Rendering: challenge ───────────────────────────────────────────────────────
+function showChallenge(ch) {
+  served = ch;
+  document.getElementById('ch-skill').textContent = SKILL_LABELS[ch.skill] || ch.skill;
+  document.getElementById('ch-time').textContent  = ch.time === '—' ? 'any dish' : '~ ' + ch.time;
+  document.getElementById('ch-title').textContent = ch.title;
+  document.getElementById('ch-brief').textContent = ch.brief;
+  document.getElementById('ch-meal').textContent = ch.meal;
+  document.getElementById('ch-teaches').textContent = ch.teaches;
+  document.getElementById('ch-tell').textContent  = ch.tell;
+  swapPanel(challengePanel);
+}
+
+// ── Rendering: cooking / report ────────────────────────────────────────────────
+function renderOutcomes() {
+  const wrap = document.getElementById('outcomes');
+  wrap.innerHTML = '';
+  Object.keys(OUTCOMES).forEach(key => {
+    const oc = OUTCOMES[key];
+    const b = document.createElement('button');
+    b.className = 'outcome-btn';
+    b.style.setProperty('--oc', oc.color);
+    b.innerHTML = `<span class="outcome-swatch"></span><span>${oc.label}</span><span class="outcome-sub">${oc.sub}</span>`;
+    b.addEventListener('click', () => report(key));
+    wrap.appendChild(b);
+  });
+}
+function showCooking(ch) {
+  document.getElementById('cook-title').textContent = ch.title;
+  document.getElementById('cook-tell').textContent  = ch.tell;
+  renderOutcomes();
+  swapPanel(cookingPanel);
+}
+
+// ── Rendering: result ──────────────────────────────────────────────────────────
+function showResult(outcomeKey, res) {
+  const succ = OUTCOMES[outcomeKey].success;
+  let line, sub = '';
+  if (res.leveledUp) {
+    line = `Two clean cooks in a row.`;
+    sub = `You’re stepping up to <b>level ${state.level}</b> — ${LEVEL_THEMES[state.level]}.`;
+  } else if (succ && state.streak === 1) {
+    line = `Nicely done.`;
+    sub = `One more clean cook at this level and you’ll climb a rung.`;
+  } else if (succ) {
+    line = `That’s a clear.`;
+    sub = `Staying at <b>level ${state.level}</b> for now — there’s more to cook here.`;
+  } else if (res.leveledDown) {
+    line = `That’s how cooking is learned.`;
+    sub = `Easing back to <b>level ${state.level}</b> to lock in the fundamentals before climbing again.`;
+  } else {
+    line = `No worries at all.`;
+    sub = `Staying at <b>level ${state.level}</b> — come back to it whenever you’re ready.`;
+  }
+  if (res.newSkill) sub += ` And <b>${res.newSkill}</b> is now in your hands.`;
+  document.getElementById('result-line').textContent = line;
+  document.getElementById('result-sub').innerHTML = sub;
+  swapPanel(resultPanel);
+}
+
+// ── Panel + view switching ──────────────────────────────────────────────────────
+function swapPanel(panel) {
+  [homePanel, challengePanel, cookingPanel, resultPanel].forEach(p => p.classList.add('hidden'));
+  panel.classList.remove('hidden');
+  // re-trigger the entrance animation
+  panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
+}
+function switchView(v) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  if (v === 'cook') {
+    cookView.classList.remove('hidden');
+    progressView.classList.add('hidden');
+    // returning to Cook always lands on home (or resumes an active cook)
+    if (state.active) { const ac = byId(state.active.id); if (ac) { showCooking(ac); return; } }
+    renderHome(); swapPanel(homePanel);
+  } else {
+    cookView.classList.add('hidden');
+    progressView.classList.remove('hidden');
+    renderProgress();
+  }
+}
+
+// ── Flow actions ────────────────────────────────────────────────────────────────
+function newChallenge() {
+  if (state.active) { const ac = byId(state.active.id); if (ac) return showCooking(ac); }
+  showChallenge(pickChallenge());
+}
+function skipChallenge() {
+  if (served) state.recent.push(served.id);
+  state.recent = state.recent.slice(-4);
+  save();
+  showChallenge(pickChallenge(served && served.id));
+}
+function startCooking() {
+  if (!served) return;
+  markUsage();                                  // the practice begins the moment you commit to cook
+  state.active = { id: served.id, ts: Date.now() };
+  state.recent.push(served.id); state.recent = state.recent.slice(-4);
+  save();
+  showCooking(served);
+}
+function report(outcomeKey) {
+  const res = recordOutcome(outcomeKey);
+  showResult(outcomeKey, res);
+}
+function leaveCooking() {
+  state.active = null; save();
+  renderHome(); swapPanel(homePanel);
+}
+
+// ── Progress view ─────────────────────────────────────────────────────────────
+function dayKey(ts) { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function dayLabel(ts) {
+  const now = Date.now();
+  if (dayKey(ts) === dayKey(now)) return 'Today';
+  if (dayKey(ts) === dayKey(now - 86400000)) return 'Yesterday';
+  return new Date(ts).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function renderProgress() {
+  document.getElementById('p-level').textContent  = state.level;
+  document.getElementById('p-cooked').textContent = clearedCount();
+  document.getElementById('p-skills').textContent = learnedSkills().size;
+
+  // skills, learned ones lit in accent
+  const learned = learnedSkills();
+  const grid = document.getElementById('skills-grid');
+  grid.innerHTML = '';
+  Object.keys(SKILL_LABELS).forEach(key => {
+    const n = clearedIds().filter(id => { const c = byId(id); return c && c.skill === key; }).length;
+    const chip = document.createElement('span');
+    chip.className = 'skill-chip' + (learned.has(key) ? ' learned' : '');
+    chip.innerHTML = SKILL_LABELS[key] + (n ? ` <span class="n">${n}</span>` : '');
+    grid.appendChild(chip);
+  });
+
+  // history, newest first, grouped by day
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  list.innerHTML = '';
+  if (!state.history.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  let lastDay = null, group = null;
+  [...state.history].reverse().forEach(h => {
+    const ch = byId(h.id); if (!ch) return;
+    const oc = OUTCOMES[h.outcome] || OUTCOMES.came;
+    const k = dayKey(h.ts);
+    if (k !== lastDay) {
+      lastDay = k;
+      group = document.createElement('div'); group.className = 'hist-day';
+      const head = document.createElement('div'); head.className = 'hist-day-h';
+      head.textContent = dayLabel(h.ts); group.appendChild(head);
+      list.appendChild(group);
+    }
+    const row = document.createElement('div'); row.className = 'hist-row';
+    row.innerHTML =
+      `<span class="hist-dot" style="background:${oc.color}"></span>` +
+      `<span class="hist-title">${ch.title}</span>` +
+      `<span class="hist-outcome">${oc.label}</span>`;
+    group.appendChild(row);
+  });
+}
+
+// ── Export / import (your data is yours) ────────────────────────────────────────
+function exportData() {
+  const payload = { app: 'nourish', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `nourish-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object') throw new Error('not a Nourish export');
+    if (typeof incoming.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, incoming.level));
+    if (typeof incoming.streak === 'number') state.streak = incoming.streak;
+    if (incoming.cleared && typeof incoming.cleared === 'object') state.cleared = incoming.cleared;
+    if (Array.isArray(incoming.history)) state.history = incoming.history;
+    state.active = null;
+    save();
+    switchView('progress');
+    alert('Imported your Nourish progress.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
+document.getElementById('skip-btn').addEventListener('click', skipChallenge);
+document.getElementById('start-cooking-btn').addEventListener('click', startCooking);
+document.getElementById('leave-btn').addEventListener('click', leaveCooking);
+document.getElementById('next-challenge-btn').addEventListener('click', newChallenge);
+document.getElementById('done-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
+document.getElementById('export-btn').addEventListener('click', exportData);
+document.getElementById('import-btn').addEventListener('click', () => importFile.click());
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+switchView('cook');   // lands on home, or resumes a mid-cook challenge
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
