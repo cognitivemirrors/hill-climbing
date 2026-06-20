@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
        background-sampling) matches the dark page like iOS Safari does. -->
   <meta name="theme-color" content="#0a0b12">
@@ -317,7 +317,8 @@
     .extra-add-inner { display: flex; gap: 8px; max-width: 420px; margin: 0 auto; }
     .extra-add input {
       flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line);
-      border-radius: 10px; color: var(--text); font-family: var(--font-ui); font-size: 14px;
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px so iOS Safari doesn't auto-zoom on focus */
       padding: 11px 14px; outline: none; transition: border-color 0.2s;
     }
     .extra-add input:focus { border-color: var(--accent-soft); }
@@ -370,7 +371,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · nourish</div>
+<div class="corner" id="version-label">v0.6 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -521,7 +522,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.5 · nourish';
+const VERSION  = 'v0.6 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
