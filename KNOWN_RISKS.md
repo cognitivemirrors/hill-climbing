@@ -132,6 +132,22 @@ The most likely future entries here would be: a code path that disables the idle
 - **Shape:** `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { "YYYY-MM-DD": 1, … } }`. Stores only date-flags; no session content, no text, no user-identifiable data.
 - ✅ **Resolved:** added to REQUIREMENTS.md §1.1 with founder confirmation (v1.64).
 
+### L22. REQUIREMENTS.md §1.1 data inventory and §1.3 network claims are stale after the multi-app + Web Push growth
+- **Confidence:** confirmed (documentation / audit-readiness gap, not a code bug; found in the v1.77 doc audit)
+- **Where:** REQUIREMENTS.md §1.1 ("every item the app stores or transmits") and §1.3 / §2.1 ("zero outbound network traffic at Tier 0–1" / "nothing leaves the device").
+- **§1.1 missing localStorage keys:** `breathe-session-duration` (breathe pref), `hill-climbing-install-dismissed` (hub install banner, v1.73), `hill-climbing-nourish` (nourish ladder state, v1.77), `hill-climbing-timed-minutes` (meditate timed-mode pref). The `hill-climbing-usage` row also predates Nourish — it is now written by `meditate.html`, `breathe.html`, **and** `nourish.html`.
+- **§1.1 missing store entirely:** the Reflect **`journal` IndexedDB** (entries with free-text notes + mood/satisfaction ratings) — the most sensitive data in the suite, and §1.1 currently documents only localStorage. A privacy auditor would expect this inventoried.
+- **§1.3 / §2.1 network claim inaccurate:** the v1.76 opt-in Web Push reminders register a push subscription with a third-party push service and receive pushes — outbound/inbound traffic beyond the initial HTML/JS load, available at Tier 0. The "zero outbound network at Tier 0–1" and "nothing leaves the device" statements are no longer strictly true for users who enable reminders; §5's verification row inherits the same gap.
+- **Impact:** REQUIREMENTS.md is the binding auditable doc. An external privacy/safety auditor relying on it would find §1.1 incomplete and the §1.3 network claim inaccurate. No user harm — a governance / audit-readiness gap (same class as L21).
+- **Fix:** amend §1.1 (add the four keys + an IndexedDB subsection for `journal`), update the `hill-climbing-usage` row to name Nourish, and carve out the opt-in Web Push exception in §1.3 / §2.1 / §5. **Binding doc → requires founder ratification** (CONSTRAINTS §6).
+- ✅ **Resolved:** all of the above amended with founder confirmation in the v1.77 doc audit — §1.1 gained the four keys + a Browser IndexedDB subsection for `journal`, the `hill-climbing-usage` row now names Nourish, §1.3/§2.1/§5 carve out the opt-in Web Push exception, and §1.4's delete-all scope now covers the full key set + the `journal` DB.
+
+### L23. Nourish's level / progression mechanic sits near the anti-gamification line
+- **Confidence:** confirmed (design consideration, not a bug)
+- **Where:** `nourish.html`, added v1.77.
+- **Description:** CONSTRAINTS §3.1 names "gamification beyond the user's interest" as a power-over-behaviour concern, and §5 rejects progression mechanics whose purpose is to drive engagement. Nourish has explicit levels, a climbing ladder, a 2-up/1-down staircase, and skill "unlocks." These serve pedagogy (keeping the cook at their learning edge, ~71% success) rather than time-in-app — but the line is real and worth watching.
+- **Mitigation (already in place):** free skips on every challenge; non-shaming outcome copy ("Struggled" → "that's how cooking is learned," no red/fail language); no points, badges, or scores beyond the level number; no notifications; progress framed for orientation, not as a number to maximise; the hub streak is weekly not daily (see L20). Any future change adding points, daily streaks, or push nudges to Nourish should be reviewed against CONSTRAINTS §3.1/§5 before shipping.
+
 ### L19. GitHub Pages legacy build trigger occasionally drops pushes
 - **Confidence:** observed (v1.57 and v1.58 push events both failed to auto-trigger builds; v1.56 was the last commit Pages built before manual intervention)
 - **Where:** the repo is on `build_type: "legacy"` Pages (per `gh api .../pages`), which auto-builds on push to `main`. The trigger isn't 100% reliable — quick successive pushes occasionally land without firing a build, leaving the deployed site behind the repo head.
@@ -140,6 +156,7 @@ The most likely future entries here would be: a code path that disables the idle
 - **Recovery:** `gh api -X POST repos/cognitivemirrors/hill-climbing/pages/builds` queues a manual build; takes ~30–60 s.
 - **Cache caveat:** the Fastly edge in front of Pages has `max-age=600` — even after a successful new build, the user's browser may serve cached HTML for up to 10 minutes. Hard refresh bypasses; otherwise it self-clears.
 - **Workflow upgrade path:** migrating to GitHub Actions Pages (build_type: "workflow") gives explicit, observable build runs and would surface trigger drops as failed/missing runs rather than silent stale-deploys.
+- **Recurred at v1.77 (2026-06-20):** the push of commit `26d069e` did not auto-trigger a build — the latest *built* commit remained `6880d2b` (v1.76). The documented recovery (`POST .../pages/builds`) was attempted but blocked by the environment's auto-mode classifier as an out-of-scope production action, so the rebuild was deferred to the operator. Confirms the trigger is unreliable and that "pushed v1.77" ≠ "v1.77 is live" until the build is verified.
 
 ---
 

@@ -2,16 +2,16 @@
 
 **For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Then ask the user §6's confirmation question before making any change.
 
-This is a working solo-developer project. The user is building a stillness-meditation web app. The git baseline is `v1.32`; this handoff has been updated through **v1.63** (committed), with v1.64 (weekly usage dashboard) implemented in-session but not yet committed as of this update.
+This is a working solo-developer project. The user is building a suite of contemplative/practice web apps under the "Hill Climbing" name (it began as a single stillness-meditation app). The git baseline is `v1.32`; this handoff has been updated through **v1.77** (committed) — the suite is now four apps behind a hub (see §1). Note: §§5–10 below were largely written during the single-app era and still describe the meditation app specifically; they remain accurate *for `meditate.html`*.
 
 ---
 
 ## 1. Project state
 
-> **⚠️ STRUCTURE CHANGED 2026-05-30 (read before editing files).** The project is now **three apps behind a hub**, not one. `index.html` is a static **hub/landing page** (Meditate · Breathe · Reflect cards). The meditation app — everything this handoff calls "the app" / "index.html" below — now lives in **`meditate.html`** (v1.60). The other two practices are `breathe.html` (breathwork + nervous-system training, was `nervous-system.html`) and `reflect.html` (journal, was `journal.html`). Each app links back to the hub via a top-left `#home-link`. **When the text below says `index.html`, it means `meditate.html`.** This handoff predates the multi-app split and is otherwise still pinned at v1.32 — treat its file references accordingly.
+> **⚠️ STRUCTURE (updated through v1.77 — read before editing files).** The project is **four apps behind a hub**, not one. `index.html` is a static **hub/landing page** (Meditate · Breathe · Reflect · Nourish cards + a weekly-usage dashboard + opt-in Web Push reminders). The meditation app — everything this handoff calls "the app" / "index.html" below — lives in **`meditate.html`** (its own in-product label reads `v1.75`; the global git tag line is `v1.77`). The other three practices are `breathe.html` (breathwork + nervous-system training, was `nervous-system.html`), `reflect.html` (journal, IndexedDB-backed, was `journal.html`), and `nourish.html` (learn-to-cook via the staircase, added v1.77). Each app links back to the hub via a top-left `#home-link`. **When the prose below says `index.html`, it means `meditate.html`.** §§5–10 predate the multi-app split and are pinned to the meditation app — treat their file references accordingly.
 
-- **Single-file HTML web app** at `/Users/kevinchan/stillness/meditate.html` (formerly `index.html`). No build system, no dependencies, no backend. Open the file in a browser to run.
-- **Current version:** v1.63 committed; v1.64 (weekly usage dashboard) implemented and awaiting commit. Tier 0 (solo developer).
+- **Single-file HTML apps**, one per practice, plus the hub. No build system, no dependencies, no backend. Open any file in a browser to run.
+- **Current version:** v1.77 committed (Nourish, the fourth practice). Tier 0 (solo developer). Each app carries its own in-product version label; the git tag line (`vX.Y`) is global across the suite.
 - **Git is initialised** at v1.32 baseline. Each version bump should be its own commit + tag. See §4 for workflow.
 - **The app:** measures user stillness via webcam motion detection, plays synthesised sound that responds to stillness, and runs a 2-up/1-down staircase game that adapts both round duration and stillness threshold to keep the user near a ~71% success rate.
 - **Two round modes** alternate: "stillness" rounds (the default) and "smoothness" rounds (after every motion interlude — the user maintains slow continuous motion instead of stillness).
@@ -24,11 +24,11 @@ This is a working solo-developer project. The user is building a stillness-medit
 
 | File | Purpose | Read first? |
 |---|---|---|
-| `index.html` | **Hub/landing page** (~340 lines) — four cards + weekly usage dashboard (added v1.64; Nourish row added v1.77). Added 2026-05-30. | Yes (quick skim) |
-| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~2720 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
-| `breathe.html` | Breathwork + nervous-system training app (~645 lines). Was `nervous-system.html`. | If relevant |
-| `reflect.html` | Journal app, IndexedDB-backed (~570 lines). Was `journal.html`. | If relevant |
-| `nourish.html` | Cooking app (~620 lines). Adaptive 2-up/1-down staircase over a 10-level ladder of cooking challenges; success is self-reported. State in `hill-climbing-nourish` localStorage. Added v1.77 (2026-06-20). | If relevant |
+| `index.html` | **Hub/landing page** (~720 lines) — four cards + weekly usage dashboard (added v1.64; Nourish row added v1.77) + install banner (v1.73) + opt-in Web Push reminders (v1.76). Added 2026-05-30. | Yes (quick skim) |
+| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~3,140 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
+| `breathe.html` | Breathwork + nervous-system training app (~710 lines). Was `nervous-system.html`. | If relevant |
+| `reflect.html` | Journal app, IndexedDB-backed (~620 lines). Was `journal.html`. | If relevant |
+| `nourish.html` | Cooking app (~940 lines). Adaptive 2-up/1-down staircase over a 10-level ladder of cooking challenges; success is self-reported. State in `hill-climbing-nourish` localStorage. Added v1.77 (2026-06-20). | If relevant |
 | `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. Contains `[DECISION]` markers for unresolved values. | Yes |
 | `REQUIREMENTS.md` | Auditable specifics: data inventory, adverse-event runbook, tier transition criteria, verification procedures, decision register | Yes |
 | `BACKLOG.md` | Work tracking. Categorised by Bugs / Features / Tuning / Design Questions / Done | Yes |
@@ -102,7 +102,7 @@ The user has been thoughtful and explicit about what matters. Carry these forwar
 
 Before making any change, ask:
 
-> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The current committed version is v1.63 (v1.64 dashboard was implemented but may or may not be committed yet — check `git log`). Before I do anything, can you confirm: (a) are we still at TIER 0; (b) is the highest-leverage next item still S1 (replay clears cooldown) or S4 (sticky reminder flags); and (c) any context the prior session missed?"
+> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The current committed version is v1.77 — four apps (Meditate, Breathe, Reflect, Nourish) behind a hub; confirm with `git log`. Before I do anything, can you confirm: (a) are we still at TIER 0; (b) the open items I see are the meditation safety items S1/S2/S4/S5 and the binding-doc data-inventory gaps in REQUIREMENTS.md §1.1 flagged in the v1.77 audit (KNOWN_RISKS L22) — which, if any, is the priority; and (c) any context the prior session missed?"
 
 Wait for the answer. Then proceed.
 
@@ -114,6 +114,7 @@ These came up in conversation and informed code, but the reasoning isn't fully c
 
 - **The motion-interlude (light-version alternation) was chosen over a full smoothness-scored mode initially, then the smoothness-scored mode was added later in v1.13.** The interlude is now followed by exactly one smoothness round per cycle.
 - **The 2-up/1-down staircase was chosen because it converges to ~71% success rate** (Levitt 1971 — the engagement-zone result from psychophysics). Both duration AND threshold staircase together as of v1.22.
+- **Nourish (v1.77) reuses the staircase with a self-reported success signal.** The cooking app has no sensor, so the user reports the outcome themselves (Nailed it / Came together / Struggled): two clears step the level up, one struggle steps it down, over a 10-level ladder of 25 cooking challenges. State is one localStorage blob (`hill-climbing-nourish`: level, streak, cleared dishes, history, in-progress cook). Usage logs `markUsage('nourish')` when the user commits to cook — the analog of meditate's `setPhase('settling')`. Watch the gamification line: levels/progression are exactly what CONSTRAINTS §3.1/§5 are wary of — kept honest by free skips, non-shaming outcome copy, no points/badges, and the weekly (not daily) hub streak. Flagged for review in KNOWN_RISKS L23.
 - **Audio is parameter-replay, not signal-replay.** Trajectory recording captures `(stillness, audioMotion)` samples at 10 Hz; replay feeds these back to the live audio engine. Faithful to "what was sent to the audio engine," not a microphone capture. The audio engine's smoothing (~0.5s time constants) means replay is approximate.
 - **Onboarding modal shows on first run regardless of tier.** This is universal orientation. Safety modal is tier-gated (≥1). They're separate.
 - **The 5-minute idle-pause is a coarse heuristic.** The user accepted it as the trance-prevention safeguard at Tier 0; at higher tiers, more sophisticated detection is on the roadmap.
@@ -144,13 +145,14 @@ These shaped the project's direction. If a future user wants to revisit any of t
 
 ---
 
-## 9. Active open questions (live as of v1.63 / v1.64)
+## 9. Active open questions (live as of v1.77)
 
-- **S1 (replay clears cooldown)** and **S4 (sticky reminder flags)** are the next safety items to fix. Either is a reasonable choice; user hasn't picked yet.
+- **Meditation safety items S1 (replay clears cooldown), S2 (mute during idle-pause), S4 (sticky reminder flags), S5 (no surfaced report-review path)** remain open in KNOWN_RISKS. User hasn't picked a priority.
+- **REQUIREMENTS.md §1.1 data inventory is materially incomplete after the multi-app + reminders growth** (found in the v1.77 doc audit, KNOWN_RISKS L22). Missing: `breathe-session-duration`, `hill-climbing-install-dismissed`, `hill-climbing-nourish`, `hill-climbing-timed-minutes`, the Reflect `journal` IndexedDB (free-text entries — the most sensitive store in the suite), and the v1.76 Web Push subscription. **Also: §1.3/§2.1's "zero outbound network at Tier 0–1 / nothing leaves the device" claim is now contradicted by the opt-in Web Push reminders.** REQUIREMENTS.md is binding — these need founder ratification to amend; proposed edits were surfaced in the v1.77 audit, not yet applied.
+- **Nourish gamification vs CONSTRAINTS §3.1/§5** — the cooking ladder's levels/progression sit near the anti-gamification line; flagged for review in KNOWN_RISKS L23.
 - **The 12 [DECISION] markers in CONSTRAINTS.md** have proposed defaults in REQUIREMENTS.md §7 but await explicit founder ratification. Don't unilaterally treat them as resolved.
-- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet. The v1.64 reflect dot-strip on the hub is a first step toward surfacing journal usage, but it doesn't add ratings.
+- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet. The hub's Reflect dot-strip surfaces journal usage but doesn't add ratings.
 - **Audio tuning (temple-atmosphere paradigm from v1.32)** has been stable across many versions. Still watch for: ambient bell interval (6–14s), volume (35%), pentatonic scale, and anchor-layer fade-out range (0.85–1.0).
-- **REQUIREMENTS.md §1.1 data inventory is missing the `hill-climbing-usage` localStorage key** added in v1.64. That table is a binding auditable doc — needs founder ratification to amend. Tracked in KNOWN_RISKS.md L21. *(Aesthetic polish via design tokens was an open question; resolved in v1.61.)*
 
 ---
 
@@ -170,9 +172,9 @@ For the benefit of the next instance, knowing what to be cautious about:
 
 Before relying on anything in this file, verify:
 
-1. The version label in `meditate.html` matches what this doc claims. (`index.html` is the hub and does not carry a version label.)
-2. The files listed in §2 still exist with the same purposes.
-3. The TIER constant at the top of the JS is still `0`.
+1. `meditate.html`'s in-product label reads `v1.75` and the latest `git tag` is `v1.77` (the global suite line). The hub `index.html` carries no version label.
+2. The files listed in §2 still exist with the same purposes — five HTML files: `index.html` (hub) + four practice apps.
+3. The TIER constant at the top of `meditate.html`'s JS is still `0`.
 4. None of the §9 open questions has been answered without this doc being updated.
 5. `git log` shows the v1.32 baseline commit (`4683660`) is still the earliest in the history.
 

@@ -12,7 +12,9 @@ Items marked **[FOUNDER-PENDING]** are proposed defaults awaiting explicit found
 
 Every item the app stores or transmits, where, for how long, and how it's deleted.
 
-### 1.1 Browser localStorage (persistent, on user device only)
+### 1.1 On-device storage (persistent, on user device only)
+
+**Browser localStorage:**
 
 | Key | Contents | Size | Retention | Deletion mechanism |
 |---|---|---|---|---|
@@ -21,9 +23,21 @@ Every item the app stores or transmits, where, for how long, and how it's delete
 | `hill-combing-reports` | Adverse-event reports: list of `{timestamp, text (≤2000 chars), snapshot {round, duration, todaySecs, phase, tier}}`. Capped at 50 entries. | < 100 KB max | Until user clears or 50-cap rotation | Same as above |
 | `hill-combing-last-trajectory` | Most recent round's audio trajectory: `{timestamp, mode, duration, held, won, samples: [{t, s, m}]}` | < 50 KB | Overwritten by next round-end | Same as above |
 | `hill-climbing-introduced-v1` | Onboarding completion flag (`'1'`) | ~10 B | Until user clears | Same as above |
-| `hill-climbing-usage` | Per-app daily usage flags: `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { "YYYY-MM-DD": 1, … } }`. Written by `meditate.html` (on entering settling phase) and `breathe.html` (on session start); read by `index.html` hub dashboard. Reflect usage is derived separately from the journal IndexedDB. No session content, no user-identifiable data — only boolean day-flags. | < 10 KB (grows ~2 KB/yr) | Until user clears; no auto-pruning (streak requires full history) | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-usage` | Per-app daily usage flags: `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { … }, "nourish": { … } }`. Written by `meditate.html` (on entering settling phase), `breathe.html` (on session start), and `nourish.html` (when the user commits to cook a challenge); read by `index.html` hub dashboard. Reflect usage is derived separately from the journal IndexedDB. No session content, no user-identifiable data — only boolean day-flags. | < 10 KB (grows ~3 KB/yr) | Until user clears; no auto-pruning (streak requires full history) | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-timed-minutes` | Meditate timed-mode session length preference (minutes, integer) | ~10 B | Until user clears | Same as above |
+| `breathe-session-duration` | Breathe session length preference (minutes, integer) | ~10 B | Until user clears | Same as above |
+| `hill-climbing-install-dismissed` | Hub PWA install-banner dismissal timestamp (ms since epoch); re-prompts 5 days after dismissal | ~15 B | Until user clears | Same as above |
+| `hill-climbing-nourish` | Nourish cooking-ladder state: `{ v, level, streak, cleared {id→outcome}, history [{id, outcome, ts}], active, recent[] }`. Challenge ids and self-reported outcomes only; no free text, no identity. | < 20 KB (grows slowly) | Until user clears | Same as above |
 
 The `hill-combing-*` keys retain the legacy prefix to preserve user state across the v1.19 rename. New keys may use `hill-climbing-*`.
+
+**Browser IndexedDB:**
+
+| Database / store | Contents | Size | Retention | Deletion mechanism |
+|---|---|---|---|---|
+| `journal` / `entries` (written by `reflect.html`) | Journal entries: `{ id, created, updated, text (free-form, user-written), mood (1–7 or null), satisfaction (1–7 or null), embedding (reserved, currently null), embModel (null) }` | grows with use; `text` is user-authored prose | Until the user deletes an entry (in-app, per-entry) or clears browser data | In-app per-entry delete; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+
+This is the only store holding **free-text personal content** — the most sensitive data in the suite. The hub (`index.html`) opens this database **read-only and version-less** to derive Reflect's usage dots, and never writes to it (see the IndexedDB-gotcha note in `CLAUDE.md §7`).
 
 ### 1.2 Browser memory (transient)
 
@@ -35,14 +49,15 @@ The `hill-combing-*` keys retain the legacy prefix to preserve user state across
 
 ### 1.3 Network transmission
 
-- **Tier 0–1: zero outbound network traffic** at any time (other than the initial HTML/JS load). No analytics, telemetry, ads, error reporting, or third-party scripts.
+- **Tier 0–1: zero outbound network traffic** at any time (other than the initial HTML/JS load), **except the opt-in Web Push reminders below.** No analytics, telemetry, ads, error reporting, or third-party scripts.
+- **Opt-in Web Push reminders (all tiers, off by default; added v1.76).** If — and only if — the user explicitly enables reminders on the hub, the browser registers a push subscription with its platform push service (Google / Apple / Mozilla) and receives pushes sent by the project's own GitHub Actions sender. This is user-initiated, revocable at any time ("Turn off"), and carries no analytics or behavioural data — the payload is a fixed practice prompt drawn from a hand-authored rotation. The subscription endpoint is the user's to copy into the sender's GitHub Actions secret. This is the single exception to "nothing leaves the device," and it exists only at the user's explicit request.
 - **Tier ≥ 2: adverse-event reports may POST to a backend** *with explicit per-report consent at submission time*. No silent transmission.
 - **All tiers: no microphone, no audio recording, no behavioral telemetry, no fingerprinting, no cookies for tracking.**
 
 ### 1.4 Deletion
 
 - **Now (Tier 0):** user clears via browser DevTools → Application → Local Storage. Documented as a known gap.
-- **Tier ≥ 2 prerequisite:** in-app "delete all my data" button that removes all `hill-combing-*` and `stillness-game` keys, with confirmation and acknowledgment.
+- **Tier ≥ 2 prerequisite:** in-app "delete all my data" button that removes all `hill-combing-*` and `hill-climbing-*` localStorage keys, the `stillness-game` and `breathe-session-duration` keys, and the Reflect `journal` IndexedDB database, with confirmation and acknowledgment. (Reflect already offers per-entry delete today; a future control should also unsubscribe any active Web Push reminder.)
 - **Tier ≥ 2:** server-side report-deletion endpoint with same SLA as data-export (24 h).
 
 ---
@@ -51,7 +66,7 @@ The `hill-combing-*` keys retain the legacy prefix to preserve user state across
 
 ### 2.1 What we collect
 
-Nothing leaves the device at Tier ≤ 1. At Tier ≥ 2, only adverse-event reports the user explicitly submits via the in-product form.
+Nothing leaves the device at Tier ≤ 1, **except an opt-in Web Push subscription if the user turns on daily reminders** (user-initiated and revocable; see §1.3). At Tier ≥ 2, additionally only adverse-event reports the user explicitly submits via the in-product form.
 
 ### 2.2 What we never collect
 
@@ -197,7 +212,7 @@ For each binding constraint, how compliance is verified.
 | No advertising revenue | Code review + dependency audit + revenue-source attestation | Every release + quarterly |
 | No data sale or sharing | Operator written attestation | Quarterly |
 | Data export ≤ 24 h | Manual test (when implemented) | Every release |
-| Zero outbound network traffic at Tier 0–1 | Network tab inspection during full session | Every release |
+| Zero outbound network traffic at Tier 0–1 (except opt-in Web Push reminders) | Network tab inspection during full session | Every release |
 | Adverse-event rate ≤ 5% / quarter | Aggregate count from reports / active users | Quarterly |
 | Investor concentration ≤ 20% | Cap-table review | Every funding event |
 | Open-source safety research published | Repo review | Quarterly |

@@ -18,6 +18,7 @@ Move items between sections freely. The order within a section is rough priority
 Things noticed but not yet sorted into a category. Empty this regularly.
 
 - [ ] **Onboarding copy is stale post-v1.52.** The six-page modal still describes the old game ("hold above a moving threshold," "drop below for half a second or longer and the round ends," "amber tick marks the floor"). Currently invisible because `FEATURES.showOnboardingOnFirstRun` is `false`, but anyone re-enabling it sees a wrong description of the practice. Rewrite to match the gradient-accumulator paradigm before re-enabling.
+- [x] **Ratify REQUIREMENTS.md §1.1/§1.3 amendments (v1.77 doc audit).** Added the four un-inventoried localStorage keys (`breathe-session-duration`, `hill-climbing-install-dismissed`, `hill-climbing-nourish`, `hill-climbing-timed-minutes`) plus a `journal` IndexedDB subsection to §1.1; updated the `hill-climbing-usage` row to include Nourish; carved out the opt-in Web Push exception in §1.3/§2.1/§5; widened §1.4's delete-all scope. **Founder-approved** in the v1.77 audit. Detail in KNOWN_RISKS L22.
 
 ---
 
@@ -25,6 +26,7 @@ Things noticed but not yet sorted into a category. Empty this regularly.
 
 Things that don't work as intended.
 
+- [ ] **Nourish: result copy over-promises at the top of the ladder (L10).** At level 10 with one clear banked, the result screen still reads "One more clean cook at this level and you'll climb a rung" — but L10 is the top, so a second clear only resets the streak with no climb. Cosmetic; reachable only after clearing most of the ladder. Fix: branch the message when `level === LVL_MAX`. (Found in the v1.77 doc audit.)
 - [x] Report modal shown on page load (missing default `display: none`) — fixed v1.17
 - [x] Cancel button in report modal did nothing (no `.show` to remove) — fixed v1.17
 - [x] Report link invisible at Tier 0 (over-gated) — fixed v1.18
