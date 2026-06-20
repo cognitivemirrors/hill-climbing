@@ -322,7 +322,7 @@
     }
     .extra-add-btn:hover { background: var(--accent-glow); border-color: var(--accent); }
     /* editable + removable rows for the user's own list */
-    .extra-row { display: flex; align-items: center; max-width: 420px; margin: 0 auto; border-radius: 10px; }
+    .extra-row { display: flex; align-items: center; width: 100%; border-radius: 10px; }
     .extra-row:hover { background: rgba(255,255,255,0.04); }
     .extra-toggle {
       display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; text-align: left;
@@ -362,7 +362,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · nourish</div>
+<div class="corner" id="version-label">v0.4 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -509,7 +509,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.3 · nourish';
+const VERSION  = 'v0.4 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
