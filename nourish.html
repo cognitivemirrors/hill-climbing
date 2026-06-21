@@ -150,6 +150,10 @@
     /* ── home panel ─────────────────────────────────────────────── */
     #home-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
     .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+    /* learning-track selector (segmented control) */
+    .track-row { display: inline-flex; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 3px; gap: 2px; margin-bottom: 26px; }
+    .track-btn { padding: 6px 18px; border-radius: 13px; border: none; background: transparent; color: var(--dim); font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.06em; cursor: pointer; transition: background 0.2s, color 0.2s; }
+    .track-btn.sel { background: rgba(255,255,255,0.1); color: var(--text); }
 
     /* the climb — ten rungs, current highlighted, climbed ones filled */
     .ladder { display: flex; gap: 6px; align-items: flex-end; height: 48px; margin-bottom: 28px; }
@@ -403,7 +407,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.10 · nourish</div>
+<div class="corner" id="version-label">v0.11 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -436,7 +440,11 @@
 
     <!-- home / idle -->
     <div id="home-panel" class="panel">
-      <div class="kicker">Your kitchen ladder</div>
+      <div class="track-row" id="track-row" role="group" aria-label="Learning track">
+        <button class="track-btn" type="button" data-track="general">General</button>
+        <button class="track-btn" type="button" data-track="sushi">Sushi</button>
+      </div>
+      <div class="kicker" id="home-kicker">Your kitchen ladder</div>
       <div class="ladder" id="ladder" aria-hidden="true"></div>
       <div class="level-num" id="home-level">1</div>
       <div class="level-theme" id="home-theme">the basics</div>
@@ -577,10 +585,20 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.10 · nourish';
+const VERSION  = 'v0.11 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
-const LVL_MIN = 1, LVL_MAX = 10;
+const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
+
+// Learning tracks. Each has its own ladder (challenges tagged with `track`),
+// its own top level, and its own progress (state.tracks[id]). A challenge with
+// no `track` field is treated as 'general' — so the original 24 stay untouched.
+const TRACKS = {
+  general: { name: 'General', max: 10, kicker: 'Your kitchen ladder' },
+  sushi:   { name: 'Sushi',   max: 4,  kicker: 'Your sushi ladder' },
+};
+function chTrack(c) { return c.track || 'general'; }
+function lvlMax() { return (TRACKS[state.track] || TRACKS.general).max; }
 
 // Human labels for each skill domain a challenge can teach.
 const SKILL_LABELS = {
@@ -588,16 +606,25 @@ const SKILL_LABELS = {
   eggs: 'Eggs',         knife: 'Knife work',     sear: 'Searing',
   rest: 'Resting meat', sauce: 'Sauces',         braise: 'Braising',
   roast: 'Roasting',    dough: 'Dough',          plate: 'Putting it together',
+  // sushi track
+  shari: 'Sushi rice',  roll: 'Rolling',         nigiri: 'Nigiri',  aburi: 'Aburi (torch)',
 };
 
-// One-line theme shown under the big level number on the home screen.
+// One-line theme shown under the big level number on the home screen, per track.
 const LEVEL_THEMES = {
-  1: 'the basics — salt, fat, heat', 2: 'eggs & tasting as you go',
-  3: 'sautéing & browning',          4: 'searing & crusts',
-  5: 'pan sauces',                   6: 'low-heat texture',
-  7: 'braising',                     8: 'roasting & timing',
-  9: 'emulsions & dough',            10: 'putting it all together',
+  general: {
+    1: 'the basics — salt, fat, heat', 2: 'eggs & tasting as you go',
+    3: 'sautéing & browning',          4: 'searing & crusts',
+    5: 'pan sauces',                   6: 'low-heat texture',
+    7: 'braising',                     8: 'roasting & timing',
+    9: 'emulsions & dough',            10: 'putting it all together',
+  },
+  sushi: {
+    1: 'the rice — shari',  2: 'rolling',
+    3: 'slicing & nigiri',  4: 'aburi — torch-seared',
+  },
 };
+function levelTheme(lvl) { return (LEVEL_THEMES[state.track] || {})[lvl] || ''; }
 
 // Three honest self-reports. "nailed" and "came" both count as a clear for the
 // 2-up/1-down staircase; "struggled" is the single down-step. No red, no shame —
@@ -750,6 +777,44 @@ const CHALLENGES = [
     teaches:'Holding it together under a little pressure, from memory, is where techniques stop being steps and become yours.',
     tell:'You served it on time, it tasted good, and you’d happily make it again.',
     meal:'Plan it in three parts you can mostly do ahead: a make-ahead or no-cook starter, one main you’ve already practised (a braise or roast reheats forgivingly), and a simple or bought dessert. Set the table before you start — hosting is 80% sequencing, 20% stove.' },
+
+  // ══ SUSHI TRACK ══ absolute beginner → aburi (blow-torched) sushi
+  // L1 — the rice (shari)
+  { id:'sushi-rice', level:1, skill:'shari', time:'30 min', title:'Cook short-grain sushi rice', track:'sushi',
+    brief:'Rinse Japanese short-grain rice until the water runs clear, then cook it until tender and sticky.',
+    teaches:'Sushi lives or dies on the rice. Short-grain rice and a thorough rinse give the sticky-but-distinct grains everything else sits on.',
+    tell:'The grains are tender and cling together, yet you can still see each one — sticky, not mushy.' },
+  { id:'season-shari', level:1, skill:'shari', time:'15 min', title:'Season it into shari', track:'sushi',
+    brief:'Fold seasoned rice vinegar (vinegar, sugar, salt) through the warm rice and cool it to body temperature.',
+    teaches:'Shari is seasoned rice. The vinegar mix gives the gentle sweet-tang that defines sushi; folding — not stirring — keeps the grains whole.',
+    tell:'Glossy, lightly tangy-sweet rice at body temperature, the grains still separate and intact.' },
+  // L2 — rolling
+  { id:'temaki', level:2, skill:'roll', time:'15 min', title:'Temaki hand roll', track:'sushi',
+    brief:'Wrap half a sheet of nori into a cone around a little shari and a simple filling like cucumber or avocado.',
+    teaches:'The easiest sushi — no mat needed. You learn the rice-to-nori-to-filling balance, and that nori softens fast, so hand rolls are eaten straight away.',
+    tell:'A tidy cone that holds together, well balanced, eaten while the nori is still crisp.' },
+  { id:'maki-roll', level:2, skill:'roll', time:'25 min', title:'Cucumber or avocado maki', track:'sushi',
+    brief:'Using a bamboo mat, roll nori around a thin layer of shari and a strip of cucumber or avocado, then cut into rounds.',
+    teaches:'The classic roll. A thin, even rice layer and gentle but firm pressure on the mat give a tight roll that cuts cleanly.',
+    tell:'A firm, round roll that keeps its shape when cut into even pieces.' },
+  // L3 — slicing & nigiri
+  { id:'sushi-slice', level:3, skill:'knife', time:'10 min', title:'Slice fish & avocado cleanly', track:'sushi',
+    brief:'With a sharp, wet knife, cut sushi-grade fish and avocado into clean, even slices using single drawing strokes.',
+    teaches:'Sushi cuts are single, pulling strokes with a sharp wet blade — sawing tears delicate fish. Even slices look and eat far better.',
+    tell:'Clean-faced, even slices with no ragged or torn edges.' },
+  { id:'nigiri', level:3, skill:'nigiri', time:'20 min', title:'Hand-formed nigiri', track:'sushi',
+    brief:'Shape a small, loose oval of shari in your hand, add a dab of wasabi, and drape a slice of fish over the top.',
+    teaches:'Nigiri is all about a light hand — a loose-but-holding oval of rice, never a squashed brick. The fish should blanket the rice.',
+    tell:'The rice holds its oval but falls apart easily in the mouth; the fish sits neatly on top.' },
+  // L4 — aburi (the destination)
+  { id:'sushi-sauces', level:4, skill:'sauce', time:'15 min', title:'Spicy mayo & sweet glaze', track:'sushi',
+    brief:'Make a spicy mayo (mayo + sriracha) and a sweet soy glaze (soy, mirin and sugar, gently reduced) — the two sushi-bar sauces.',
+    teaches:'Sauces lift modern sushi. Spicy mayo brings richness and heat; a reduced sweet-soy glaze (like unagi/aburi sauce) adds shine and umami.',
+    tell:'A creamy, balanced spicy mayo, and a glossy, syrupy sweet-soy glaze that coats the back of a spoon.' },
+  { id:'aburi-salmon', level:4, skill:'aburi', time:'30 min', title:'Aburi salmon nigiri (blow-torched)', track:'sushi',
+    brief:'Top salmon nigiri with a little spicy mayo, sear the surface with a kitchen torch until just caramelised, then finish with the sweet glaze.',
+    teaches:'Aburi means flame-seared. A quick pass with a torch melts the fat and caramelises the surface, turning the salmon silky and lightly smoky — the destination of this track.',
+    tell:'A lightly blistered, glossy top; the salmon just-seared and melting, not cooked through.' },
 ];
 
 // Shoppable ingredients per challenge — the core technique items plus a simple
@@ -782,6 +847,15 @@ const CHALLENGE_INGREDIENTS = {
   'fresh-pasta':      ['plain or 00 flour', 'eggs', 'butter', 'parmesan', 'salad greens'],
   'full-plate':       ['a protein', 'a vegetable', 'a starch'],
   'cook-for-someone': ['a main you have practised', 'a simple starter', 'dessert'],
+  // sushi track
+  'sushi-rice':     ['sushi rice (short-grain)'],
+  'season-shari':   ['sushi rice (short-grain)', 'rice vinegar', 'sugar', 'salt'],
+  'temaki':         ['nori', 'cucumber', 'avocado', 'sushi rice (short-grain)'],
+  'maki-roll':      ['nori', 'cucumber', 'avocado', 'sushi rice (short-grain)'],
+  'sushi-slice':    ['sushi-grade salmon', 'avocado'],
+  'nigiri':         ['sushi-grade salmon', 'wasabi', 'sushi rice (short-grain)'],
+  'sushi-sauces':   ['mayonnaise', 'sriracha', 'soy sauce', 'mirin', 'sugar'],
+  'aburi-salmon':   ['sushi-grade salmon', 'sushi rice (short-grain)', 'mayonnaise', 'sriracha', 'soy sauce', 'mirin'],
 };
 
 // Plain, beginner-friendly "how to do it" steps for each challenge — explicit
@@ -930,6 +1004,49 @@ const CHALLENGE_STEPS = {
     'Write a simple plan and shopping list, and prep whatever you can ahead of time.',
     'Cook it start to finish without the recipe open mid-cook, leaning on what you’ve practised.',
     'Plate it, serve, and afterwards note what felt smooth and what you’d change.',
+  ],
+  // sushi track
+  'sushi-rice': [
+    'Measure the rice, then rinse it in cold water — swirl and drain — until the water runs almost clear (4–5 changes).',
+    'Drain well and cook with water (about 1 : 1.1 rice to water) in a rice cooker or covered pan: bring to a boil, then low for ~12 min.',
+    'Off the heat, let it sit with the lid on for 10 min to finish steaming. Don’t lift the lid early.',
+  ],
+  'season-shari': [
+    'Gently warm rice vinegar, sugar and a little salt until dissolved — don’t boil (roughly 3 tbsp vinegar : 2 tsp sugar : ½ tsp salt per cup of rice).',
+    'Tip the hot rice into a wide bowl and pour the vinegar mix over the back of a spatula to spread it.',
+    'Fold gently with a slicing motion (never mash) while fanning it cool to body temperature. Keep it under a damp cloth.',
+  ],
+  'temaki': [
+    'Cut a sheet of nori in half and hold a half shiny-side down in your palm.',
+    'Spread a small spoon of shari over one half, and lay a strip of cucumber or avocado across it on the diagonal.',
+    'Roll it into a cone from the corner, dab a little water to seal the tip, and eat it straight away while the nori is crisp.',
+  ],
+  'maki-roll': [
+    'Lay nori shiny-side down on a bamboo mat. Spread a thin, even layer of shari over it, leaving a 2 cm strip bare at the top.',
+    'Lay a strip of cucumber or avocado across the middle.',
+    'Roll the mat up and over the filling, tuck firmly, and roll on to the bare edge; press gently to seal.',
+    'Wet a sharp knife and cut into 6–8 even pieces, wiping the blade between cuts.',
+  ],
+  'sushi-slice': [
+    'Chill the fish briefly so it firms up, make sure your knife is sharp, and wet the blade.',
+    'Cut against the grain in single, smooth pulling strokes — let the knife do the work, don’t saw.',
+    'Aim for even slices about 0.5 cm thick; slice the avocado the same way, cut-side down.',
+  ],
+  'nigiri': [
+    'Wet your hands in a little water with a splash of vinegar so the rice won’t stick.',
+    'Scoop a heaped tablespoon of shari and squeeze it gently into a loose oval — firm enough to hold, loose enough to melt.',
+    'Smear a tiny dab of wasabi on a slice of fish, then press the fish gently over the rice so it drapes the top.',
+  ],
+  'sushi-sauces': [
+    'Spicy mayo: stir mayonnaise with sriracha to taste (start about 3 : 1) and a few drops of lemon.',
+    'Sweet glaze: simmer equal parts soy sauce, mirin and sugar over low heat, stirring, until syrupy enough to coat a spoon (~5 min).',
+    'Cool both, then put them in squeeze bottles or small spoons ready for drizzling.',
+  ],
+  'aburi-salmon': [
+    'Make salmon nigiri — slice the salmon, form loose rice ovals, drape the fish (earlier sushi steps).',
+    'Pipe or spoon a thin line of spicy mayo along each piece.',
+    'Holding the torch a few inches away, sear the tops in short passes until they blister and turn glossy — a few seconds each, no longer.',
+    'Finish with a drizzle of the sweet glaze and serve straight away.',
   ],
 };
 
@@ -1283,6 +1400,117 @@ const MEAL_RECIPE = {
       'Cook it start to finish without the recipe open mid-cook (steps above), leaning on what you’ve practised.',
     ],
   },
+  // sushi track
+  'sushi-rice': {
+    title: 'Sushi rice bowl',
+    ing: [
+      { qty: 90, unit: 'g', name: 'sushi rice (short-grain)' },
+      { note: 'Toppings you like — egg, avocado, cucumber, flaked fish' },
+    ],
+    method: [
+      'Cook the rice until tender and sticky (steps above).',
+      'Spoon it warm into a bowl and pile on your toppings.',
+      'Once the rice is reliable, season it into shari (next challenge) for the real thing.',
+    ],
+  },
+  'season-shari': {
+    title: 'Quick chirashi bowl',
+    ing: [
+      { qty: 90, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 80, unit: 'g', name: 'sushi-grade salmon, sliced' },
+      { qty: 0.5, unit: 'avocado' },
+      { note: 'Cucumber, soy sauce, sesame' },
+    ],
+    method: [
+      'Make and cool the shari (steps above).',
+      'Spoon it into a bowl and arrange the salmon, avocado and cucumber on top.',
+      'Drizzle with a little soy and scatter with sesame — all the flavours, none of the assembly.',
+    ],
+  },
+  'temaki': {
+    title: 'Hand-roll dinner (DIY temaki)',
+    ing: [
+      { qty: 2, unit: 'sheet', name: 'nori, halved' },
+      { qty: 90, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 0.5, unit: 'cucumber' },
+      { qty: 0.5, unit: 'avocado' },
+      { qty: 60, unit: 'g', name: 'sushi-grade salmon (optional)' },
+    ],
+    method: [
+      'Set out bowls of shari, fillings and halved nori.',
+      'Everyone rolls their own cones to order (steps above).',
+      'Eat each one straight away while the nori is crisp, with soy for dipping.',
+    ],
+  },
+  'maki-roll': {
+    title: 'A platter of maki',
+    ing: [
+      { qty: 2, unit: 'sheet', name: 'nori' },
+      { qty: 110, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 0.5, unit: 'cucumber' },
+      { qty: 0.5, unit: 'avocado' },
+      { note: 'Soy sauce & pickled ginger, to serve' },
+    ],
+    method: [
+      'Roll two or three maki on the mat and cut into rounds (steps above).',
+      'Arrange them on a plate.',
+      'Serve with soy, a little wasabi and pickled ginger.',
+    ],
+  },
+  'sushi-slice': {
+    title: 'Salmon & avocado sashimi plate',
+    ing: [
+      { qty: 90, unit: 'g', name: 'sushi-grade salmon' },
+      { qty: 0.5, unit: 'avocado' },
+      { note: 'Soy sauce, wasabi, a squeeze of lemon' },
+    ],
+    method: [
+      'Slice the salmon and avocado cleanly (steps above).',
+      'Fan the slices out on a plate.',
+      'Serve with soy, wasabi and a little lemon — a plate that’s all about the knife.',
+    ],
+  },
+  'nigiri': {
+    title: 'A plate of nigiri',
+    ing: [
+      { qty: 110, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 80, unit: 'g', name: 'sushi-grade salmon, sliced' },
+      { note: 'Wasabi & soy sauce' },
+    ],
+    method: [
+      'Form 4–6 pieces of nigiri per person (steps above).',
+      'Arrange them on a plate.',
+      'Dip the fish side (not the rice) in soy so the nigiri holds together.',
+    ],
+  },
+  'sushi-sauces': {
+    title: 'Sauced sushi bowl',
+    ing: [
+      { qty: 90, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 80, unit: 'g', name: 'sushi-grade salmon or cooked prawns' },
+      { note: 'Spicy mayo & sweet glaze (from this challenge)' },
+      { note: 'Avocado, cucumber, sesame' },
+    ],
+    method: [
+      'Make the spicy mayo and sweet glaze (steps above).',
+      'Build a bowl of shari topped with the fish, avocado and cucumber.',
+      'Drizzle generously with both sauces and scatter with sesame.',
+    ],
+  },
+  'aburi-salmon': {
+    title: 'Aburi salmon nigiri platter',
+    ing: [
+      { qty: 110, unit: 'g', name: 'shari (seasoned rice)' },
+      { qty: 100, unit: 'g', name: 'sushi-grade salmon, sliced' },
+      { note: 'Spicy mayo & sweet glaze' },
+      { note: 'A kitchen blow-torch' },
+    ],
+    method: [
+      'Form salmon nigiri and pipe a line of spicy mayo along each (steps above).',
+      'Torch the tops in short passes until blistered and glossy.',
+      'Finish with the sweet glaze and serve at once — the destination of the sushi track.',
+    ],
+  },
 };
 
 // Indicative per-person quantities for the recommended ingredients, scaled by the
@@ -1337,6 +1565,18 @@ const INGREDIENT_QTY = {
   'parsley':                { note: 'a few sprigs' },
   'fresh herbs':            { note: 'a few sprigs' },
   'chili flakes':           { note: 'a pinch' },
+  // sushi track
+  'sushi rice (short-grain)': { qty: 90, unit: 'g' },
+  'rice vinegar':           { qty: 1,   unit: 'tbsp' },
+  'sugar':                  { qty: 1,   unit: 'tsp' },
+  'nori':                   { qty: 1,   unit: 'sheet' },
+  'cucumber':               { qty: 0.5, unit: 'cucumber' },
+  'avocado':                { qty: 0.5, unit: 'avocado' },
+  'sushi-grade salmon':     { qty: 80,  unit: 'g' },
+  'wasabi':                 { note: 'to taste' },
+  'mayonnaise':             { qty: 1,   unit: 'tbsp' },
+  'sriracha':               { note: 'to taste' },
+  'mirin':                  { qty: 1,   unit: 'tbsp' },
 };
 // Scaled quantity string for an ingredient, or '' if it has none.
 function fmtNum(n) {
@@ -1366,36 +1606,68 @@ function mealIngLine(item, servings) {
 // records are tiny flags, not long text — cf. Reflect, which earns IndexedDB).
 const state = {
   v: 1,
-  level: 1,            // current rung (integer, 1..10) — the staircase target
-  streak: 0,           // consecutive clears toward the next 2-up step
-  cleared: {},         // id -> best outcome key ('nailed'|'came') for cleared challenges
-  history: [],         // [{id, outcome, ts}], newest pushed to the end
-  active: null,        // {id, ts} for a challenge being cooked but not yet reported
-  recent: [],          // last few served ids, so "skip" rotates instead of repeating
-  pantry: {},          // shopping list: { ingredientName: 1 } for items the user already has
-  extras: [],          // user's own additions: [{ name, have }] — persist until removed (never auto-churn)
-  servings: 2,         // shopping-list serving size (1 / 2 / 4) — scales the recommended quantities
+  track: 'general',    // active learning track
+  tracks: {},          // per-track progress { general: {...}, sushi: {...} }, filled in load()
+  // working mirror of the active track — all the staircase code reads these directly:
+  level: 1, streak: 0, cleared: {}, history: [], active: null, recent: [],
+  pantry: {},          // shared shopping pantry (have-marks), across tracks
+  extras: [],          // shared manual shopping list
+  servings: 2,         // shared serving size (1 / 2 / 4)
 };
 
+function blankProgress() { return { level: 1, streak: 0, cleared: {}, history: [], active: null, recent: [] }; }
+function normalizeProgress(raw) {
+  const p = blankProgress();
+  if (!raw || typeof raw !== 'object') return p;
+  if (typeof raw.level === 'number') p.level = Math.max(LVL_MIN, Math.round(raw.level));
+  if (typeof raw.streak === 'number') p.streak = raw.streak;
+  if (raw.cleared && typeof raw.cleared === 'object') p.cleared = raw.cleared;
+  if (Array.isArray(raw.history)) p.history = raw.history;
+  if (raw.active && raw.active.id) p.active = raw.active;
+  if (Array.isArray(raw.recent)) p.recent = raw.recent;
+  return p;
+}
+// Copy the active track's stored progress into the working fields.
+function loadWorkingFromTrack() {
+  const p = state.tracks[state.track] || blankProgress();
+  state.level = Math.min(lvlMax(), Math.max(LVL_MIN, p.level));
+  state.streak = p.streak; state.cleared = p.cleared; state.history = p.history;
+  state.active = p.active;  state.recent = p.recent;
+}
 function load() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-    if (raw && typeof raw === 'object') {
-      if (typeof raw.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, raw.level));
-      if (typeof raw.streak === 'number') state.streak = raw.streak;
-      if (raw.cleared && typeof raw.cleared === 'object') state.cleared = raw.cleared;
-      if (Array.isArray(raw.history)) state.history = raw.history;
-      if (raw.active && raw.active.id) state.active = raw.active;
-      if (Array.isArray(raw.recent)) state.recent = raw.recent;
-      if (raw.pantry && typeof raw.pantry === 'object') state.pantry = raw.pantry;
-      if (Array.isArray(raw.extras)) state.extras = raw.extras.filter(e => e && typeof e.name === 'string');
-      if ([1, 2, 4].includes(raw.servings)) state.servings = raw.servings;
-    }
-  } catch (e) { /* corrupt / private mode — start fresh, never throw */ }
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  if (!raw || typeof raw !== 'object') raw = {};
+  state.tracks = { general: blankProgress(), sushi: blankProgress() };
+  if (raw.tracks && typeof raw.tracks === 'object') {
+    Object.keys(TRACKS).forEach(t => { if (raw.tracks[t]) state.tracks[t] = normalizeProgress(raw.tracks[t]); });
+  } else {
+    state.tracks.general = normalizeProgress(raw);   // migrate a pre-track save into the General track
+  }
+  state.track = TRACKS[raw.track] ? raw.track : 'general';
+  loadWorkingFromTrack();
+  // shared across tracks
+  if (raw.pantry && typeof raw.pantry === 'object') state.pantry = raw.pantry;
+  if (Array.isArray(raw.extras)) state.extras = raw.extras.filter(e => e && typeof e.name === 'string');
+  if ([1, 2, 4].includes(raw.servings)) state.servings = raw.servings;
 }
 function save() {
+  // mirror the working fields back into the active track before serialising
+  state.tracks[state.track] = {
+    level: state.level, streak: state.streak, cleared: state.cleared,
+    history: state.history, active: state.active, recent: state.recent,
+  };
   try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
   catch (e) { /* quota / private mode — never break the flow */ }
+}
+function switchTrack(id) {
+  if (!TRACKS[id] || id === state.track) return;
+  save();                    // store the current track's progress
+  state.track = id;
+  loadWorkingFromTrack();    // working fields ← the new track
+  served = null;
+  save();
+  renderHome(); swapPanel(homePanel);
 }
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────────
@@ -1431,9 +1703,10 @@ function learnedSkills() {
 // the target level; widen by ±1, then to any uncleared, then (whole ladder
 // cooked) allow a replay. Avoid the just-served ids so "skip" actually moves on.
 function pickChallenge(excludeId) {
-  const target = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(state.level)));
+  const target = Math.min(lvlMax(), Math.max(LVL_MIN, Math.round(state.level)));
   const cleared = new Set(clearedIds());
   const avoid = new Set([excludeId, ...state.recent.slice(-2)].filter(Boolean));
+  const trackPool = CHALLENGES.filter(c => chTrack(c) === state.track);   // only the active track's ladder
 
   const tiers = [
     c => c.level === target && !cleared.has(c.id),
@@ -1442,21 +1715,20 @@ function pickChallenge(excludeId) {
     () => true,                      // everything cleared — replay is fine
   ];
   for (const pred of tiers) {
-    let pool = CHALLENGES.filter(pred).filter(c => !avoid.has(c.id));
-    if (!pool.length) pool = CHALLENGES.filter(pred);   // relax the avoid set if it emptied us
+    let pool = trackPool.filter(pred).filter(c => !avoid.has(c.id));
+    if (!pool.length) pool = trackPool.filter(pred);   // relax the avoid set if it emptied us
     if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
   }
-  return CHALLENGES[0];
+  return trackPool[0] || CHALLENGES[0];
 }
 
 // The skill waiting a little further up — a gentle, non-spoiler teaser.
 function aheadSkill() {
   const cleared = new Set(clearedIds());
   const target = Math.round(state.level);
-  const next = CHALLENGES
-    .filter(c => !cleared.has(c.id) && c.level >= target)
-    .sort((a,b) => a.level - b.level)[0]
-    || CHALLENGES.filter(c => !cleared.has(c.id)).sort((a,b)=>a.level-b.level)[0];
+  const inTrack = CHALLENGES.filter(c => chTrack(c) === state.track && !cleared.has(c.id));
+  const next = inTrack.filter(c => c.level >= target).sort((a,b) => a.level - b.level)[0]
+    || inTrack.sort((a,b) => a.level - b.level)[0];
   return next ? SKILL_LABELS[next.skill] : null;
 }
 
@@ -1483,7 +1755,7 @@ function recordOutcome(outcomeKey) {
   if (oc.success) {
     state.streak++;
     if (state.streak >= 2) {
-      if (state.level < LVL_MAX) { state.level++; result.leveledUp = true; }
+      if (state.level < lvlMax()) { state.level++; result.leveledUp = true; }
       state.streak = 0;
     }
   } else {
@@ -1512,7 +1784,7 @@ let served = null;        // the challenge currently shown on the challenge pane
 function renderLadder() {
   const ladder = document.getElementById('ladder');
   ladder.innerHTML = '';
-  for (let i = 1; i <= LVL_MAX; i++) {
+  for (let i = 1; i <= lvlMax(); i++) {
     const r = document.createElement('div');
     r.className = 'rung' + (i < state.level ? ' climbed' : i === state.level ? ' current' : '');
     r.style.height = (16 + i * 3) + 'px';     // gently rising rungs — a little hill to climb
@@ -1520,9 +1792,11 @@ function renderLadder() {
   }
 }
 function renderHome() {
+  document.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('sel', b.dataset.track === state.track));
+  document.getElementById('home-kicker').textContent = (TRACKS[state.track] || TRACKS.general).kicker;
   renderLadder();
   document.getElementById('home-level').textContent = state.level;
-  document.getElementById('home-theme').textContent = LEVEL_THEMES[state.level] || '';
+  document.getElementById('home-theme').textContent = levelTheme(state.level);
   const cooked = clearedCount(), skills = learnedSkills().size;
   document.getElementById('home-stats').textContent = cooked
     ? `${cooked} ${cooked === 1 ? 'dish' : 'dishes'} cooked · ${skills} ${skills === 1 ? 'skill' : 'skills'} in hand`
@@ -1560,7 +1834,7 @@ function showChallenge(ch) {
   document.getElementById('ch-teaches').textContent = ch.teaches;
   document.getElementById('ch-tell').textContent  = ch.tell;
   // "too easy" has nowhere to climb at the top of the ladder — hide it there
-  document.getElementById('too-easy-btn').classList.toggle('hidden', state.level >= LVL_MAX);
+  document.getElementById('too-easy-btn').classList.toggle('hidden', state.level >= lvlMax());
   swapPanel(challengePanel);
 }
 // The "make it a meal" full recipe — title, ingredients (scaled by servings), method.
@@ -1604,7 +1878,7 @@ function showResult(outcomeKey, res) {
   let line, sub = '';
   if (res.leveledUp) {
     line = `Two clean cooks in a row.`;
-    sub = `You’re stepping up to <b>level ${state.level}</b> — ${LEVEL_THEMES[state.level]}.`;
+    sub = `You’re stepping up to <b>level ${state.level}</b> — ${levelTheme(state.level)}.`;
   } else if (succ && state.streak === 1) {
     line = `Nicely done.`;
     sub = `One more clean cook at this level and you’ll climb a rung.`;
@@ -1659,7 +1933,7 @@ function skipChallenge() {                          // "show another" — neutra
   showChallenge(pickChallenge(served && served.id));
 }
 function tooEasy() {                                // "too easy ↑" — the dish is beneath you; climb a rung
-  if (state.level < LVL_MAX) { state.level++; state.streak = 0; }  // self-calibrate the ladder upward; fresh footing
+  if (state.level < lvlMax()) { state.level++; state.streak = 0; }  // self-calibrate the ladder upward; fresh footing
   if (served) { state.recent.push(served.id); state.recent = state.recent.slice(-4); }
   save();
   showChallenge(pickChallenge(served && served.id));               // now targets the higher level
@@ -1700,15 +1974,17 @@ function renderProgress() {
   document.getElementById('p-cooked').textContent = clearedCount();
   document.getElementById('p-skills').textContent = learnedSkills().size;
 
-  // skills, learned ones lit in accent
+  // skills for the ACTIVE track only (distinct, in ladder order), learned ones lit
   const learned = learnedSkills();
   const grid = document.getElementById('skills-grid');
   grid.innerHTML = '';
-  Object.keys(SKILL_LABELS).forEach(key => {
+  const trackSkills = [];
+  CHALLENGES.filter(c => chTrack(c) === state.track).forEach(c => { if (!trackSkills.includes(c.skill)) trackSkills.push(c.skill); });
+  trackSkills.forEach(key => {
     const n = clearedIds().filter(id => { const c = byId(id); return c && c.skill === key; }).length;
     const chip = document.createElement('span');
     chip.className = 'skill-chip' + (learned.has(key) ? ' learned' : '');
-    chip.innerHTML = SKILL_LABELS[key] + (n ? ` <span class="n">${n}</span>` : '');
+    chip.innerHTML = (SKILL_LABELS[key] || key) + (n ? ` <span class="n">${n}</span>` : '');
     grid.appendChild(chip);
   });
 
@@ -1747,7 +2023,7 @@ function renderProgress() {
 function upcomingChallenges() {
   const cleared = new Set(clearedIds());
   return CHALLENGES
-    .filter(c => !cleared.has(c.id) && c.level >= state.level)
+    .filter(c => chTrack(c) === state.track && !cleared.has(c.id) && c.level >= state.level)
     .sort((a, b) => a.level - b.level)
     .slice(0, UPCOMING_COUNT);
 }
@@ -1886,14 +2162,18 @@ async function importData(file) {
     const parsed = JSON.parse(await file.text());
     const incoming = parsed && parsed.state ? parsed.state : parsed;
     if (!incoming || typeof incoming !== 'object') throw new Error('not a Nourish export');
-    if (typeof incoming.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, incoming.level));
-    if (typeof incoming.streak === 'number') state.streak = incoming.streak;
-    if (incoming.cleared && typeof incoming.cleared === 'object') state.cleared = incoming.cleared;
-    if (Array.isArray(incoming.history)) state.history = incoming.history;
+    // per-track progress (or migrate a flat/legacy export into General)
+    if (incoming.tracks && typeof incoming.tracks === 'object') {
+      Object.keys(TRACKS).forEach(t => { if (incoming.tracks[t]) state.tracks[t] = normalizeProgress(incoming.tracks[t]); });
+    } else {
+      state.tracks.general = normalizeProgress(incoming);
+    }
+    if (TRACKS[incoming.track]) state.track = incoming.track;
+    state.tracks[state.track].active = null;     // don't resume a half-cook from an import
+    loadWorkingFromTrack();
     if (incoming.pantry && typeof incoming.pantry === 'object') state.pantry = incoming.pantry;
     if (Array.isArray(incoming.extras)) state.extras = incoming.extras.filter(e => e && typeof e.name === 'string');
     if ([1, 2, 4].includes(incoming.servings)) state.servings = incoming.servings;
-    state.active = null;
     save();
     switchView('progress');
     alert('Imported your Nourish progress.');
@@ -1905,6 +2185,7 @@ async function importData(file) {
 // ── Events ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 document.querySelectorAll('.serve-btn').forEach(b => b.addEventListener('click', () => setServings(+b.dataset.serves)));
+document.querySelectorAll('.track-btn').forEach(b => b.addEventListener('click', () => switchTrack(b.dataset.track)));
 document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
 document.getElementById('skip-btn').addEventListener('click', skipChallenge);
 document.getElementById('too-easy-btn').addEventListener('click', tooEasy);
