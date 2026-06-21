@@ -199,6 +199,17 @@
     .info-block.steps li { font-size: 13.5px; line-height: 1.6; color: var(--mid); margin-bottom: 8px; padding-left: 4px; }
     .info-block.steps li:last-child { margin-bottom: 0; }
     .info-block.steps li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
+    /* make-it-a-meal full recipe */
+    .meal-title { font-family: var(--font-display); font-size: 1.1rem; color: var(--text); margin-bottom: 12px; }
+    .meal-serve { justify-content: flex-start; margin: 0 0 14px; }
+    .meal-sub { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin: 14px 0 7px; }
+    .meal-ing { margin: 0; padding-left: 18px; list-style: disc; }
+    .meal-ing li { font-size: 13.5px; line-height: 1.55; color: var(--text); margin-bottom: 4px; }
+    .meal-ing li::marker { color: var(--accent-soft); }
+    .meal-method { margin: 0; padding-left: 22px; }
+    .meal-method li { font-size: 13.5px; line-height: 1.6; color: var(--mid); margin-bottom: 7px; padding-left: 4px; }
+    .meal-method li:last-child { margin-bottom: 0; }
+    .meal-method li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
 
     .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 26px; }
     #too-easy-btn { color: var(--faint); }
@@ -392,7 +403,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.9 · nourish</div>
+<div class="corner" id="version-label">v0.10 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -454,7 +465,17 @@
         </div>
         <div class="info-block meal">
           <div class="block-label">Make it a meal</div>
-          <p id="ch-meal">meal</p>
+          <div class="meal-title" id="meal-title"></div>
+          <div class="serve-row meal-serve" role="group" aria-label="Serving size">
+            <span class="serve-label">Feeds</span>
+            <button class="serve-btn" type="button" data-serves="1">1</button>
+            <button class="serve-btn" type="button" data-serves="2">2</button>
+            <button class="serve-btn" type="button" data-serves="4">4</button>
+          </div>
+          <div class="meal-sub">Ingredients</div>
+          <ul class="meal-ing" id="meal-ing"></ul>
+          <div class="meal-sub">Method</div>
+          <ol class="meal-method" id="meal-method"></ol>
         </div>
         <div class="info-block why">
           <div class="block-label">Why it works</div>
@@ -556,7 +577,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.9 · nourish';
+const VERSION  = 'v0.10 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1, LVL_MAX = 10;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -912,6 +933,358 @@ const CHALLENGE_STEPS = {
   ],
 };
 
+// Full "make it a meal" recipes — a meal name, a per-person ingredients list
+// (scaled by the Feeds 1/2/4 selector via fmtQtyItem), and a short method that
+// builds on the challenge technique. Written for an absolute beginner.
+const MEAL_RECIPE = {
+  'salt-water': {
+    title: 'Butter & parmesan pasta',
+    ing: [
+      { qty: 90, unit: 'g', name: 'pasta' },
+      { qty: 15, unit: 'g', name: 'butter' },
+      { qty: 20, unit: 'g', name: 'parmesan, finely grated' },
+      { note: 'Black pepper, to taste' },
+    ],
+    method: [
+      'Cook the pasta in well-salted water (steps above). Before draining, save a mug of the cooking water.',
+      'Off the heat, toss the drained pasta with the butter, parmesan and a good splash of the pasta water until glossy and creamy.',
+      'Finish with lots of black pepper, and a little more parmesan if you like.',
+    ],
+  },
+  'vinaigrette': {
+    title: 'Green salad, properly dressed',
+    ing: [
+      { qty: 2, unit: 'handful', name: 'salad leaves' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+      { qty: 1, unit: 'tsp', name: 'vinegar' },
+      { qty: 0.5, unit: 'tsp', name: 'mustard' },
+      { note: 'Bread & cheese, a tin of tuna, or boiled eggs, to serve' },
+    ],
+    method: [
+      'Whisk the mustard, vinegar and a pinch of salt, then whisk in the oil until creamy (steps above).',
+      'Toss with the salad leaves just before serving so they stay crisp.',
+      'Serve alongside bread and cheese, tuna, or a couple of boiled eggs to make it a meal.',
+    ],
+  },
+  'toast-nuts': {
+    title: 'Yogurt with toasted nuts & honey',
+    ing: [
+      { qty: 150, unit: 'g', name: 'yogurt' },
+      { qty: 20, unit: 'g', name: 'nuts or seeds' },
+      { note: 'Honey, to drizzle' },
+      { note: 'Fresh fruit (optional)' },
+    ],
+    method: [
+      'Toast the nuts or seeds in a dry pan until golden (steps above) and let them cool a moment.',
+      'Spoon the yogurt into a bowl.',
+      'Top with the toasted nuts, a drizzle of honey, and some fruit if you have it.',
+    ],
+  },
+  'soft-scramble': {
+    title: 'Soft scrambled eggs on toast',
+    ing: [
+      { qty: 2, unit: 'egg' },
+      { qty: 2, unit: 'slice', name: 'bread' },
+      { qty: 10, unit: 'g', name: 'butter' },
+      { note: 'Cherry tomatoes or spinach, on the side' },
+    ],
+    method: [
+      'Make the soft scrambled eggs, taking them off the heat while still glossy (steps above).',
+      'Meanwhile, toast and butter the bread.',
+      'Pile the eggs onto the toast and serve with tomatoes or a handful of quickly-wilted spinach.',
+    ],
+  },
+  'fried-egg': {
+    title: 'Fried egg rice bowl',
+    ing: [
+      { qty: 75, unit: 'g', name: 'rice' },
+      { qty: 1, unit: 'egg' },
+      { note: 'Soy sauce, to taste' },
+      { note: 'A handful of greens (optional)' },
+    ],
+    method: [
+      'Cook the rice.',
+      'Fry the egg so the yolk stays runny (steps above).',
+      'Pile the egg on the rice, splash with soy, add greens, and break the yolk to coat.',
+    ],
+  },
+  'taste-adjust': {
+    title: 'A simple bowl, seasoned right',
+    ing: [
+      { qty: 75, unit: 'g', name: 'rice' },
+      { note: 'Salt' },
+      { note: 'Lemon or vinegar, for acid' },
+      { note: 'Any greens or leftovers, to bulk it out' },
+    ],
+    method: [
+      'Cook the rice (or any simple base — a soup or some eggs).',
+      'Stir through any greens or leftovers and warm everything together.',
+      'Taste, then adjust with salt and a squeeze of acid until it pops (the skill above) before serving.',
+    ],
+  },
+  'blister-greens': {
+    title: 'Blistered greens with a fried egg',
+    ing: [
+      { qty: 100, unit: 'g', name: 'green beans or broccoli' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+      { qty: 1, unit: 'egg' },
+      { note: 'Lemon & flaky salt' },
+    ],
+    method: [
+      'Blister the greens in a hot pan (steps above) and finish with lemon and flaky salt.',
+      'Fry an egg.',
+      'Plate the greens and slide the egg on top.',
+    ],
+  },
+  'golden-mushrooms': {
+    title: 'Garlic mushrooms on toast',
+    ing: [
+      { qty: 80, unit: 'g', name: 'mushrooms' },
+      { qty: 2, unit: 'slice', name: 'bread' },
+      { qty: 15, unit: 'g', name: 'butter' },
+      { qty: 1, unit: 'clove', name: 'garlic' },
+      { note: 'Parsley (optional)' },
+    ],
+    method: [
+      'Brown the mushrooms deeply (steps above).',
+      'In the last minute, add the butter and the sliced garlic and toss.',
+      'Pile onto toasted bread and scatter with parsley.',
+    ],
+  },
+  'even-dice': {
+    title: 'Quick tomato sauce pasta',
+    ing: [
+      { qty: 1, unit: 'onion', name: '(finely diced)' },
+      { qty: 1, unit: 'clove', name: 'garlic' },
+      { qty: 0.5, unit: 'can', name: 'chopped tomatoes' },
+      { qty: 90, unit: 'g', name: 'pasta' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+    ],
+    method: [
+      'Dice the onion evenly (steps above) and soften it gently in the oil with the garlic, 8–10 min.',
+      'Add the tomatoes and simmer 15 min; season well with salt.',
+      'Toss with cooked pasta and a splash of its water.',
+    ],
+  },
+  'crisp-thigh': {
+    title: 'Crisp chicken thigh, potatoes & greens',
+    ing: [
+      { qty: 1, unit: 'chicken thigh', name: '(bone-in, skin-on)' },
+      { qty: 150, unit: 'g', name: 'potatoes, chunked' },
+      { qty: 100, unit: 'g', name: 'green vegetables' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+    ],
+    method: [
+      'Toss the potatoes in oil and salt and roast at 220°C for ~30 min.',
+      'Crisp the chicken thigh skin-side down, then cook through (steps above).',
+      'Wilt the greens in the chicken pan, then plate everything together.',
+    ],
+  },
+  'sear-fish': {
+    title: 'Seared fish with lemony yogurt',
+    ing: [
+      { qty: 1, unit: 'fish fillet' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+      { qty: 50, unit: 'g', name: 'yogurt' },
+      { qty: 0.5, unit: 'lemon' },
+      { qty: 2, unit: 'handful', name: 'salad leaves' },
+    ],
+    method: [
+      'Stir a squeeze of lemon into the yogurt with a pinch of salt.',
+      'Sear the fish to a golden crust (steps above).',
+      'Spread the lemony yogurt on the plate, sit the fish on top, and add a simple salad.',
+    ],
+  },
+  'rest-meat': {
+    title: 'Rested steak with a quick salad',
+    ing: [
+      { qty: 1, unit: 'steak' },
+      { qty: 150, unit: 'g', name: 'potatoes' },
+      { qty: 2, unit: 'handful', name: 'salad leaves' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+    ],
+    method: [
+      'Cook the steak (or a pork chop or chicken breast) to your liking, then rest it (steps above).',
+      'While it rests, warm a starch and dress a quick salad.',
+      'Slice the meat and spoon any resting juices back over it.',
+    ],
+  },
+  'pan-sauce': {
+    title: 'Pan-sauce steak with mash',
+    ing: [
+      { qty: 1, unit: 'steak' },
+      { note: 'A splash of stock or wine' },
+      { qty: 15, unit: 'g', name: 'cold butter' },
+      { qty: 150, unit: 'g', name: 'potatoes, for mash' },
+      { qty: 100, unit: 'g', name: 'green vegetables' },
+    ],
+    method: [
+      'Sear and rest the steak, then make a pan sauce from the fond — deglaze, reduce, swirl in the cold butter (steps above).',
+      'Meanwhile boil and mash the potatoes, and cook a green vegetable.',
+      'Plate the steak and mash, spoon over the sauce.',
+    ],
+  },
+  'aglio-olio': {
+    title: 'Aglio e olio',
+    ing: [
+      { qty: 90, unit: 'g', name: 'spaghetti' },
+      { qty: 1, unit: 'clove', name: 'garlic, thinly sliced' },
+      { qty: 2, unit: 'tbsp', name: 'olive oil' },
+      { note: 'Chilli flakes & parsley' },
+      { note: 'Parmesan, to serve (optional)' },
+    ],
+    method: [
+      'Make the aglio e olio: warm the sliced garlic gently in the oil, then toss with the cooked spaghetti and a splash of pasta water until creamy (steps above).',
+      'Finish with chilli flakes and chopped parsley.',
+      'Add a little parmesan if you like, and a green salad on the side.',
+    ],
+  },
+  'omelette': {
+    title: 'Cheese & herb omelette with salad',
+    ing: [
+      { qty: 3, unit: 'egg' },
+      { qty: 10, unit: 'g', name: 'butter' },
+      { qty: 30, unit: 'g', name: 'cheese, grated' },
+      { note: 'A few fresh herbs' },
+      { qty: 2, unit: 'handful', name: 'salad leaves' },
+    ],
+    method: [
+      'Make a tender, just-set omelette (steps above), filling it with the grated cheese and herbs.',
+      'Cook one omelette per person — keep the heat low so it stays pale.',
+      'Serve with a dressed green salad.',
+    ],
+  },
+  'caramel-onions': {
+    title: 'Caramelised onion & gruyère tartine',
+    ing: [
+      { qty: 1, unit: 'onion', name: '(thinly sliced)' },
+      { qty: 15, unit: 'g', name: 'butter' },
+      { qty: 2, unit: 'slice', name: 'bread' },
+      { qty: 30, unit: 'g', name: 'gruyère, grated' },
+    ],
+    method: [
+      'Caramelise the onions low and slow until deep amber (steps above).',
+      'Pile them onto the bread and top with the grated gruyère.',
+      'Grill or toast until the cheese melts and bubbles.',
+    ],
+  },
+  'braise-thighs': {
+    title: 'Braised chicken thighs with rice',
+    ing: [
+      { qty: 2, unit: 'chicken thigh' },
+      { qty: 1, unit: 'onion', name: '(sliced)' },
+      { qty: 200, unit: 'ml', name: 'stock' },
+      { qty: 75, unit: 'g', name: 'rice' },
+      { note: 'A green salad, to serve' },
+    ],
+    method: [
+      'Brown the thighs, then braise them in the stock with the onion until fork-tender (steps above).',
+      'Cook the rice.',
+      'Serve the thighs and their sauce over the rice, with a sharp salad alongside.',
+    ],
+  },
+  'beans-scratch': {
+    title: 'Brothy beans on toast with an egg',
+    ing: [
+      { qty: 80, unit: 'g', name: 'dried beans' },
+      { qty: 1, unit: 'clove', name: 'garlic' },
+      { qty: 2, unit: 'slice', name: 'bread' },
+      { qty: 1, unit: 'egg' },
+      { note: 'Good olive oil & grated cheese' },
+    ],
+    method: [
+      'Simmer the beans gently with aromatics until creamy, then season well (steps above).',
+      'Toast the bread and rub it with the cut garlic clove.',
+      'Ladle beans and broth over the toast, top with a fried egg, and finish with olive oil and cheese.',
+    ],
+  },
+  'roast-chicken': {
+    title: 'Roast chicken dinner',
+    ing: [
+      { note: '1 whole chicken (feeds ~4; brilliant for leftovers)' },
+      { qty: 200, unit: 'g', name: 'potatoes' },
+      { qty: 150, unit: 'g', name: 'vegetables' },
+      { note: 'Salt & oil' },
+    ],
+    method: [
+      'Roast the chicken until the skin is browned and juices run clear, then rest it (steps above).',
+      'Roast potatoes and vegetables on a lower oven shelf.',
+      'Make a quick pan sauce from the roasting juices, carve, and serve.',
+    ],
+  },
+  'roast-veg': {
+    title: 'Roast veg grain bowl',
+    ing: [
+      { qty: 200, unit: 'g', name: 'mixed vegetables' },
+      { qty: 1, unit: 'tbsp', name: 'olive oil' },
+      { qty: 60, unit: 'g', name: 'couscous or farro' },
+      { qty: 30, unit: 'g', name: 'feta' },
+      { note: 'A dollop of yogurt or hummus' },
+      { note: 'Herbs & toasted nuts' },
+    ],
+    method: [
+      'Roast the vegetables until browned and caramelised (steps above).',
+      'Cook the couscous or farro.',
+      'Pile the grain in a bowl, top with the veg, a dollop of yogurt or hummus, crumbled feta, herbs and nuts.',
+    ],
+  },
+  'mayo': {
+    title: 'Aioli plate',
+    ing: [
+      { note: 'Aioli (1 batch makes plenty): 1 egg yolk, ~150 ml neutral oil, 1 grated garlic clove' },
+      { qty: 150, unit: 'g', name: 'potatoes' },
+      { qty: 100, unit: 'g', name: 'vegetables, to dip' },
+      { note: 'Seared fish or chicken (optional)' },
+    ],
+    method: [
+      'Make the mayo by hand, then grate in the garlic to turn it into aioli (steps above).',
+      'Boil the potatoes and blanch a few vegetables.',
+      'Serve everything warm around the bowl of aioli for dipping.',
+    ],
+  },
+  'fresh-pasta': {
+    title: 'Fresh pasta, butter & parmesan',
+    ing: [
+      { qty: 100, unit: 'g', name: '00 or plain flour' },
+      { qty: 1, unit: 'egg' },
+      { qty: 15, unit: 'g', name: 'butter' },
+      { qty: 20, unit: 'g', name: 'parmesan, grated' },
+    ],
+    method: [
+      'Make, rest and roll the dough, then cut into noodles (steps above).',
+      'Cook in boiling salted water for just 1–3 min, saving a splash of the water.',
+      'Toss with the butter, parmesan and a little pasta water until silky.',
+    ],
+  },
+  'full-plate': {
+    title: 'A balanced plate',
+    ing: [
+      { qty: 150, unit: 'g', name: 'protein — chicken, fish or tofu' },
+      { qty: 150, unit: 'g', name: 'vegetables' },
+      { qty: 75, unit: 'g', name: 'rice or potatoes' },
+      { note: 'Oil, salt, lemon' },
+    ],
+    method: [
+      'Prep all three components first — chop, season, measure (mise en place).',
+      'Work backwards from when you want to eat and start the longest one first (steps above).',
+      'Season each and time them to finish together, hot on the plate.',
+    ],
+  },
+  'cook-for-someone': {
+    title: 'A meal for someone',
+    ing: [
+      { note: 'A starter you can buy or make ahead' },
+      { note: 'A main you have practised (a braise or roast reheats well)' },
+      { note: 'A simple or bought dessert' },
+    ],
+    method: [
+      'Choose a main you’ve cooked before and plan three simple parts.',
+      'Prep whatever you can ahead of time, and lay the table before you start.',
+      'Cook it start to finish without the recipe open mid-cook (steps above), leaning on what you’ve practised.',
+    ],
+  },
+};
+
 // Indicative per-person quantities for the recommended ingredients, scaled by the
 // chosen serving size (1 / 2 / 4). A *sense* of how much to buy, not precise recipe
 // maths; things that don't scale (seasonings, a whole bird, a batch of oil for mayo)
@@ -971,15 +1344,21 @@ function fmtNum(n) {
   if (Math.abs(frac - 0.5) < 0.05) return whole === 0 ? '½' : whole + '½';
   return String(Math.round(n));
 }
-function fmtQty(name, servings) {
-  const item = INGREDIENT_QTY[name];
+function fmtQtyItem(item, servings) {                        // item = { qty, unit } | { note }
   if (!item) return '';
   if (item.note) return item.note;
   const n = item.qty * servings, u = item.unit || '', num = fmtNum(n);
-  if (u === '') return num;                                  // count item — the name carries the noun
+  if (u === '') return num;                                  // count — the name carries the noun
   if (u === 'g' || u === 'ml') return num + u;               // 180g, 200ml
   if (u === 'tbsp' || u === 'tsp') return num + ' ' + u;
   return num + ' ' + (n > 1.001 ? u + 's' : u);             // ½ lemon, 1 onion, 2 cloves
+}
+function fmtQty(name, servings) { return fmtQtyItem(INGREDIENT_QTY[name], servings); }
+// A recipe ingredient line: scaled amount + name (or a free-form note).
+function mealIngLine(item, servings) {
+  if (item.note) return item.note;
+  const amt = fmtQtyItem(item, servings);
+  return item.name ? amt + ' ' + item.name : amt;
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1177,12 +1556,25 @@ function showChallenge(ch) {
   stepsEl.innerHTML = '';
   steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsEl.appendChild(li); });
   document.getElementById('ch-steps-block').classList.toggle('hidden', steps.length === 0);
-  document.getElementById('ch-meal').textContent = ch.meal;
+  renderMeal(ch);
   document.getElementById('ch-teaches').textContent = ch.teaches;
   document.getElementById('ch-tell').textContent  = ch.tell;
   // "too easy" has nowhere to climb at the top of the ladder — hide it there
   document.getElementById('too-easy-btn').classList.toggle('hidden', state.level >= LVL_MAX);
   swapPanel(challengePanel);
+}
+// The "make it a meal" full recipe — title, ingredients (scaled by servings), method.
+function renderMeal(ch) {
+  const recipe = MEAL_RECIPE[ch.id];
+  document.querySelectorAll('.meal-serve .serve-btn').forEach(b => b.classList.toggle('sel', +b.dataset.serves === state.servings));
+  const titleEl = document.getElementById('meal-title');
+  const ingEl = document.getElementById('meal-ing');
+  const methodEl = document.getElementById('meal-method');
+  ingEl.innerHTML = ''; methodEl.innerHTML = '';
+  if (!recipe) { titleEl.textContent = ''; return; }
+  titleEl.textContent = recipe.title;
+  recipe.ing.forEach(it => { const li = document.createElement('li'); li.textContent = mealIngLine(it, state.servings); ingEl.appendChild(li); });
+  recipe.method.forEach(s => { const li = document.createElement('li'); li.textContent = s; methodEl.appendChild(li); });
 }
 
 // ── Rendering: cooking / report ────────────────────────────────────────────────
@@ -1378,7 +1770,9 @@ function setServings(n) {
   if (![1, 2, 4].includes(n)) return;
   state.servings = n;
   save();
-  renderRecommended();   // quantities + selected pill update; extras unaffected
+  document.querySelectorAll('.serve-btn').forEach(b => b.classList.toggle('sel', +b.dataset.serves === n));
+  renderRecommended();                       // shop quantities (also re-syncs the shop pill)
+  if (served) renderMeal(served);            // card recipe quantities, if a challenge is open
 }
 function renderShop() {
   renderRecommended();
