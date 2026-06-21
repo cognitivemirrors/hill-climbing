@@ -407,7 +407,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.11 · nourish</div>
+<div class="corner" id="version-label">v0.12 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
@@ -451,10 +451,7 @@
       <div class="home-stats" id="home-stats">nothing cooked yet</div>
       <div class="home-ahead" id="home-ahead"></div>
       <button class="btn primary" id="new-challenge-btn">NEW CHALLENGE</button>
-      <div class="home-hint" id="home-hint">
-        Cook the dish in your own kitchen, then tell me how it went.
-        It adapts — clear two and you climb, struggle and it eases back.
-      </div>
+      <div class="home-hint" id="home-hint"></div>
     </div>
 
     <!-- a served challenge, pre-cook -->
@@ -585,7 +582,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.11 · nourish';
+const VERSION  = 'v0.12 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -1813,8 +1810,7 @@ function renderHome() {
     document.getElementById('home-hint').textContent = ac ? `"${ac.title}" is waiting for your verdict.` : '';
   } else {
     btn.textContent = clearedCount() ? 'NEXT CHALLENGE' : 'NEW CHALLENGE';
-    document.getElementById('home-hint').textContent =
-      'Cook the dish in your own kitchen, then tell me how it went. It adapts — clear two and you climb, struggle and it eases back.';
+    document.getElementById('home-hint').textContent = '';
   }
 }
 
