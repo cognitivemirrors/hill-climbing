@@ -1,8 +1,21 @@
 # Hill Climbing — Agent Handoff
 
-**For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Then ask the user §6's confirmation question before making any change.
+**For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Read **§0 (default posture)** before you touch anything, then ask the user what they want to work on.
 
-This is a working solo-developer project. The user is building a suite of contemplative/practice web apps under the "Hill Climbing" name (it began as a single stillness-meditation app). The git baseline is `v1.32`; this handoff has been updated through **v1.77** (committed) — the suite is now four apps behind a hub (see §1). Note: §§5–10 below were largely written during the single-app era and still describe the meditation app specifically; they remain accurate *for `meditate.html`*.
+This is a working solo-developer project. The user is building a suite of contemplative/practice web apps under the "Hill Climbing" name (it began as a single stillness-meditation app). The git baseline is `v1.32`; this handoff was last hand-updated around **v1.77**, but **the repo has moved past that** — treat every version number, "current version," and open-item list in this file as possibly stale. The source of truth is `git log` / `git tag` and the `TIER` constant in the code, not this prose. §§5–10 were largely written during the single-app era and still describe the meditation app specifically; they remain accurate *for `meditate.html`*.
+
+---
+
+## 0. Default posture and scope discipline
+
+Read this before deciding what to do.
+
+- **Default to the user's stated task.** Don't go looking for governance, audit, or doc-amendment work. The user steers; you execute. If you find yourself proposing a roadmap, a constraints rewrite, or a "while we're here, let's also fix the docs" detour that the user didn't ask for, stop.
+- **CONSTRAINTS.md and REQUIREMENTS.md are mostly forward-looking scaffolding.** They specify obligations calibrated for a future multi-user, possibly-incorporated org. **At the current `TIER` (check the constant in the code — it's 0, solo developer, effectively a single user), the subset that actually binds *now* is small.** A requirement gated above the current tier (`[TBD-TIER-N]`, anything in §4 tier-transition lists, clinical advisor, pre-screening, user council, backend submission, breach runbooks) is a *future commitment, not a present task*. Do not act on it, and do not be alarmed by a "gap" in it, unless the user is explicitly doing tier-transition work.
+- **If you spot a doc gap, a misspecified clause, or a contradiction** (e.g. a binding statement that the shipped code no longer matches): log it in **one terse line** in BACKLOG.md or KNOWN_RISKS.md and keep moving. **Check KNOWN_RISKS first** — it's very likely already logged and deliberately deferred, and re-litigating it is the exact distraction this section exists to prevent.
+- **Binding-doc edits still need explicit user confirmation** (see §4). Noticing a problem ≠ a license to fix it inline. Surface it terse; let the user decide whether and when.
+
+The point: the elaborate risk apparatus in the binding docs is *designed* to escalate with real exposure via the tier system. Front-loading it for an app only the founder uses is the over-engineering the tiers exist to prevent.
 
 ---
 
@@ -100,11 +113,9 @@ The user has been thoughtful and explicit about what matters. Carry these forwar
 
 ## 6. The first question to ask the user
 
-Before making any change, ask:
+Open by asking **what the user wants to work on** — don't lead with a checklist of open safety/doc items (an earlier version of this section did exactly that, which front-loaded governance before the user had stated a goal; see §0). Orient yourself from `git log` / `git tag` and the `TIER` constant, confirm the tier if it matters to the task, and surface relevant context only once you know what they're doing. Keep open-item lists out of the opening — they go stale, and naming them invites a detour into work the user didn't ask for.
 
-> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The current committed version is v1.77 — four apps (Meditate, Breathe, Reflect, Nourish) behind a hub; confirm with `git log`. Before I do anything, can you confirm: (a) are we still at TIER 0; (b) the open items I see are the meditation safety items S1/S2/S4/S5 and the binding-doc data-inventory gaps in REQUIREMENTS.md §1.1 flagged in the v1.77 audit (KNOWN_RISKS L22) — which, if any, is the priority; and (c) any context the prior session missed?"
-
-Wait for the answer. Then proceed.
+A serviceable opener: *"Caught up on the docs and the current state (verified against git). What would you like to work on?"* — then narrow with task-specific questions.
 
 ---
 
