@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strength · tracking spike</title>
+<!--
+  FEASIBILITY SPIKE — not the shipped app, not a version bump.
+  Purpose: prove two real-time signals in the browser before we design the game loop.
+    1. ML pose skeleton via MediaPipe Tasks Vision (the uncertain part: does it run at usable FPS?)
+    2. Color-blob object tracking (track any held implement by colour; no model needed)
+
+  NOTE: getUserMedia + MediaPipe need a SECURE CONTEXT. Open this over
+  https or http://localhost — NOT file://. Quick local serve:
+      python3 -m http.server 8000   →   http://localhost:8000/strength-proto.html
+
+  This file loads MediaPipe from a CDN, which deliberately departs from the
+  suite's single-file / offline / zero-dependency invariant. That tradeoff is
+  the thing we're evaluating, not assuming.
+-->
+<style>
+  :root { --bg:#0e0f13; --fg:#e7e7ea; --dim:#8a8d98; --accent:#7fd1c1; --warn:#e0a45e; --err:#e07a7a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100%; padding: 18px;
+  }
+  a#home-link { position: fixed; top: 14px; left: 16px; color: var(--dim); text-decoration: none; font-size: 13px; }
+  a#home-link:hover { color: var(--fg); }
+  h1 { font-size: 17px; font-weight: 600; margin: 6px 0 2px; letter-spacing: .02em; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 14px; text-align:center; max-width: 560px; }
+  .stage { position: relative; width: min(92vw, 640px); aspect-ratio: 4 / 3; background:#000; border-radius: 12px; overflow: hidden; }
+  video, canvas#overlay { position:absolute; inset:0; width:100%; height:100%; }
+  video { object-fit: cover; transform: scaleX(-1); }      /* mirror like a, well, mirror */
+  canvas#overlay { transform: scaleX(-1); }                 /* overlay mirrors with the video */
+  .controls { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:14px 0 8px; }
+  button {
+    background:#1b1d24; color:var(--fg); border:1px solid #2c2f3a; border-radius:8px;
+    padding:9px 14px; font-size:14px; cursor:pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  .readout { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; color:var(--dim); font-size:13px; margin-top:4px; }
+  .readout b { color: var(--fg); font-variant-numeric: tabular-nums; }
+  #status { margin-top:10px; font-size:13px; color:var(--dim); min-height:1.4em; text-align:center; max-width:560px; }
+  #status.warn { color: var(--warn); }
+  #status.err  { color: var(--err); }
+  .hint { color:var(--dim); font-size:12px; margin-top:6px; max-width:560px; text-align:center; }
+  kbd { background:#1b1d24; border:1px solid #2c2f3a; border-radius:4px; padding:1px 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<a id="home-link" href="index.html">← hill climbing</a>
+<h1>strength · tracking spike</h1>
+<div class="sub">Feasibility check for the strength app. Proves real-time <b>pose</b> and <b>object</b> tracking in the browser before we design any game.</div>
+
+<div class="stage">
+  <video id="cam" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+</div>
+
+<div class="controls">
+  <button id="startBtn">Start camera</button>
+  <button id="poseBtn" disabled>Pose: off</button>
+  <button id="objBtn" disabled>Track object: off</button>
+</div>
+
+<div class="readout">
+  <span>fps <b id="fps">—</b></span>
+  <span>pose <b id="poseState">—</b></span>
+  <span>object <b id="objState">—</b></span>
+</div>
+
+<div id="status">Click <b>Start camera</b>. You'll be asked for camera permission.</div>
+<div class="hint">To track an object: turn it on, then <b>click the object in the video</b> to lock onto its colour (a brightly-coloured item works best — a band on a dumbbell, a sock, a phone case).</div>
+
+<script type="module">
+import {
+  FilesetResolver,
+  PoseLandmarker,
+  DrawingUtils,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
+
+const cam      = document.getElementById('cam');
+const overlay  = document.getElementById('overlay');
+const octx     = overlay.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const poseBtn  = document.getElementById('poseBtn');
+const objBtn   = document.getElementById('objBtn');
+const statusEl = document.getElementById('status');
+const fpsEl    = document.getElementById('fps');
+const poseStateEl = document.getElementById('poseState');
+const objStateEl  = document.getElementById('objState');
+
+// Small offscreen canvas for cheap pixel reads (object tracking + colour pick).
+const sample   = document.createElement('canvas');
+const sctx     = sample.getContext('2d', { willReadFrequently: true });
+const SAMPLE_W = 160;                 // downscaled width for blob search — keeps it cheap
+let   SAMPLE_H = 120;
+
+let poseLandmarker = null;
+let drawer = null;
+let poseOn = false, objOn = false;
+let running = false;
+let lastVideoTime = -1;
+let target = null;                    // {r,g,b} colour we're tracking
+let blob = null;                      // {x,y} normalised centroid of last find
+const trail = [];                     // recent blob positions for a motion trail
+
+function setStatus(msg, cls='') { statusEl.textContent = msg; statusEl.className = cls; }
+
+if (!window.isSecureContext) {
+  setStatus('Not a secure context — camera is blocked. Serve over https or http://localhost (e.g. `python3 -m http.server`), not file://.', 'err');
+  startBtn.disabled = true;
+}
+
+// ---- Camera -----------------------------------------------------------------
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  setStatus('Requesting camera…');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    cam.srcObject = stream;
+    await cam.play();
+    await new Promise(res => cam.readyState >= 2 ? res() : (cam.onloadedmetadata = res));
+
+    // Size the overlay + sampler to the real video aspect.
+    overlay.width  = cam.videoWidth;
+    overlay.height = cam.videoHeight;
+    SAMPLE_H = Math.round(SAMPLE_W * cam.videoHeight / cam.videoWidth);
+    sample.width = SAMPLE_W; sample.height = SAMPLE_H;
+
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      setStatus('Camera disconnected.', 'warn');
+      running = false;
+    });
+
+    poseBtn.disabled = false;
+    objBtn.disabled = false;
+    running = true;
+    setStatus('Camera live. Toggle Pose and/or Track object above.');
+    requestAnimationFrame(loop);
+  } catch (err) {
+    setStatus('Camera failed: ' + err.message, 'err');
+    startBtn.disabled = false;
+  }
+});
+
+// ---- Pose (lazy-loaded on first enable) -------------------------------------
+async function ensurePose() {
+  if (poseLandmarker) return true;
+  setStatus('Loading pose model (first time downloads ~ a few MB)…');
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numPoses: 1
+    });
+    drawer = new DrawingUtils(octx);
+    setStatus('Pose model ready.');
+    return true;
+  } catch (err) {
+    setStatus('Pose model failed to load: ' + err.message + ' (CDN/network blocked?)', 'err');
+    poseOn = false; poseBtn.classList.remove('on'); poseBtn.textContent = 'Pose: off';
+    return false;
+  }
+}
+
+poseBtn.addEventListener('click', async () => {
+  if (!poseOn) {
+    poseBtn.disabled = true;
+    const ok = await ensurePose();
+    poseBtn.disabled = false;
+    if (!ok) return;
+  }
+  poseOn = !poseOn;
+  poseBtn.classList.toggle('on', poseOn);
+  poseBtn.textContent = 'Pose: ' + (poseOn ? 'on' : 'off');
+  poseStateEl.textContent = poseOn ? 'on' : 'off';
+});
+
+// ---- Object tracking (colour blob) ------------------------------------------
+objBtn.addEventListener('click', () => {
+  objOn = !objOn;
+  objBtn.classList.toggle('on', objOn);
+  objBtn.textContent = 'Track object: ' + (objOn ? 'on' : 'off');
+  if (!objOn) { target = null; blob = null; trail.length = 0; objStateEl.textContent = 'off'; }
+  else { objStateEl.textContent = 'click the object'; }
+});
+
+// Click the video to pick the colour under the cursor. Overlay is mirrored, so
+// we un-mirror the x coordinate when mapping the click into sampler space.
+overlay.addEventListener('click', (e) => {
+  if (!objOn || !running) return;
+  const rect = overlay.getBoundingClientRect();
+  const nx = 1 - (e.clientX - rect.left) / rect.width;   // un-mirror
+  const ny = (e.clientY - rect.top) / rect.height;
+  sctx.drawImage(cam, 0, 0, SAMPLE_W, SAMPLE_H);
+  const px = Math.max(0, Math.min(SAMPLE_W - 1, Math.round(nx * SAMPLE_W)));
+  const py = Math.max(0, Math.min(SAMPLE_H - 1, Math.round(ny * SAMPLE_H)));
+  const d = sctx.getImageData(px, py, 1, 1).data;
+  target = { r: d[0], g: d[1], b: d[2] };
+  objStateEl.textContent = 'tracking';
+  setStatus(`Locked colour rgb(${target.r}, ${target.g}, ${target.b}). Move the object.`);
+});
+
+// Find the centroid of pixels close to the target colour, on the downscaled frame.
+function findBlob() {
+  if (!target) return null;
+  sctx.drawImage(cam, 0, 0, SAMPLE_W, SAMPLE_H);
+  const data = sctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
+  const TOL2 = 60 * 60;               // squared colour distance threshold
+  let sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < SAMPLE_H; y++) {
+    for (let x = 0; x < SAMPLE_W; x++) {
+      const i = (y * SAMPLE_W + x) * 4;
+      const dr = data[i] - target.r, dg = data[i+1] - target.g, db = data[i+2] - target.b;
+      if (dr*dr + dg*dg + db*db < TOL2) { sx += x; sy += y; n++; }
+    }
+  }
+  if (n < 6) return null;             // too few matches → lost
+  return { x: (sx / n) / SAMPLE_W, y: (sy / n) / SAMPLE_H, size: n };
+}
+
+// ---- Main loop --------------------------------------------------------------
+let frames = 0, fpsClock = performance.now();
+
+function loop() {
+  if (!running) return;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  if (poseOn && poseLandmarker && cam.currentTime !== lastVideoTime) {
+    lastVideoTime = cam.currentTime;
+    const res = poseLandmarker.detectForVideo(cam, performance.now());
+    if (res.landmarks && res.landmarks.length) {
+      for (const lm of res.landmarks) {
+        drawer.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#7fd1c1', lineWidth: 3 });
+        drawer.drawLandmarks(lm, { color: '#e7e7ea', radius: 3 });
+      }
+      poseStateEl.textContent = 'body found';
+    } else {
+      poseStateEl.textContent = 'no body';
+    }
+  }
+
+  if (objOn && target) {
+    const found = findBlob();
+    if (found) {
+      blob = found;
+      trail.push({ x: found.x, y: found.y });
+      if (trail.length > 30) trail.shift();
+      objStateEl.textContent = 'tracking';
+    } else {
+      objStateEl.textContent = 'lost';
+    }
+    // Draw trail + marker (overlay is mirrored, so x maps directly to normalised x).
+    octx.lineWidth = 3; octx.strokeStyle = 'rgba(224,164,94,.6)';
+    octx.beginPath();
+    trail.forEach((p, i) => {
+      const X = p.x * overlay.width, Y = p.y * overlay.height;
+      i ? octx.lineTo(X, Y) : octx.moveTo(X, Y);
+    });
+    octx.stroke();
+    if (blob) {
+      octx.fillStyle = '#e0a45e';
+      octx.beginPath();
+      octx.arc(blob.x * overlay.width, blob.y * overlay.height, 9, 0, Math.PI * 2);
+      octx.fill();
+    }
+  }
+
+  // FPS
+  frames++;
+  const now = performance.now();
+  if (now - fpsClock >= 500) {
+    fpsEl.textContent = Math.round(frames * 1000 / (now - fpsClock));
+    frames = 0; fpsClock = now;
+  }
+
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
