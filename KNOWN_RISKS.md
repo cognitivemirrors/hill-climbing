@@ -158,6 +158,17 @@ The most likely future entries here would be: a code path that disables the idle
 - **Workflow upgrade path:** migrating to GitHub Actions Pages (build_type: "workflow") gives explicit, observable build runs and would surface trigger drops as failed/missing runs rather than silent stale-deploys.
 - **Recurred at v1.77 (2026-06-20):** the push of commit `26d069e` did not auto-trigger a build — the latest *built* commit remained `6880d2b` (v1.76). The documented recovery (`POST .../pages/builds`) was attempted but blocked by the environment's auto-mode classifier as an out-of-scope production action, so the rebuild was deferred to the operator. Confirms the trigger is unreliable and that "pushed v1.77" ≠ "v1.77 is live" until the build is verified.
 
+### L24. Council sends personal situation text off-device — contradicts REQUIREMENTS §1.3/§2.1 "nothing leaves the device"
+- **Confidence:** confirmed (by design; `council.html`, added v1.90)
+- **Severity:** LOW *as coded* at Tier 0 (user-initiated, disclosed, on the user's own key, no operator server) — but it touches a **binding** claim, so it needs founder attention before any tier advance or before Council is promoted to the hub.
+- **Where:** `council.html` `callClaude()` POSTs the user's free-text situation (and the four directors' replies) to `https://api.anthropic.com/v1/messages` using a bring-your-own Anthropic key. REQUIREMENTS §1.3 and §2.1 assert "zero outbound network traffic at Tier 0–1" / "Nothing leaves the device at Tier ≤ 1," with the opt-in Web Push reminder as the *single* stated exception (L22). Council is a second, larger exception: it transmits the most sensitive content in the suite (free-form personal decisions), comparable to the Reflect journal but **off-device**.
+- **Why it's still defensible at Tier 0:** it is strictly user-initiated (only on "Convene"), only sends what the user types, uses the user's own API key (no operator intermediary — consistent with CONSTRAINTS §3 power-distribution: the user owns the relationship with the model), stores nothing server-side, keeps sessions in local storage only, and is disclosed plainly on first run and in the crisis footer/disclaimer.
+- **Binding-doc gap (needs founder ratification — do NOT self-amend):**
+  - §1.1 data inventory omits the two new localStorage keys: `hill-climbing-council-key` (the user's Anthropic API key — a **credential**, the first stored in the suite; note browser localStorage is not a secure secret store) and `hill-climbing-council` (saved deliberations: free-text situations + generated advice, cap 30).
+  - §1.3/§2.1's "nothing leaves the device (except opt-in Web Push)" is now false; Council is a second exception and should be documented as such, with the off-device data-flow and third-party (Anthropic) processing named.
+  - §2.4 "sharing" and §2.2 "what we never collect" should acknowledge that convening transmits user content to Anthropic under the user's own account/terms.
+- **Open questions for the founder:** (a) is bring-your-own-key the right power-distribution posture, or should Council stay off the hub until a data-flow/consent design is ratified? (b) does an app that sends personal content to a third-party LLM belong under the same care/safety constraints as the sensor apps, or does it need its own section? (c) API-key-in-localStorage risk acceptance.
+
 ---
 
 ## How to use this list
