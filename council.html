@@ -246,6 +246,36 @@
     .hist-flag  { color: hsl(28,85%,68%); font-size: 11px; margin-left: 8px; }
     .hist-noted { color: var(--accent); font-size: 11px; margin-left: 8px; opacity: 0.75; }
 
+    /* ── continuing meeting (thread + reply) ────────────────────── */
+    #thread { display: flex; flex-direction: column; gap: 16px; margin: 24px 0 4px; }
+    .turn { animation: fadeUp 0.3s ease; }
+    .turn-who {
+      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 6px;
+    }
+    .turn.you .turn-body {
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+      border-radius: 12px; padding: 13px 16px; color: var(--text);
+    }
+    .turn.you .turn-body p { font-size: 14.5px; line-height: 1.6; margin-bottom: 8px; }
+    .turn.you .turn-body p:last-child { margin-bottom: 0; }
+    .turn.chair-turn .turn-who { color: var(--accent); opacity: 0.85; }
+    .turn.chair-turn .turn-body p { font-size: 14.5px; color: var(--text); line-height: 1.62; margin-bottom: 10px; }
+    .turn.chair-turn .turn-body p:last-child { margin-bottom: 0; }
+    .turn.error .turn-body p { color: var(--dim); font-style: italic; }
+
+    .reply { margin-top: 18px; }
+    .reply textarea {
+      width: 100%; min-height: 84px; resize: vertical; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 12px; color: var(--text);
+      font-family: var(--font-ui); font-size: 15px; line-height: 1.6; padding: 14px 16px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .reply textarea:focus { border-color: var(--accent-soft); }
+    .reply textarea::placeholder { color: var(--dim); }
+    .reply-row { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+    .reply-note { font-size: 11.5px; color: var(--dim); }
+
     /* ── setup / key gate ───────────────────────────────────────── */
     .card {
       background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
@@ -301,7 +331,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · council</div>
+<div class="corner" id="version-label">v0.3 · council</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="convene">Convene</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -337,7 +367,7 @@
   <!-- Convene view -->
   <div id="convene-view">
     <div class="lede">Convene your board.</div>
-    <div class="sub">Bring a real decision or situation to a small council of advisors. They won't decide for you — they'll help you <em>see it clearly</em> and hand the choice back.</div>
+    <div class="sub">Bring a real decision or situation to a small council of advisors. They won't decide for you — they'll help you <em>see it clearly</em>. Then reply, push back, and keep the meeting going until you reach your own decision.</div>
 
     <div id="compose">
       <textarea id="situation" placeholder="What's on your mind? Describe the decision or situation as you'd tell a trusted friend — the facts, what you're weighing, what you're afraid of. The more honest, the more useful."></textarea>
@@ -392,7 +422,7 @@
 // amended.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.2 · council';
+const VERSION   = 'v0.3 · council';
 const MODEL     = 'claude-opus-4-8';
 const LS_KEY    = 'hill-climbing-council-key';   // user's Anthropic API key
 const LS_HIST   = 'hill-climbing-council';        // saved deliberations
@@ -452,12 +482,31 @@ Your job is NOT to vote, break a tie, or decide. It is to close the meeting well
 
 Speak in the first person, directly to them, roughly 150–220 words. Warm, clear, unhurried. Do not recap each director in turn like meeting minutes — synthesise. Do not add fresh advice of your own; your work is to reflect their own deliberation back so they can decide with clear eyes. Same hard limit as the rest of the board: if this involves imminent danger, a medical or legal emergency, or an acute mental-health crisis, set the synthesis aside and tell them plainly to reach a real person now.`;
 
+// The Chair, now facilitating the continuing meeting (multi-turn). Distinct from
+// CHAIR_SYSTEM (the one-shot opening synthesis): this one takes the user's
+// pushback, can bring a director's voice back in, drives toward a decision the
+// user can own — then ends the meeting rather than prolonging it (anti-dependence).
+const FACILITATOR_SYSTEM =
+  "You are the Chair of someone's personal board of directors. The board has already given its opening deliberation on the situation they brought — it appears as the previous assistant turn (the four directors, then your opening synthesis). The meeting is now continuing: they will respond — push back, add what the board missed, correct a wrong assumption, or ask to go deeper — and you facilitate from here.\n\n" +
+  "The board you chair, and can bring back in when a lens is needed:\n" +
+  SEATS.map(s => "- " + s.name + " — " + s.charge).join("\n") +
+  "\n\nHow to conduct the continuing meeting:\n" +
+  "- This is a real, unfolding deliberation, not a one-shot verdict. Help them think it through across turns and move toward a decision they can own and act on.\n" +
+  "- When a particular director's lens would sharpen things, bring that director back in and voice them briefly in their own register — e.g. \"Here the Skeptic would push:…\" or \"The Steward wants me to say…\". Do this when it genuinely adds something; don't ventriloquise all four every turn, and don't just restate the opening.\n" +
+  "- Take their pushback seriously. If they tell you the board misread something, update — don't defend the opening. If they're avoiding something, name it, kindly. If they've talked themselves somewhere unwise, say so.\n" +
+  "- Keep the board's standing rules every turn: never issue a verdict or tell them what to do, never flatter, disagree when warranted, and name the real tension honestly. The decision stays theirs.\n" +
+  "- Converge, don't prolong. Your aim is to help them reach their own clarity and then let them go — a good chair makes the meeting end, not continue forever. When they've reached a decision, or the useful work is done, say so plainly and hand it back; do not manufacture more deliberation to keep them here.\n" +
+  "- Speak in the first person as the Chair, directly to them, warm and unhurried. Usually 120–200 words; a little more only when you're voicing a director.\n" +
+  "- Hard limit, every turn: if what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set the facilitation aside and tell them plainly to reach a real person right now — a crisis line, a doctor, a lawyer.";
+
 // ── State ────────────────────────────────────────────────────────────────────
 let apiKey = localStorage.getItem(LS_KEY) || '';
 let running = false;
+let replying = false;   // a follow-up turn is in flight
+let current = null;     // the live/open meeting: {id, situation, directors, chairOpening, thread, feedback}
 
 // ── Anthropic call (browser-direct, user's key) ─────────────────────────────
-async function callClaude(system, userText) {
+async function callClaudeRaw(system, messages, maxTokens) {
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: {
@@ -469,21 +518,25 @@ async function callClaude(system, userText) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: maxTokens || 1024,
       system: system,
-      messages: [{ role: 'user', content: userText }]
+      messages: messages
     })
   });
   if (!res.ok) {
     let detail = '';
     try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
     if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
-    if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and convene again.');
+    if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and try again.');
     throw new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
   }
   const data = await res.json();
   const block = (data.content || []).find(b => b.type === 'text');
   return block ? block.text.trim() : '';
+}
+// Single-user-turn convenience (opening round).
+function callClaude(system, userText) {
+  return callClaudeRaw(system, [{ role: 'user', content: userText }], 1024);
 }
 function ApiError(kind, message) { this.kind = kind; this.message = message; }
 ApiError.prototype = Object.create(Error.prototype);
@@ -567,15 +620,29 @@ function finishConvene(situation, results, chairText, save) {
     savedId = sess.id;
   }
 
-  // Tester note first (POC evidence + adverse-event capture), then the actions row.
-  if (savedId) slot.insertAdjacentHTML('beforeend', feedbackBlock(savedId, null));
-  const actions = document.createElement('div');
-  actions.className = 'board-actions';
-  actions.innerHTML =
-    '<button class="ghost" id="again-btn" type="button">Bring another situation</button>';
-  slot.appendChild(actions);
-  document.getElementById('again-btn').addEventListener('click', resetConvene);
-  if (savedId) wireFeedback(savedId);
+  // Build the live meeting, then render the continuation UI: the growing thread,
+  // a reply composer (Chair facilitates), the tester note, and the actions row.
+  if (savedId) {
+    const cur = {
+      id: savedId,
+      situation: situation,
+      directors: results.filter(r => r.ok).map(r => ({ name: r.seat.name, text: r.text })),
+      chairOpening: chairText,
+      thread: [],
+      feedback: null
+    };
+    slot.insertAdjacentHTML('beforeend',
+      '<div id="thread"></div>' +
+      replyComposer() +
+      feedbackBlock(cur.id, null) +
+      '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring a new situation</button></div>');
+    wireMeeting(cur);
+  } else {
+    // Total failure — just an actions row, nothing saved.
+    slot.insertAdjacentHTML('beforeend',
+      '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring another situation</button></div>');
+    document.getElementById('again-btn').addEventListener('click', resetConvene);
+  }
 
   if (keyRejected) { keyRejected = false; showSetup(true); }
 }
@@ -639,6 +706,98 @@ function resetConvene() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ── Continuing meeting (Chair facilitates) ───────────────────────────────────
+// After the opening round, the meeting keeps going: the user replies and the
+// Chair responds, carrying the full thread, bringing directors back in when a
+// lens helps, and driving toward a decision the user owns.
+function replyComposer() {
+  return '<div class="reply">' +
+    '<textarea id="reply-box" placeholder="Respond to the board — push back, add what they’re missing, tell them what they got wrong, or ask them to go deeper.  (⌘/Ctrl+Enter to send)"></textarea>' +
+    '<div class="reply-row">' +
+      '<button class="primary" id="reply-btn" type="button">Reply to the board</button>' +
+      '<span class="reply-note">The meeting continues until you’ve reached your own clarity.</span>' +
+    '</div>' +
+  '</div>';
+}
+function turnHTML(role, text, isErr) {
+  const who = role === 'user' ? 'You' : 'The Chair';
+  return '<div class="turn ' + (role === 'user' ? 'you' : 'chair-turn') + (isErr ? ' error' : '') + '">' +
+    '<div class="turn-who">' + who + '</div>' +
+    '<div class="turn-body">' + toParas(text) + '</div>' +
+  '</div>';
+}
+// Rebuild the API message list: situation, the opening deliberation as one prior
+// assistant turn, then the real back-and-forth. Ends with the newest user reply.
+function threadMessages(cur) {
+  const msgs = [{ role: 'user', content: broughtBlock(cur.situation) }];
+  const opening = cur.directors.map(d => '## ' + d.name + '\n' + d.text).join('\n\n') +
+    '\n\n## The Chair\n' + cur.chairOpening;
+  msgs.push({ role: 'assistant', content: opening });
+  (cur.thread || []).forEach(t => msgs.push({ role: t.role === 'user' ? 'user' : 'assistant', content: t.text }));
+  return msgs;
+}
+function persistThread() {
+  if (!current) return;
+  const all = loadHist();
+  const s = all.find(x => x.id === current.id || x.ts === current.id);
+  if (s) { s.thread = current.thread; try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {} }
+}
+function scrollToEnd() {
+  const box = document.getElementById('reply-box');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+async function sendReply() {
+  if (replying || !current) return;
+  if (!apiKey) { showSetup(true); return; }
+  const box = document.getElementById('reply-box');
+  const text = box.value.trim();
+  if (!text) { box.focus(); return; }
+
+  replying = true;
+  const btn = document.getElementById('reply-btn');
+  btn.disabled = true; btn.textContent = 'The Chair is considering…';
+
+  current.thread = current.thread || [];
+  current.thread.push({ role: 'user', text: text });
+  persistThread();
+
+  const threadEl = document.getElementById('thread');
+  threadEl.insertAdjacentHTML('beforeend', turnHTML('user', text));
+  box.value = '';
+  threadEl.insertAdjacentHTML('beforeend',
+    '<div class="turn chair-turn" id="pending"><div class="turn-who">The Chair</div><div class="turn-body">' + deliberating() + '</div></div>');
+  scrollToEnd();
+
+  try {
+    const reply = await callClaudeRaw(FACILITATOR_SYSTEM, threadMessages(current), 1536);
+    current.thread.push({ role: 'chair', text: reply });
+    persistThread();
+    const pend = document.getElementById('pending');
+    if (pend) pend.outerHTML = turnHTML('chair', reply);
+  } catch (err) {
+    const pend = document.getElementById('pending');
+    if (pend) pend.outerHTML = turnHTML('chair', err.message || 'The Chair couldn’t respond just now.', true);
+    if (err.kind === 'key') showSetup(true);
+  } finally {
+    replying = false;
+    btn.disabled = false; btn.textContent = 'Reply to the board';
+    scrollToEnd();
+  }
+}
+// Wire a rendered meeting (live or reopened) to its controls.
+function wireMeeting(cur) {
+  current = cur;
+  const again = document.getElementById('again-btn');
+  if (again) again.addEventListener('click', resetConvene);
+  const rbtn = document.getElementById('reply-btn');
+  if (rbtn) rbtn.addEventListener('click', sendReply);
+  const rbox = document.getElementById('reply-box');
+  if (rbox) rbox.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendReply(); }
+  });
+  if (cur.id != null) wireFeedback(cur.id);
+}
+
 // ── Rendering ────────────────────────────────────────────────────────────────
 function broughtBlock(situation) {
   return 'The situation they brought to the board:\n\n"""\n' + situation + '\n"""';
@@ -656,7 +815,7 @@ function seatShell(seat) {
 function chairShell() {
   return '<div class="chair seat" id="seat-chair">' +
     '<div class="seat-name">The Chair</div>' +
-    '<div class="seat-charge">closes the meeting · hands it back to you</div>' +
+    '<div class="seat-charge">the opening synthesis · reply below to keep going</div>' +
     '<div class="seat-body">' + deliberating() + '</div>' +
     '</div>';
 }
@@ -711,15 +870,26 @@ function openSession(s) {
     '</div>').join('');
   const chair = s.chair ?
     '<div class="chair seat"><div class="seat-name">The Chair</div>' +
-    '<div class="seat-charge">closes the meeting · hands it back to you</div>' +
+    '<div class="seat-charge">the opening synthesis · reply below to keep going</div>' +
     '<div class="seat-body">' + toParas(s.chair) + '</div></div>' : '';
   const sid = s.id || s.ts;
+  const cur = {
+    id: sid,
+    situation: s.situation,
+    directors: (s.directors || []).map(d => ({ name: d.name, text: d.text })),
+    chairOpening: s.chair || '',
+    thread: (s.thread || []).slice(),
+    feedback: s.feedback || null
+  };
+  const canContinue = !!s.chair && cur.directors.length > 0;
+  const threadHTML = cur.thread.map(t => turnHTML(t.role, t.text)).join('');
   board.innerHTML = renderBrought(s.situation) +
     '<div class="directors">' + dirs + '</div>' + chair +
+    '<div id="thread">' + threadHTML + '</div>' +
+    (canContinue ? replyComposer() : '') +
     feedbackBlock(sid, s.feedback) +
     '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring a new situation</button></div>';
-  document.getElementById('again-btn').addEventListener('click', resetConvene);
-  wireFeedback(sid);
+  wireMeeting(cur);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function fmtDate(ts) {
