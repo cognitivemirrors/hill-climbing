@@ -207,6 +207,45 @@
 
     .board-actions { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 
+    /* ── tester note (POC evaluation + "didn't feel right" capture) ── */
+    .feedback {
+      margin-top: 20px; background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px;
+    }
+    .feedback h3 {
+      font-family: var(--font-display); font-size: 15px; font-weight: normal;
+      color: var(--mid); margin-bottom: 13px; letter-spacing: 0.01em;
+    }
+    .fb-label { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 8px; }
+    .fb-scale { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .fb-opt {
+      border: 1px solid var(--line); background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; padding: 7px 14px;
+      border-radius: 999px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .fb-opt:hover { color: var(--text); border-color: var(--line-strong); }
+    .fb-opt.sel { color: var(--text); border-color: var(--accent-soft); background: var(--accent-glow); }
+    .feedback textarea {
+      width: 100%; min-height: 64px; resize: vertical; background: rgba(0,0,0,0.22);
+      border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+      font-family: var(--font-ui); font-size: 14px; line-height: 1.55; padding: 11px 13px;
+      outline: none; margin-bottom: 14px;
+    }
+    .feedback textarea:focus { border-color: var(--accent-soft); }
+    .feedback textarea::placeholder { color: var(--dim); }
+    .fb-flag {
+      display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+      border: 1px solid var(--line); background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; padding: 8px 14px; border-radius: 999px;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .fb-flag:hover { color: var(--text); border-color: var(--line-strong); }
+    .fb-flag.on { color: hsl(28,85%,68%); border-color: hsla(28,80%,60%,0.55); background: hsla(28,80%,55%,0.12); }
+    .fb-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .fb-status { font-size: 12px; color: var(--accent); }
+    .hist-flag  { color: hsl(28,85%,68%); font-size: 11px; margin-left: 8px; }
+    .hist-noted { color: var(--accent); font-size: 11px; margin-left: 8px; opacity: 0.75; }
+
     /* ── setup / key gate ───────────────────────────────────────── */
     .card {
       background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
@@ -262,7 +301,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · council</div>
+<div class="corner" id="version-label">v0.2 · council</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="convene">Convene</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -353,7 +392,7 @@
 // amended.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.1 · council';
+const VERSION   = 'v0.2 · council';
 const MODEL     = 'claude-opus-4-8';
 const LS_KEY    = 'hill-climbing-council-key';   // user's Anthropic API key
 const LS_HIST   = 'hill-climbing-council';        // saved deliberations
@@ -513,27 +552,84 @@ function finishConvene(situation, results, chairText, save) {
   convBtn.disabled = false;
   convBtn.textContent = 'Convene the board';
 
-  // Actions row
   const slot = document.getElementById('chair-slot');
+  let savedId = null;
+  if (save) {
+    const sess = {
+      id: Date.now(),
+      ts: Date.now(),
+      situation: situation,
+      directors: results.filter(r => r.ok).map(r => ({ id: r.seat.id, name: r.seat.name, text: r.text })),
+      chair: chairText,
+      feedback: null
+    };
+    saveSession(sess);
+    savedId = sess.id;
+  }
+
+  // Tester note first (POC evidence + adverse-event capture), then the actions row.
+  if (savedId) slot.insertAdjacentHTML('beforeend', feedbackBlock(savedId, null));
   const actions = document.createElement('div');
   actions.className = 'board-actions';
   actions.innerHTML =
     '<button class="ghost" id="again-btn" type="button">Bring another situation</button>';
   slot.appendChild(actions);
   document.getElementById('again-btn').addEventListener('click', resetConvene);
+  if (savedId) wireFeedback(savedId);
 
-  if (save) {
-    saveSession({
-      ts: Date.now(),
-      situation: situation,
-      directors: results.filter(r => r.ok).map(r => ({ id: r.seat.id, name: r.seat.name, text: r.text })),
-      chair: chairText
-    });
-  }
   if (keyRejected) { keyRejected = false; showSetup(true); }
 }
 
 let keyRejected = false;
+
+// ── Tester note ──────────────────────────────────────────────────────────────
+// A per-session capture: how the board did (POC evidence) plus a prominent flag
+// for "something felt off" — the adverse-event signal, ported in spirit from
+// meditate's "this didn't feel right." Written onto the saved session, and
+// surfaced in History so flagged sessions are easy to find.
+const CLARITY = ['Off', 'Meh', 'Somewhat', 'Clarifying'];
+function feedbackBlock(id, fb) {
+  fb = fb || {};
+  const scale = CLARITY.map((label, i) =>
+    '<button class="fb-opt' + (fb.clarity === i ? ' sel' : '') + '" data-fb-clarity="' + i + '" type="button">' + label + '</button>'
+  ).join('');
+  return '<div class="feedback" data-fb-id="' + id + '">' +
+    '<h3>Before you go — how did the board do?</h3>' +
+    '<div class="fb-label">Did it help you see the decision more clearly?</div>' +
+    '<div class="fb-scale">' + scale + '</div>' +
+    '<div class="fb-label">Anything that felt off, wrong, or that a tester should know?</div>' +
+    '<textarea class="fb-note" placeholder="Optional — what worked, what didn’t, anything that surprised you.">' + esc(fb.note || '') + '</textarea>' +
+    '<div class="fb-row">' +
+      '<button class="fb-flag' + (fb.flagged ? ' on' : '') + '" data-fb-flag type="button">⚑ Something here felt off or concerning</button>' +
+      '<button class="ghost fb-save" data-fb-save type="button">Save note</button>' +
+      '<span class="fb-status" data-fb-status>' + (fb.ts ? 'Saved' : '') + '</span>' +
+    '</div>' +
+  '</div>';
+}
+function wireFeedback(id) {
+  const el = document.querySelector('.feedback[data-fb-id="' + id + '"]');
+  if (!el) return;
+  const existing = ((loadHist().find(s => s.id === id || s.ts === id) || {}).feedback) || {};
+  const state = { clarity: (existing.clarity != null ? existing.clarity : null), note: existing.note || '', flagged: !!existing.flagged };
+  el.querySelectorAll('[data-fb-clarity]').forEach(b => b.addEventListener('click', () => {
+    state.clarity = +b.dataset.fbClarity;
+    el.querySelectorAll('[data-fb-clarity]').forEach(x => x.classList.toggle('sel', x === b));
+  }));
+  const flag = el.querySelector('[data-fb-flag]');
+  flag.addEventListener('click', () => { state.flagged = !state.flagged; flag.classList.toggle('on', state.flagged); });
+  el.querySelector('[data-fb-save]').addEventListener('click', () => {
+    state.note = el.querySelector('.fb-note').value.trim();
+    updateFeedback(id, { clarity: state.clarity, note: state.note, flagged: state.flagged, ts: Date.now() });
+    el.querySelector('[data-fb-status]').textContent = state.flagged ? 'Saved & flagged ✓' : 'Saved ✓';
+  });
+}
+function updateFeedback(id, fb) {
+  const all = loadHist();
+  const s = all.find(x => x.id === id || x.ts === id);
+  if (!s) return;
+  s.feedback = fb;
+  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+}
 
 function resetConvene() {
   board.classList.add('hidden');
@@ -593,11 +689,15 @@ function renderHistory() {
     list.innerHTML = '<div class="empty">No deliberations yet.<br>Convene the board on a real decision and it’ll be kept here — only on this device.</div>';
     return;
   }
-  list.innerHTML = all.map((s, i) =>
-    '<div class="hist-item" data-i="' + i + '">' +
-      '<div class="hist-date">' + fmtDate(s.ts) + '</div>' +
+  list.innerHTML = all.map((s, i) => {
+    const mark = s.feedback
+      ? (s.feedback.flagged ? '<span class="hist-flag">⚑ flagged</span>' : '<span class="hist-noted">noted</span>')
+      : '';
+    return '<div class="hist-item" data-i="' + i + '">' +
+      '<div class="hist-date">' + fmtDate(s.ts) + mark + '</div>' +
       '<div class="hist-snippet">' + esc(s.situation) + '</div>' +
-    '</div>').join('');
+    '</div>';
+  }).join('');
   list.querySelectorAll('.hist-item').forEach(el =>
     el.addEventListener('click', () => openSession(all[+el.dataset.i])));
 }
@@ -613,10 +713,13 @@ function openSession(s) {
     '<div class="chair seat"><div class="seat-name">The Chair</div>' +
     '<div class="seat-charge">closes the meeting · hands it back to you</div>' +
     '<div class="seat-body">' + toParas(s.chair) + '</div></div>' : '';
+  const sid = s.id || s.ts;
   board.innerHTML = renderBrought(s.situation) +
     '<div class="directors">' + dirs + '</div>' + chair +
+    feedbackBlock(sid, s.feedback) +
     '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring a new situation</button></div>';
   document.getElementById('again-btn').addEventListener('click', resetConvene);
+  wireFeedback(sid);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function fmtDate(ts) {
