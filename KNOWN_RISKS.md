@@ -169,6 +169,18 @@ The most likely future entries here would be: a code path that disables the idle
   - §2.4 "sharing" and §2.2 "what we never collect" should acknowledge that convening transmits user content to Anthropic under the user's own account/terms.
 - **Open questions for the founder:** (a) is bring-your-own-key the right power-distribution posture, or should Council stay off the hub until a data-flow/consent design is ratified? (b) does an app that sends personal content to a third-party LLM belong under the same care/safety constraints as the sensor apps, or does it need its own section? (c) API-key-in-localStorage risk acceptance.
 
+### L25. Climb's goal/todo mechanics sit near the anti-gamification line — and its event log is a mirror that could become a scoreboard
+- **Confidence:** confirmed (design consideration, not a bug)
+- **Where:** `climb.html`, added v1.94.
+- **Description:** Todo trackers are the canonical guilt machines — due dates, overdue reds, completion percentages, and streaks are the standard engagement toolkit CONSTRAINTS §3.1 ("power over user behaviour") and §5 (streak mechanics, loss-aversion) explicitly reject. Climb additionally keeps an **append-only event log of the user's own follow-through**, which is designed as a self-owned mirror for reflection but could read (or later be surfaced) as self-surveillance or a report card.
+- **Mitigation (already in place):** no due dates at all in v1 (dates are the todo-app guilt engine); no points, badges, streaks, or completion percentages; archive copy is "resting" / "Let it rest" / "Pick it back up" — never failed, abandoned, or overdue; the focus card is framed as attention ("Current focus"), not obligation; History is a flat chronological mirror with no aggregates beyond a raw event count; the log is local-only, exportable, and honestly deletable in-app ("Delete everything" removes both the state blob and the event database); no notifications; hub usage feeds only the existing weekly (not daily) dots (L20 rationale applies).
+- **Watch-items:** any future analytics view over the event log must present rates and "attention gravity" as neutral mirrors for the user's own curiosity — the moment a derived number starts functioning as a target (velocity, completion rate, goals-per-week), it should be reviewed against §3.1/§5 before shipping. Same review applies before adding due dates, reminders, or any surfacing of "you haven't touched X in N days."
+- **Sub-note (log completeness):** the IndexedDB append is best-effort *after* the localStorage state write — in a browser where IDB persistently fails (some private modes), state changes occur that the log misses. On the next healthy load, `log.snapshot` rebaselines the log from current state, so analysis has an honest "gap + baseline" rather than silent divergence.
+
+### L26. Levity and Council storage still missing from REQUIREMENTS §1.1 (pre-existing; observed while adding Climb's rows)
+- **Confidence:** confirmed
+- **Where:** REQUIREMENTS.md §1.1. Climb's rows were added in v1.94 with founder sign-off, which makes the remaining gaps conspicuous: `hill-climbing-levity` (Levity ladder + notebook state, added v1.92) has no row and Levity is absent from the `hill-climbing-usage` writer list; Council's two keys are already flagged in L24. Binding doc → founder ratification required; not self-amended in v1.94.
+
 ---
 
 ## How to use this list
