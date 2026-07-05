@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
+       background-sampling) matches the dark page like iOS Safari does. -->
+  <meta name="theme-color" content="#0a0b12">
+  <title>Climb · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Climb">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Climb (night-sky indigo) ───────────
+         Sits in the arc between Breathe (blue 200°) and Meditate
+         (violet ~260°); reads as summit sky at dusk, clearly distinct
+         from every sibling. */
+      --accent:      hsl(230,65%,72%);
+      --accent-soft: hsla(230,60%,68%,0.45);
+      --accent-glow: hsla(230,65%,58%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner menu — the shared data-management dropdown. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-item.danger .menu-item-title { color: hsl(8,62%,62%); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 16px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── breadcrumbs ────────────────────────────────────────────── */
+    .crumbs {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--dim); margin-bottom: 16px;
+    }
+    .crumb {
+      background: none; border: none; cursor: pointer; padding: 2px;
+      color: var(--dim); font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.04em;
+      max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .crumb:hover { color: var(--text); }
+    .crumb-sep { color: var(--faint); }
+
+    /* ── focus card (root screen) ───────────────────────────────── */
+    #focus-card {
+      border: 1px solid var(--accent-soft); background: var(--accent-glow);
+      border-radius: 16px; padding: 18px 18px 16px; margin-bottom: 28px;
+    }
+    .focus-kicker {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 8px;
+    }
+    .focus-clear {
+      background: none; border: none; cursor: pointer;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.05em; text-transform: none;
+      font-family: var(--font-ui);
+    }
+    .focus-clear:hover { color: var(--text); }
+    .focus-title {
+      display: block; background: none; border: none; padding: 0; cursor: pointer; text-align: left;
+      font-family: var(--font-display); font-size: 1.35rem; color: var(--text);
+      line-height: 1.3; overflow-wrap: anywhere;
+    }
+    .focus-title:hover { color: var(--accent); }
+    .focus-tasks { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+    .focus-task { font-size: 13px; color: var(--mid); overflow-wrap: anywhere; }
+    .focus-task::before { content: '·'; color: var(--accent-soft); margin-right: 8px; }
+
+    /* ── goal screen header ─────────────────────────────────────── */
+    .goal-head { margin-bottom: 10px; }
+    .goal-head-title {
+      display: block; background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+      font-family: var(--font-display); font-size: 1.7rem; line-height: 1.25;
+      color: var(--text); overflow-wrap: anywhere;
+    }
+    .goal-head-title:hover { color: var(--accent); }
+    .goal-head-row {
+      position: relative; display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-top: 10px;
+    }
+    .focus-toggle {
+      background: none; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--mid); font-size: 11.5px; letter-spacing: 0.05em; padding: 6px 14px;
+      cursor: pointer; font-family: var(--font-ui);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .focus-toggle:hover, .focus-toggle.on { color: var(--accent); border-color: var(--accent-soft); }
+
+    /* ── section labels ─────────────────────────────────────────── */
+    .sec {
+      font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--dim); margin: 24px 0 10px;
+    }
+
+    /* ── goal rows ──────────────────────────────────────────────── */
+    .goal-list { display: flex; flex-direction: column; gap: 8px; }
+    .goal-row {
+      position: relative; display: flex; align-items: center; gap: 2px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 4px 4px 4px 0;
+      transition: border-color 0.2s;
+    }
+    .goal-row:hover { border-color: var(--line-strong); }
+    .goal-row.dragging { opacity: 0.35; }
+    .grip {
+      flex: none; width: 36px; align-self: stretch; min-height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; border-radius: 10px;
+      color: var(--faint); cursor: grab;
+      touch-action: none;   /* the one property that stops scroll-vs-drag fights */
+    }
+    .grip:active { cursor: grabbing; }
+    .grip svg { width: 14px; height: 14px; display: block; pointer-events: none; }
+    .goal-main {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start;
+      background: none; border: none; padding: 10px 0; cursor: pointer; text-align: left;
+      color: var(--text); font-family: var(--font-ui);
+    }
+    .goal-title { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+    .goal-hint { font-size: 11px; color: var(--dim); margin-top: 1px; }
+    .row-menu-btn {
+      flex: none; width: 36px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; border-radius: 8px;
+      color: var(--faint); cursor: pointer; transition: color 0.2s;
+    }
+    .row-menu-btn:hover { color: var(--text); }
+    .row-menu-btn svg { width: 15px; height: 15px; display: block; pointer-events: none; }
+    .row-menu {
+      position: absolute; right: 8px; top: calc(100% - 4px); z-index: 6; width: 190px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line); border-radius: 12px;
+      padding: 6px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); animation: fadeUp 0.15s ease;
+    }
+    .row-menu button {
+      display: block; width: 100%; text-align: left; padding: 8px 10px;
+      border: none; border-radius: 8px; background: transparent;
+      color: var(--text); font-size: 13px; cursor: pointer; font-family: var(--font-ui);
+      transition: background 0.15s;
+    }
+    .row-menu button:hover { background: rgba(255,255,255,0.06); }
+    .drag-ghost {
+      position: fixed; z-index: 50; pointer-events: none; opacity: 0.92;
+      transform: scale(1.02); box-shadow: 0 14px 40px rgba(0,0,0,0.5);
+      background: #14141f;
+    }
+    body.dragging-now, body.dragging-now * { user-select: none; -webkit-user-select: none; }
+
+    /* ── move picker ────────────────────────────────────────────── */
+    .move-panel {
+      border: 1px solid var(--line); border-radius: 14px; background: rgba(20,20,34,0.6);
+      padding: 14px; margin: 10px 0 4px; animation: fadeUp 0.2s ease;
+    }
+    .move-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 8px;
+    }
+    .move-cancel {
+      background: none; border: none; cursor: pointer; color: var(--dim);
+      font-size: 11px; text-transform: none; letter-spacing: 0.04em; font-family: var(--font-ui);
+    }
+    .move-cancel:hover { color: var(--text); }
+    .move-opt {
+      display: block; width: 100%; text-align: left; padding: 7px 8px;
+      background: none; border: none; border-radius: 8px; cursor: pointer;
+      color: var(--mid); font-size: 13.5px; font-family: var(--font-ui);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .move-opt:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+    /* ── composers ──────────────────────────────────────────────── */
+    .composer { display: flex; gap: 8px; margin: 14px 0 4px; }
+    .composer input {
+      flex: 1; min-width: 0;
+      font-size: 16px;  /* ≥16px: keeps iOS Safari from zooming the page on focus */
+      font-family: var(--font-ui); color: var(--text);
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .composer input:focus { border-color: var(--accent-soft); }
+    .composer input::placeholder { color: var(--dim); }
+    .composer button {
+      flex: none; background: none; border: 1px solid var(--line); border-radius: 12px;
+      color: var(--mid); font-size: 12px; letter-spacing: 0.08em; padding: 0 18px;
+      cursor: pointer; font-family: var(--font-ui); transition: color 0.2s, border-color 0.2s;
+    }
+    .composer button:hover { color: var(--accent); border-color: var(--accent-soft); }
+
+    .edit-input {
+      width: 100%; font-size: 16px; font-family: var(--font-ui); color: var(--text);
+      background: var(--panel); border: 1px solid var(--accent-soft); border-radius: 10px;
+      padding: 8px 10px; outline: none;
+    }
+    .edit-input.head { font-family: var(--font-display); font-size: 1.4rem; }
+
+    /* ── tasks ──────────────────────────────────────────────────── */
+    .task-list { display: flex; flex-direction: column; gap: 2px; }
+    .task-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-radius: 10px; }
+    .task-check {
+      flex: none; width: 22px; height: 22px; border-radius: 999px;
+      border: 1.5px solid var(--line-strong); background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; color: transparent;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .task-check:hover { border-color: var(--accent-soft); }
+    .task-row.done .task-check { border-color: var(--accent-soft); color: var(--accent); }
+    .task-check svg { width: 11px; height: 11px; display: block; pointer-events: none; }
+    .task-title {
+      flex: 1; min-width: 0; background: none; border: none; text-align: left; cursor: pointer;
+      color: var(--text); font-size: 14.5px; font-family: var(--font-ui);
+      line-height: 1.4; overflow-wrap: anywhere; padding: 0;
+    }
+    .task-row.done .task-title {
+      color: var(--dim); text-decoration: line-through; text-decoration-color: var(--faint);
+    }
+    .task-del {
+      flex: none; min-width: 30px; height: 30px; padding: 0 6px;
+      background: transparent; border: none; border-radius: 8px;
+      color: var(--faint); font-size: 18px; line-height: 1; cursor: pointer;
+      font-family: var(--font-ui); transition: color 0.2s;
+    }
+    .task-del:hover { color: hsl(8,62%,62%); }
+    .task-del.confirm { color: hsl(8,62%,62%); font-size: 11px; letter-spacing: 0.04em; }
+
+    /* ── resting goals ──────────────────────────────────────────── */
+    details.resting { margin-top: 22px; }
+    details.resting summary {
+      cursor: pointer; color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+      list-style: none; display: inline-flex; align-items: center; gap: 6px;
+      user-select: none; -webkit-user-select: none;
+    }
+    details.resting summary::-webkit-details-marker { display: none; }
+    details.resting summary:hover { color: var(--mid); }
+    .rest-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 8px 2px;
+    }
+    .rest-title { color: var(--dim); font-size: 14px; overflow-wrap: anywhere; }
+    .rest-restore {
+      flex: none; background: none; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--mid); font-size: 11px; letter-spacing: 0.04em; padding: 5px 12px;
+      cursor: pointer; font-family: var(--font-ui); transition: color 0.2s, border-color 0.2s;
+    }
+    .rest-restore:hover { color: var(--accent); border-color: var(--accent-soft); }
+
+    /* ── history ────────────────────────────────────────────────── */
+    .h-head { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 8px; }
+    .h-day {
+      font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--dim); margin: 26px 0 8px;
+    }
+    .h-line {
+      display: flex; gap: 10px; align-items: baseline; padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .h-time { flex: none; width: 62px; font-size: 11px; color: var(--faint); }
+    .h-text { flex: 1; font-size: 13.5px; color: var(--mid); overflow-wrap: anywhere; }
+    .h-type {
+      flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px; color: var(--faint);
+    }
+
+    .empty { color: var(--dim); font-size: 14px; line-height: 1.8; text-align: center; padding: 48px 12px; }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .goal-head-title { font-size: 1.45rem; }
+      .h-type { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .row-menu, .move-panel, #menu-panel { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · climb</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="goals">Goals</button>
+  <button class="mode-btn"        data-view="history">History</button>
+</nav>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download goals + full history</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <button class="menu-item danger" id="erase-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Delete everything</span>
+      <span class="menu-item-sub" id="erase-sub">Goals and history, gone for real</span>
+    </button>
+    <div class="menu-note">Your goals live only on this device.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <section id="goals-view" class="panel"></section>
+  <section id="history-view" class="panel hidden"></section>
+</main>
+
+<script>
+'use strict';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const VERSION   = 'v0.1 · climb';
+const STATE_KEY = 'hill-climbing-climb';
+const DB_NAME   = 'climb';
+const STORE     = 'events';
+
+// ── State ───────────────────────────────────────────────────────────────────
+// Source of truth is the localStorage blob; the IndexedDB event log is an
+// append-only record of every change, for the user's own later analysis.
+const state = {
+  v: 1,
+  goals: {},       // id → { id, title, parentId, order, status, created, updated, restedAt }
+  tasks: {},       // id → { id, goalId, title, done, created, updated, doneAt }
+  focusId: null,
+};
+
+// Transient UI state — never persisted; reload lands at the root.
+const ui = {
+  view: 'goals',           // 'goals' | 'history'
+  path: [],                // goal ids from root → current screen
+  menuOpenId: null,        // goal id whose ⋯ menu is open
+  movingId: null,          // goal id being moved (picker open)
+  editing: null,           // { kind: 'goal' | 'goal-head' | 'task', id }
+  restingOpen: false,      // the "resting" disclosure at the current level
+  confirmKey: null,        // two-tap confirm target ('task-<id>' | 'erase')
+  confirmTimer: null,
+};
+
+// ── IndexedDB event log (minimal promise wrapper, as reflect.html) ──────────
+let _db = null;
+function db() {
+  if (_db) return Promise.resolve(_db);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        const store = d.createObjectStore(STORE, { keyPath: 'id' });
+        store.createIndex('ts', 'ts');
+      }
+    };
+    req.onsuccess = () => { _db = req.result; resolve(_db); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+function idbAppend(evt) {
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(evt);
+    tx.oncomplete = () => res(evt);
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function idbPutMany(events) {
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    events.forEach(e => store.put(e));
+    tx.oncomplete = () => res();
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function idbAll() {
+  return db().then(d => new Promise((res, rej) => {
+    const req = d.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+    req.onsuccess = () => res(req.result || []);
+    req.onerror   = () => rej(req.error);
+  }));
+}
+function idbCount() {
+  return db().then(d => new Promise((res, rej) => {
+    const req = d.transaction(STORE, 'readonly').objectStore(STORE).count();
+    req.onsuccess = () => res(req.result || 0);
+    req.onerror   = () => rej(req.error);
+  }));
+}
+function idbClear() {
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => res();
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function uid() {
+  return (crypto.randomUUID && crypto.randomUUID()) ||
+         `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function esc(s) { const p = document.createElement('div'); p.textContent = s == null ? '' : String(s); return p.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+function dayKey(ts) { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function dayLabel(ts) {
+  const d = new Date(ts), now = new Date();
+  if (dayKey(ts) === dayKey(now.getTime())) return 'Today';
+  if (dayKey(ts) === dayKey(now.getTime() - 86400000)) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function timeLabel(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+
+// Derived reads — no denormalized child arrays anywhere.
+function activeChildren(parentId) {
+  return Object.values(state.goals)
+    .filter(g => g.parentId === parentId && g.status === 'active')
+    .sort((a, b) => a.order - b.order);
+}
+function restingChildren(parentId) {
+  return Object.values(state.goals)
+    .filter(g => g.parentId === parentId && g.status === 'resting')
+    .sort((a, b) => (a.restedAt || 0) - (b.restedAt || 0));
+}
+function tasksOf(goalId) {
+  return Object.values(state.tasks).filter(t => t.goalId === goalId);
+}
+function subtreeIds(goalId) {
+  const out = [goalId];
+  for (let i = 0; i < out.length; i++) {
+    Object.values(state.goals).forEach(g => { if (g.parentId === out[i]) out.push(g.id); });
+  }
+  return out;
+}
+function isEffectivelyActive(goalId) {
+  let g = state.goals[goalId];
+  while (g) {
+    if (g.status !== 'active') return false;
+    g = g.parentId ? state.goals[g.parentId] : null;
+  }
+  return !!state.goals[goalId];
+}
+function pathTo(goalId) {
+  const path = [];
+  let g = state.goals[goalId];
+  while (g) { path.unshift(g.id); g = g.parentId ? state.goals[g.parentId] : null; }
+  return path;
+}
+function reindex(parentId) {
+  activeChildren(parentId).forEach((g, i) => { g.order = i; });
+}
+
+// ── Storage: defensive load / save (nourish pattern) ────────────────────────
+function normalizeState(raw) {
+  const clean = { v: 1, goals: {}, tasks: {}, focusId: null };
+  if (!raw || typeof raw !== 'object') return clean;
+  const rg = (raw.goals && typeof raw.goals === 'object') ? raw.goals : {};
+  Object.keys(rg).forEach(id => {
+    const g = rg[id];
+    if (!g || typeof g.title !== 'string' || !g.title.trim()) return;
+    clean.goals[id] = {
+      id,
+      title: g.title,
+      parentId: typeof g.parentId === 'string' ? g.parentId : null,
+      order: Number.isFinite(g.order) ? g.order : 0,
+      status: g.status === 'resting' ? 'resting' : 'active',
+      created: Number.isFinite(g.created) ? g.created : Date.now(),
+      updated: Number.isFinite(g.updated) ? g.updated : Date.now(),
+      restedAt: Number.isFinite(g.restedAt) ? g.restedAt : null,
+    };
+  });
+  // Orphaned goals (parent missing) re-root rather than vanish.
+  Object.values(clean.goals).forEach(g => {
+    if (g.parentId && !clean.goals[g.parentId]) g.parentId = null;
+  });
+  const rt = (raw.tasks && typeof raw.tasks === 'object') ? raw.tasks : {};
+  Object.keys(rt).forEach(id => {
+    const t = rt[id];
+    if (!t || typeof t.title !== 'string' || !t.title.trim()) return;
+    if (!clean.goals[t.goalId]) return;               // orphaned tasks are dropped
+    clean.tasks[id] = {
+      id,
+      goalId: t.goalId,
+      title: t.title,
+      done: !!t.done,
+      created: Number.isFinite(t.created) ? t.created : Date.now(),
+      updated: Number.isFinite(t.updated) ? t.updated : Date.now(),
+      doneAt: Number.isFinite(t.doneAt) ? t.doneAt : null,
+    };
+  });
+  // Re-pack sibling order 0..n-1 per parent.
+  const parents = new Set(Object.values(clean.goals).map(g => g.parentId));
+  parents.forEach(p => {
+    Object.values(clean.goals)
+      .filter(g => g.parentId === p && g.status === 'active')
+      .sort((a, b) => a.order - b.order)
+      .forEach((g, i) => { g.order = i; });
+  });
+  clean.focusId = typeof raw.focusId === 'string' && clean.goals[raw.focusId] ? raw.focusId : null;
+  return clean;
+}
+function load() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  const clean = normalizeState(raw);
+  state.goals = clean.goals;
+  state.tasks = clean.tasks;
+  state.focusId = clean.focusId;
+  if (state.focusId && !isEffectivelyActive(state.focusId)) state.focusId = null;
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+}
+
+// ── Hub usage log (canonical hcDayKey — do NOT reuse other date helpers) ────
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+let loggedThisLoad = false;   // one flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log.climb ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+    loggedThisLoad = true;
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+
+// ── The choke point ─────────────────────────────────────────────────────────
+// Every mutation flows through apply(): reduce onto state, save the blob,
+// append to the event log, mark hub usage. UI handlers never touch state
+// directly, so the log cannot drift from what actually changed.
+function reduce(evt) {
+  const g = evt.goalId ? state.goals[evt.goalId] : null;
+  const t = evt.taskId ? state.tasks[evt.taskId] : null;
+  switch (evt.type) {
+    case 'goal.add':
+      state.goals[evt.goalId] = {
+        id: evt.goalId, title: evt.title, parentId: evt.parentId, order: evt.order,
+        status: 'active', created: evt.ts, updated: evt.ts, restedAt: null,
+      };
+      break;
+    case 'goal.rename':
+      g.title = evt.to; g.updated = evt.ts;
+      break;
+    case 'goal.reorder': {
+      const sibs = activeChildren(evt.parentId).filter(x => x.id !== evt.goalId);
+      sibs.splice(evt.to, 0, g);
+      sibs.forEach((x, i) => { x.order = i; });
+      g.updated = evt.ts;
+      break;
+    }
+    case 'goal.move':
+      g.parentId = evt.toParent; g.order = evt.toIndex; g.updated = evt.ts;
+      reindex(evt.fromParent); reindex(evt.toParent);
+      break;
+    case 'goal.archive':
+      g.status = 'resting'; g.restedAt = evt.ts; g.updated = evt.ts;
+      reindex(g.parentId);
+      break;
+    case 'goal.restore':
+      g.status = 'active'; g.restedAt = null; g.order = evt.order; g.updated = evt.ts;
+      reindex(g.parentId);
+      break;
+    case 'focus.set':   state.focusId = evt.goalId; break;
+    case 'focus.clear': state.focusId = null; break;
+    case 'task.add':
+      state.tasks[evt.taskId] = {
+        id: evt.taskId, goalId: evt.goalId, title: evt.title,
+        done: false, created: evt.ts, updated: evt.ts, doneAt: null,
+      };
+      break;
+    case 'task.rename':     t.title = evt.to; t.updated = evt.ts; break;
+    case 'task.complete':   t.done = true;  t.doneAt = evt.ts; t.updated = evt.ts; break;
+    case 'task.uncomplete': t.done = false; t.doneAt = null;   t.updated = evt.ts; break;
+    case 'task.delete':     delete state.tasks[evt.taskId]; break;
+  }
+}
+function apply(evt) {
+  evt.id = uid();
+  evt.ts = Date.now();
+  reduce(evt);
+  save();
+  idbAppend(evt).catch(() => { /* best-effort; log.snapshot rebaselines later */ });
+  markUsage();
+  return evt;
+}
+
+// If state exists but the log is empty (IDB cleared independently, or an
+// import that carried no events), append one baseline snapshot so analysis
+// always has a starting point. Not a user mutation: bypasses apply().
+function snapshotIfLogEmpty() {
+  if (!Object.keys(state.goals).length) return Promise.resolve();
+  return idbCount().then(n => {
+    if (n > 0) return;
+    return idbAppend({
+      id: uid(), ts: Date.now(), type: 'log.snapshot',
+      state: JSON.parse(JSON.stringify(state)),
+    });
+  }).catch(() => {});
+}
+
+// ── Actions (one per event type) ────────────────────────────────────────────
+function addGoal(title, parentId) {
+  title = (title || '').trim();
+  if (!title) return;
+  apply({ type: 'goal.add', goalId: uid(), title, parentId, order: activeChildren(parentId).length });
+}
+function renameGoal(id, to) {
+  to = (to || '').trim();
+  const g = state.goals[id];
+  if (!g || !to || to === g.title) return;
+  apply({ type: 'goal.rename', goalId: id, from: g.title, to });
+}
+function reorderGoal(id, from, to) {
+  const g = state.goals[id];
+  if (!g || from === to) return;
+  apply({ type: 'goal.reorder', goalId: id, parentId: g.parentId, from, to });
+}
+function moveGoal(id, toParent) {
+  const g = state.goals[id];
+  if (!g || g.parentId === toParent) return;
+  if (toParent && subtreeIds(id).includes(toParent)) return;   // never into own subtree
+  apply({
+    type: 'goal.move', goalId: id,
+    fromParent: g.parentId, fromIndex: g.order,
+    toParent, toIndex: activeChildren(toParent).length,
+  });
+}
+function archiveGoal(id) {
+  const g = state.goals[id];
+  if (!g || g.status !== 'active') return;
+  apply({ type: 'goal.archive', goalId: id, parentId: g.parentId, order: g.order, subtreeSize: subtreeIds(id).length });
+  if (state.focusId && !isEffectivelyActive(state.focusId)) {
+    apply({ type: 'focus.clear', goalId: state.focusId, reason: 'archived' });
+  }
+}
+function restoreGoal(id) {
+  const g = state.goals[id];
+  if (!g || g.status !== 'resting') return;
+  apply({ type: 'goal.restore', goalId: id, parentId: g.parentId, order: activeChildren(g.parentId).length });
+}
+function setFocus(id) {
+  if (!isEffectivelyActive(id) || state.focusId === id) return;
+  apply({ type: 'focus.set', goalId: id, prev: state.focusId });
+}
+function clearFocus() {
+  if (!state.focusId) return;
+  apply({ type: 'focus.clear', goalId: state.focusId, reason: 'user' });
+}
+function addTask(title, goalId) {
+  title = (title || '').trim();
+  if (!title || !state.goals[goalId]) return;
+  apply({ type: 'task.add', taskId: uid(), goalId, title });
+}
+function renameTask(id, to) {
+  to = (to || '').trim();
+  const t = state.tasks[id];
+  if (!t || !to || to === t.title) return;
+  apply({ type: 'task.rename', taskId: id, from: t.title, to });
+}
+function toggleTask(id) {
+  const t = state.tasks[id];
+  if (!t) return;
+  apply({ type: t.done ? 'task.uncomplete' : 'task.complete', taskId: id, goalId: t.goalId, title: t.title });
+}
+function deleteTask(id) {
+  const t = state.tasks[id];
+  if (!t) return;
+  apply({ type: 'task.delete', taskId: id, goalId: t.goalId, title: t.title, done: t.done });
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+const goalsView   = document.getElementById('goals-view');
+const historyView = document.getElementById('history-view');
+
+function currentParent() { return ui.path.length ? ui.path[ui.path.length - 1] : null; }
+
+function hintFor(goal) {
+  const open = tasksOf(goal.id).filter(t => !t.done).length;
+  const subs = activeChildren(goal.id).length;
+  const bits = [];
+  if (open) bits.push(open === 1 ? '1 step' : `${open} steps`);
+  if (subs) bits.push(subs === 1 ? '1 subgoal' : `${subs} subgoals`);
+  return bits.join(' · ');
+}
+
+const GRIP_SVG = `<svg viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+  <circle cx="4" cy="2.5" r="1.3"/><circle cx="10" cy="2.5" r="1.3"/>
+  <circle cx="4" cy="7"   r="1.3"/><circle cx="10" cy="7"   r="1.3"/>
+  <circle cx="4" cy="11.5" r="1.3"/><circle cx="10" cy="11.5" r="1.3"/>
+</svg>`;
+const DOTS_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/>
+</svg>`;
+const CHECK_SVG = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M2 6.5 5 9.5 10 3"/>
+</svg>`;
+
+function rowMenuHTML(g) {
+  const isFocus = state.focusId === g.id;
+  return `<div class="row-menu" data-menu-for="${escAttr(g.id)}" role="menu">
+    <button type="button" data-act="rename" data-id="${escAttr(g.id)}">Rename</button>
+    <button type="button" data-act="move" data-id="${escAttr(g.id)}">Move…</button>
+    <button type="button" data-act="rest" data-id="${escAttr(g.id)}">Let it rest</button>
+    <button type="button" data-act="${isFocus ? 'unfocus' : 'focus'}" data-id="${escAttr(g.id)}">${isFocus ? 'Set down the focus' : 'Make this the focus'}</button>
+  </div>`;
+}
+
+function movePanelHTML(g) {
+  const excluded = new Set(subtreeIds(g.id));
+  const opts = [];
+  if (g.parentId !== null) opts.push({ id: null, label: 'Top level', depth: 0 });
+  (function walk(parentId, depth) {
+    activeChildren(parentId).forEach(c => {
+      if (excluded.has(c.id)) return;
+      if (c.id !== g.parentId) opts.push({ id: c.id, label: c.title, depth: depth + (g.parentId !== null ? 1 : 0) });
+      else opts.push(null);   // current parent: not a destination, but walk its children
+      walk(c.id, depth + 1);
+    });
+  })(null, 0);
+  const optHTML = opts.filter(Boolean).map(o =>
+    `<button type="button" class="move-opt" data-act="move-to" data-id="${escAttr(g.id)}" data-target="${o.id === null ? '' : escAttr(o.id)}"
+       style="padding-left:${8 + o.depth * 16}px">${o.id === null ? 'Top level' : esc(o.label)}</button>`
+  ).join('');
+  return `<div class="move-panel">
+    <div class="move-head"><span>Move “${esc(g.title)}” under…</span>
+      <button type="button" class="move-cancel" data-act="move-cancel">cancel</button></div>
+    ${optHTML || '<div class="empty" style="padding:12px">Nowhere else to move it yet.</div>'}
+  </div>`;
+}
+
+function goalRowHTML(g) {
+  const editing = ui.editing && ui.editing.kind === 'goal' && ui.editing.id === g.id;
+  const title = editing
+    ? `<input class="edit-input" data-edit="goal" data-id="${escAttr(g.id)}" value="${escAttr(g.title)}">`
+    : `<span class="goal-title">${esc(g.title)}</span>`;
+  const hint = hintFor(g);
+  return `<div class="goal-row" data-goal="${escAttr(g.id)}">
+    <button type="button" class="grip" aria-label="Drag to reorder">${GRIP_SVG}</button>
+    <button type="button" class="goal-main" data-act="open" data-id="${escAttr(g.id)}">
+      ${title}${hint ? `<span class="goal-hint">${esc(hint)}</span>` : ''}
+    </button>
+    <button type="button" class="row-menu-btn" data-act="menu" data-id="${escAttr(g.id)}" aria-label="Goal menu">${DOTS_SVG}</button>
+    ${ui.menuOpenId === g.id ? rowMenuHTML(g) : ''}
+  </div>${ui.movingId === g.id ? movePanelHTML(g) : ''}`;
+}
+
+function goalListHTML(parentId) {
+  const goals = activeChildren(parentId);
+  return `<div class="goal-list" data-list="${parentId === null ? '' : escAttr(parentId)}">
+    ${goals.map(goalRowHTML).join('')}
+  </div>`;
+}
+
+function restingHTML(parentId) {
+  const resting = restingChildren(parentId);
+  if (!resting.length) return '';
+  return `<details class="resting"${ui.restingOpen ? ' open' : ''}>
+    <summary>resting · ${resting.length}</summary>
+    ${resting.map(g => `<div class="rest-row">
+      <span class="rest-title">${esc(g.title)}</span>
+      <button type="button" class="rest-restore" data-act="restore" data-id="${escAttr(g.id)}">Pick it back up</button>
+    </div>`).join('')}
+  </details>`;
+}
+
+function composerHTML(act, key, placeholder) {
+  return `<form class="composer" data-act="${act}" data-key="${key === null ? '' : escAttr(key)}">
+    <input type="text" placeholder="${escAttr(placeholder)}" autocomplete="off">
+    <button type="submit">add</button>
+  </form>`;
+}
+
+function focusCardHTML() {
+  if (!state.focusId || !isEffectivelyActive(state.focusId)) return '';
+  const g = state.goals[state.focusId];
+  const next = tasksOf(g.id).filter(t => !t.done)
+    .sort((a, b) => a.created - b.created).slice(0, 2);
+  return `<div id="focus-card">
+    <div class="focus-kicker"><span>Current focus</span>
+      <button type="button" class="focus-clear" data-act="unfocus" data-id="${escAttr(g.id)}">set down</button></div>
+    <button type="button" class="focus-title" data-act="open-path" data-id="${escAttr(g.id)}">${esc(g.title)}</button>
+    ${next.length ? `<div class="focus-tasks">${next.map(t => `<div class="focus-task">${esc(t.title)}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function taskListHTML(goalId) {
+  const all = tasksOf(goalId);
+  const open = all.filter(t => !t.done).sort((a, b) => a.created - b.created);
+  const done = all.filter(t => t.done).sort((a, b) => (a.doneAt || 0) - (b.doneAt || 0));
+  const row = (t) => {
+    const editing = ui.editing && ui.editing.kind === 'task' && ui.editing.id === t.id;
+    const confirming = ui.confirmKey === 'task-' + t.id;
+    const title = editing
+      ? `<input class="edit-input" data-edit="task" data-id="${escAttr(t.id)}" value="${escAttr(t.title)}">`
+      : `<button type="button" class="task-title" data-act="task-edit" data-id="${escAttr(t.id)}">${esc(t.title)}</button>`;
+    return `<div class="task-row${t.done ? ' done' : ''}" data-task="${escAttr(t.id)}">
+      <button type="button" class="task-check" data-act="task-toggle" data-id="${escAttr(t.id)}"
+        role="checkbox" aria-checked="${t.done}" aria-label="${t.done ? 'Reopen' : 'Complete'} ${escAttr(t.title)}">${CHECK_SVG}</button>
+      ${title}
+      <button type="button" class="task-del${confirming ? ' confirm' : ''}" data-act="task-del" data-id="${escAttr(t.id)}"
+        aria-label="Remove ${escAttr(t.title)}">${confirming ? 'sure?' : '×'}</button>
+    </div>`;
+  };
+  return `<div class="task-list">${open.map(row).join('')}${done.map(row).join('')}</div>`;
+}
+
+function crumbsHTML() {
+  let html = `<nav class="crumbs"><button type="button" class="crumb" data-act="crumb" data-depth="0">Goals</button>`;
+  ui.path.forEach((id, i) => {
+    const g = state.goals[id];
+    if (!g) return;
+    html += `<span class="crumb-sep">›</span>
+      <button type="button" class="crumb" data-act="crumb" data-depth="${i + 1}">${esc(g.title)}</button>`;
+  });
+  return html + '</nav>';
+}
+
+function renderGoals() {
+  // Drop path segments that no longer resolve to an active goal.
+  while (ui.path.length && !isEffectivelyActive(ui.path[ui.path.length - 1])) ui.path.pop();
+  const parent = currentParent();
+  let html = '';
+
+  if (parent === null) {
+    html += focusCardHTML();
+    const anyGoals = Object.keys(state.goals).length > 0;
+    const actives = activeChildren(null);
+    if (actives.length) html += goalListHTML(null);
+    else if (!anyGoals) html += `<div class="empty">What hill are you climbing?<br>Name a goal below — you can break it into smaller ones as you go.</div>`;
+    html += composerHTML('add-goal', null, 'Add a goal…');
+    html += restingHTML(null);
+  } else {
+    const g = state.goals[parent];
+    const editingHead = ui.editing && ui.editing.kind === 'goal-head' && ui.editing.id === g.id;
+    const isFocus = state.focusId === g.id;
+    html += crumbsHTML();
+    html += `<div class="goal-head">
+      ${editingHead
+        ? `<input class="edit-input head" data-edit="goal-head" data-id="${escAttr(g.id)}" value="${escAttr(g.title)}">`
+        : `<button type="button" class="goal-head-title" data-act="rename-head" data-id="${escAttr(g.id)}" title="Tap to rename">${esc(g.title)}</button>`}
+      <div class="goal-head-row">
+        <button type="button" class="focus-toggle${isFocus ? ' on' : ''}" data-act="${isFocus ? 'unfocus' : 'focus'}" data-id="${escAttr(g.id)}">
+          ${isFocus ? 'current focus · set down' : 'make this the focus'}</button>
+        <button type="button" class="row-menu-btn" data-act="menu" data-id="${escAttr(g.id)}" aria-label="Goal menu">${DOTS_SVG}</button>
+        ${ui.menuOpenId === g.id ? rowMenuHTML(g) : ''}
+      </div>
+      ${ui.movingId === g.id ? movePanelHTML(g) : ''}
+    </div>`;
+    html += `<div class="sec">Steps</div>`;
+    html += taskListHTML(g.id);
+    html += composerHTML('add-task', g.id, 'Add a step you could do today…');
+    html += `<div class="sec">Subgoals</div>`;
+    html += goalListHTML(g.id);
+    html += composerHTML('add-goal', g.id, 'Break it down — add a subgoal…');
+    html += restingHTML(g.id);
+  }
+
+  goalsView.innerHTML = html;
+  const edit = goalsView.querySelector('.edit-input');
+  if (edit) { edit.focus(); edit.select(); }
+}
+
+// ── History (read-only mirror of the event log) ─────────────────────────────
+function goalTitle(id) { const g = state.goals[id]; return g ? g.title : '(gone)'; }
+function q(s) { return `“${esc(s)}”`; }
+function phrase(evt) {
+  switch (evt.type) {
+    case 'goal.add':        return `added goal ${q(evt.title)}`;
+    case 'goal.rename':     return `renamed ${q(evt.from)} → ${q(evt.to)}`;
+    case 'goal.reorder':    return `moved ${q(goalTitle(evt.goalId))} from position ${evt.from + 1} to ${evt.to + 1}`;
+    case 'goal.move':       return `moved ${q(goalTitle(evt.goalId))} under ${evt.toParent ? q(goalTitle(evt.toParent)) : 'the top level'}`;
+    case 'goal.archive':    return `${q(goalTitle(evt.goalId))} is resting${evt.subtreeSize > 1 ? ` (with ${evt.subtreeSize - 1} inside)` : ''}`;
+    case 'goal.restore':    return `picked ${q(goalTitle(evt.goalId))} back up`;
+    case 'focus.set':       return `focus → ${q(goalTitle(evt.goalId))}`;
+    case 'focus.clear':     return evt.reason === 'archived'
+                                 ? `focus set down (its goal is resting)` : `focus set down`;
+    case 'task.add':        return `added step ${q(evt.title)} to ${q(goalTitle(evt.goalId))}`;
+    case 'task.rename':     return `renamed step ${q(evt.from)} → ${q(evt.to)}`;
+    case 'task.complete':   return `completed ${q(evt.title || '(step)')}`;
+    case 'task.uncomplete': return `reopened ${q(evt.title || '(step)')}`;
+    case 'task.delete':     return `removed step ${q(evt.title)}`;
+    case 'log.snapshot':    return `baseline snapshot (${Object.keys((evt.state && evt.state.goals) || {}).length} goals)`;
+    default:                return evt.type;
+  }
+}
+function renderHistory() {
+  historyView.innerHTML = '<div class="empty">Reading your history…</div>';
+  idbAll().then(events => {
+    if (!events.length) {
+      historyView.innerHTML = `<div class="empty">Nothing yet.<br>Changes you make will be recorded here, on this device only.</div>`;
+      return;
+    }
+    events.sort((a, b) => b.ts - a.ts);
+    const first = events[events.length - 1].ts;
+    let html = `<div class="h-head">${events.length} event${events.length === 1 ? '' : 's'} since ${new Date(first).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>`;
+    let lastDay = null;
+    events.forEach(evt => {
+      const dk = dayKey(evt.ts);
+      if (dk !== lastDay) { html += `<div class="h-day">${dayLabel(evt.ts)}</div>`; lastDay = dk; }
+      html += `<div class="h-line">
+        <span class="h-time">${timeLabel(evt.ts)}</span>
+        <span class="h-text">${phrase(evt)}</span>
+        <span class="h-type">${esc(evt.type)}</span>
+      </div>`;
+    });
+    historyView.innerHTML = html;
+  }).catch(() => {
+    historyView.innerHTML = `<div class="empty">Couldn’t open the history store in this browser.</div>`;
+  });
+}
+
+function render() {
+  document.querySelectorAll('.mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === ui.view));
+  goalsView.classList.toggle('hidden', ui.view !== 'goals');
+  historyView.classList.toggle('hidden', ui.view !== 'history');
+  if (ui.view === 'goals') renderGoals(); else renderHistory();
+}
+function switchView(v) {
+  ui.view = v;
+  ui.menuOpenId = null; ui.movingId = null; ui.editing = null;
+  clearConfirm();
+  render();
+}
+
+// ── Two-tap confirm (task delete, erase-all) ────────────────────────────────
+function clearConfirm() {
+  if (ui.confirmTimer) clearTimeout(ui.confirmTimer);
+  ui.confirmKey = null; ui.confirmTimer = null;
+}
+function armConfirm(key, rerender) {
+  clearConfirm();
+  ui.confirmKey = key;
+  ui.confirmTimer = setTimeout(() => { clearConfirm(); if (rerender) rerender(); }, 2600);
+}
+
+// ── Interaction: delegated events on the goals view ─────────────────────────
+goalsView.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn || goalsView.classList.contains('hidden')) return;
+  const act = btn.dataset.act;
+  const id  = btn.dataset.id;
+
+  // Any click that isn't the menu button closes an open row menu.
+  if (act !== 'menu' && ui.menuOpenId && !e.target.closest('.row-menu')) {
+    ui.menuOpenId = null;
+  }
+
+  switch (act) {
+    case 'open':
+      if (ui.editing && ui.editing.id === id) return;   // click landed on the edit input
+      ui.path.push(id); ui.editing = null; ui.movingId = null; ui.restingOpen = false;
+      clearConfirm(); render(); break;
+    case 'open-path':
+      ui.path = pathTo(id); ui.editing = null; ui.movingId = null; ui.restingOpen = false;
+      clearConfirm(); render(); break;
+    case 'crumb':
+      ui.path = ui.path.slice(0, +btn.dataset.depth);
+      ui.editing = null; ui.movingId = null; ui.restingOpen = false;
+      clearConfirm(); render(); break;
+    case 'menu':
+      ui.menuOpenId = ui.menuOpenId === id ? null : id;
+      ui.movingId = null; render(); break;
+    case 'rename': {
+      const inHead = currentParent() === id;
+      ui.editing = { kind: inHead ? 'goal-head' : 'goal', id };
+      ui.menuOpenId = null; render(); break;
+    }
+    case 'rename-head':
+      ui.editing = { kind: 'goal-head', id }; render(); break;
+    case 'move':
+      ui.movingId = id; ui.menuOpenId = null; render(); break;
+    case 'move-cancel':
+      ui.movingId = null; render(); break;
+    case 'move-to':
+      moveGoal(id, btn.dataset.target || null);
+      ui.movingId = null;
+      // The move may have rewired ancestors — rebuild the crumb path.
+      if (ui.path.length) ui.path = pathTo(ui.path[ui.path.length - 1]);
+      render(); break;
+    case 'rest':
+      ui.menuOpenId = null; archiveGoal(id); render(); break;
+    case 'restore':
+      restoreGoal(id); render(); break;
+    case 'focus':
+      ui.menuOpenId = null; setFocus(id); render(); break;
+    case 'unfocus':
+      ui.menuOpenId = null; clearFocus(); render(); break;
+    case 'task-toggle':
+      clearConfirm(); toggleTask(id); render(); break;
+    case 'task-edit':
+      ui.editing = { kind: 'task', id }; render(); break;
+    case 'task-del':
+      if (ui.confirmKey === 'task-' + id) { clearConfirm(); deleteTask(id); }
+      else armConfirm('task-' + id, render);
+      render(); break;
+  }
+});
+
+goalsView.addEventListener('submit', (e) => {
+  const form = e.target.closest('form.composer');
+  if (!form) return;
+  e.preventDefault();
+  const input = form.querySelector('input');
+  const value = input.value;
+  const key = form.dataset.key || null;
+  if (form.dataset.act === 'add-goal') addGoal(value, key);
+  else if (form.dataset.act === 'add-task') addTask(value, key);
+  render();
+  // Re-focus the matching composer so quick entry flows.
+  const again = goalsView.querySelector(`form[data-act="${form.dataset.act}"][data-key="${form.dataset.key}"] input`);
+  if (again) again.focus();
+});
+
+// Inline edit commit/cancel.
+goalsView.addEventListener('keydown', (e) => {
+  const input = e.target.closest('.edit-input');
+  if (!input) return;
+  if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+  else if (e.key === 'Escape') { ui.editing = null; render(); }
+});
+goalsView.addEventListener('focusout', (e) => {
+  const input = e.target.closest('.edit-input');
+  if (!input || !ui.editing) return;
+  const kind = input.dataset.edit, id = input.dataset.id;
+  ui.editing = null;
+  if (kind === 'task') renameTask(id, input.value);
+  else renameGoal(id, input.value);
+  render();
+});
+
+// Track the resting-disclosure state across re-renders.
+goalsView.addEventListener('toggle', (e) => {
+  if (e.target.matches('details.resting')) ui.restingOpen = e.target.open;
+}, true);
+
+// Close row menus on outside click.
+document.addEventListener('click', (e) => {
+  if (ui.menuOpenId && !e.target.closest('.row-menu') && !e.target.closest('[data-act="menu"]')) {
+    ui.menuOpenId = null;
+    if (ui.view === 'goals') render();
+  }
+});
+
+// ── Drag to reorder (pointer events; siblings only) ─────────────────────────
+const drag = { active: false, started: false, row: null, list: null, ghost: null,
+               pointerId: null, startY: 0, offsetY: 0, startIndex: 0 };
+
+function dragCleanup(revert) {
+  window.removeEventListener('pointermove', onDragMove);
+  window.removeEventListener('pointerup', onDragUp);
+  window.removeEventListener('pointercancel', onDragCancel);
+  if (drag.ghost) drag.ghost.remove();
+  if (drag.row) drag.row.classList.remove('dragging');
+  document.body.classList.remove('dragging-now');
+  drag.active = false; drag.started = false;
+  drag.row = null; drag.list = null; drag.ghost = null; drag.pointerId = null;
+  if (revert) render();
+}
+
+goalsView.addEventListener('pointerdown', (e) => {
+  const grip = e.target.closest('.grip');
+  if (!grip || drag.active) return;
+  const row = grip.closest('.goal-row');
+  const list = row && row.closest('.goal-list');
+  if (!row || !list) return;
+  e.preventDefault();
+  drag.active = true; drag.started = false;
+  drag.row = row; drag.list = list;
+  drag.pointerId = e.pointerId;
+  drag.startY = e.clientY;
+  drag.offsetY = e.clientY - row.getBoundingClientRect().top;
+  drag.startIndex = [...list.querySelectorAll(':scope > .goal-row')].indexOf(row);
+  // Best-effort capture keeps events flowing if the pointer leaves the window.
+  try { grip.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointers */ }
+  // But listen on window for the drag's lifetime — capture alone is NOT
+  // enough: insertBefore() on the dragged row detaches/reinserts it, which
+  // silently releases capture mid-drag and the pointerup never arrives.
+  window.addEventListener('pointermove', onDragMove);
+  window.addEventListener('pointerup', onDragUp);
+  window.addEventListener('pointercancel', onDragCancel);
+});
+
+function onDragMove(e) {
+  if (!drag.active || e.pointerId !== drag.pointerId) return;
+  if (!drag.started) {
+    if (Math.abs(e.clientY - drag.startY) < 6) return;    // threshold: no jitter commits
+    drag.started = true;
+    const rect = drag.row.getBoundingClientRect();
+    drag.ghost = drag.row.cloneNode(true);
+    drag.ghost.classList.add('drag-ghost');
+    drag.ghost.classList.remove('dragging');
+    drag.ghost.style.width = rect.width + 'px';
+    drag.ghost.style.left = rect.left + 'px';
+    drag.ghost.style.borderRadius = '14px';
+    document.body.appendChild(drag.ghost);
+    drag.row.classList.add('dragging');
+    document.body.classList.add('dragging-now');
+  }
+  drag.ghost.style.top = (e.clientY - drag.offsetY) + 'px';
+
+  // Edge auto-scroll — lists outgrow a phone screen.
+  if (e.clientY < 56) window.scrollBy(0, -6);
+  else if (e.clientY > window.innerHeight - 56) window.scrollBy(0, 6);
+
+  // Find where the ghost's centre sits among the other rows.
+  const rows = [...drag.list.querySelectorAll(':scope > .goal-row')].filter(r => r !== drag.row);
+  const ghostMid = e.clientY - drag.offsetY + drag.row.offsetHeight / 2;
+  let insertBeforeRow = null;
+  for (const r of rows) {
+    const mid = r.getBoundingClientRect().top + r.offsetHeight / 2;
+    if (ghostMid < mid) { insertBeforeRow = r; break; }
+  }
+  const currentNext = drag.row.nextElementSibling;
+  if (insertBeforeRow !== currentNext &&
+      !(insertBeforeRow === null && currentNext === null)) {
+    drag.list.insertBefore(drag.row, insertBeforeRow);
+  }
+}
+
+function onDragUp(e) {
+  if (!drag.active || e.pointerId !== drag.pointerId) return;
+  if (!drag.started) { dragCleanup(false); return; }
+  const rows = [...drag.list.querySelectorAll(':scope > .goal-row')];
+  const endIndex = rows.indexOf(drag.row);
+  const goalId = drag.row.dataset.goal;
+  const startIndex = drag.startIndex;
+  dragCleanup(false);
+  if (endIndex !== startIndex && endIndex >= 0) reorderGoal(goalId, startIndex, endIndex);
+  render();
+}
+function onDragCancel(e) {
+  if (!drag.active || e.pointerId !== drag.pointerId) return;
+  dragCleanup(true);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (drag.active) { dragCleanup(true); return; }
+    if (ui.movingId || ui.menuOpenId) { ui.movingId = null; ui.menuOpenId = null; render(); }
+  }
+});
+
+// ── Export / import / delete (your data is yours) ───────────────────────────
+function exportData() {
+  idbAll().catch(() => []).then(events => {
+    events.sort((a, b) => a.ts - b.ts);
+    const payload = { app: 'climb', schema: 1, exported: Date.now(), state, events };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    a.href = url;
+    a.download = `climb-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object' || typeof incoming.goals !== 'object') {
+      throw new Error('not a Climb export');
+    }
+    const clean = normalizeState(incoming);
+    state.goals = clean.goals; state.tasks = clean.tasks; state.focusId = clean.focusId;
+    save();
+    const events = Array.isArray(parsed.events)
+      ? parsed.events.filter(e => e && typeof e.type === 'string' && Number.isFinite(e.ts) && e.id)
+      : [];
+    await idbClear().catch(() => {});
+    if (events.length) await idbPutMany(events).catch(() => {});
+    await snapshotIfLogEmpty();
+    ui.path = []; ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
+    render();
+    alert('Imported your goals and history.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+function eraseEverything() {
+  try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+  state.goals = {}; state.tasks = {}; state.focusId = null;
+  const finish = () => {
+    ui.path = []; ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
+    setMenu(false); render();
+  };
+  if (_db) { _db.close(); _db = null; }
+  const req = indexedDB.deleteDatabase(DB_NAME);
+  req.onsuccess = req.onerror = req.onblocked = finish;
+}
+
+// ── Corner menu / nav wiring ────────────────────────────────────────────────
+const menuEl    = document.getElementById('menu');
+const menuBtn   = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+const importFile = document.getElementById('import-file');
+const eraseBtn  = document.getElementById('erase-btn');
+const eraseSub  = document.getElementById('erase-sub');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!open && ui.confirmKey === 'erase') { clearConfirm(); resetEraseButton(); }
+}
+function resetEraseButton() {
+  eraseBtn.querySelector('.menu-item-title').textContent = 'Delete everything';
+  eraseSub.textContent = 'Goals and history, gone for real';
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+eraseBtn.addEventListener('click', () => {
+  if (ui.confirmKey === 'erase') { clearConfirm(); resetEraseButton(); eraseEverything(); return; }
+  armConfirm('erase', resetEraseButton);
+  eraseBtn.querySelector('.menu-item-title').textContent = 'Tap again to erase';
+  eraseSub.textContent = 'This cannot be undone';
+});
+
+document.querySelectorAll('.mode-btn').forEach(b =>
+  b.addEventListener('click', () => switchView(b.dataset.view)));
+
+// ── Init ────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+snapshotIfLogEmpty();
+render();
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
