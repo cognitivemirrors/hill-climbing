@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Browser-chrome tint — explicit so Chrome Android (which ignores
+       background-sampling) matches the dark page like iOS Safari does. -->
+  <meta name="theme-color" content="#0a0b12">
+  <title>Train · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Train">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Train (ember) ──────────────────────
+         Fills the arc between Reflect (amber 38°) and Levity (rose
+         348°); reads as effort / heat / iron and is clearly distinct
+         from the other five siblings. */
+      --accent:      hsl(20,72%,66%);
+      --accent-soft: hsla(20,68%,62%,0.45);
+      --accent-glow: hsla(20,72%,54%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner menu — data-management dropdown, mirrors nourish. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+
+    /* ── home panel ─────────────────────────────────────────────── */
+    #home-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+    .home-stats { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 30px; }
+    .home-hint { margin-top: 22px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 320px; }
+
+    .history { width: 100%; margin-top: 40px; text-align: left; }
+    .history-head {
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 10px; padding-left: 2px;
+    }
+    .history-row {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      width: 100%; padding: 13px 16px; margin-bottom: 8px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      color: var(--text); font-family: var(--font-ui); font-size: 14px;
+      cursor: pointer; text-align: left; transition: border-color 0.2s, background 0.2s;
+    }
+    .history-row:hover { border-color: var(--accent-soft); background: rgba(255,255,255,0.06); }
+    .history-when { color: var(--text); }
+    .history-sum { font-size: 11.5px; color: var(--dim); letter-spacing: 0.04em; white-space: nowrap; }
+
+    /* ── workout panel ──────────────────────────────────────────── */
+    .wk-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; }
+    .wk-title { font-family: var(--font-display); font-size: 1.35rem; color: var(--text); }
+    .wk-elapsed { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
+
+    .ex-card {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 16px 16px 14px; margin-bottom: 14px;
+      animation: fadeUp 0.35s ease;
+    }
+    .ex-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .ex-name { font-family: var(--font-display); font-size: 1.12rem; color: var(--text); }
+    .ex-remove {
+      flex: none; width: 30px; height: 30px; padding: 0;
+      background: transparent; border: none; color: var(--faint); font-size: 19px; line-height: 1;
+      cursor: pointer; border-radius: 8px; transition: color 0.2s;
+    }
+    .ex-remove:hover { color: hsl(8,62%,62%); }
+    .ex-legend { font-size: 10px; color: var(--faint); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+
+    .set-grid { display: grid; gap: 8px 8px; align-items: center; }
+    .col-h {
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim); text-align: center;
+    }
+    .set-num {
+      font-size: 12px; color: var(--dim); text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .fld input {
+      width: 100%; min-width: 0; text-align: center;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+      color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px so iOS Safari doesn't auto-zoom on focus */
+      padding: 7px 6px; outline: none; transition: border-color 0.2s;
+      font-variant-numeric: tabular-nums;
+    }
+    .fld input:focus { border-color: var(--accent-soft); }
+    .fld input::placeholder { color: var(--faint); }
+    .fld input.t {
+      border-style: dashed; color: var(--mid); background: transparent;
+      font-size: 16px; padding: 5px 6px;
+    }
+    .fld input.a.running { border-color: var(--accent-soft); color: var(--accent); }
+    .fld-time { display: flex; align-items: stretch; gap: 5px; }
+    .fld-time input { flex: 1; }
+    .timer-btn {
+      flex: none; width: 36px; border-radius: 9px; cursor: pointer;
+      background: transparent; border: 1px solid var(--accent-soft); color: var(--accent);
+      font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .timer-btn:hover { background: var(--accent-glow); }
+    .timer-btn.pulse { animation: pulse 0.5s ease 2; }
+    @keyframes pulse { 50% { background: var(--accent-glow); border-color: var(--accent); } }
+
+    .set-ctl { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
+    .done-btn {
+      width: 30px; height: 30px; padding: 0; border-radius: 999px; cursor: pointer;
+      background: transparent; border: 1.5px solid var(--line-strong); color: transparent;
+      font-size: 13px; line-height: 1; display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .done-btn:hover { border-color: var(--accent-soft); }
+    .done-btn.on { background: var(--accent); border-color: var(--accent); color: #0a0b12; }
+    .set-remove {
+      width: 26px; height: 30px; padding: 0;
+      background: transparent; border: none; color: var(--faint); font-size: 17px; line-height: 1;
+      cursor: pointer; border-radius: 8px; transition: color 0.2s;
+    }
+    .set-remove:hover { color: hsl(8,62%,62%); }
+
+    .add-set {
+      margin-top: 10px; padding: 7px 12px; border: none; border-radius: 8px;
+      background: transparent; color: var(--dim); font-family: var(--font-ui);
+      font-size: 12px; letter-spacing: 0.08em; cursor: pointer; transition: color 0.2s;
+    }
+    .add-set:hover { color: var(--accent); }
+
+    .wk-actions { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 26px; }
+
+    /* ── picker panel ───────────────────────────────────────────── */
+    .picker-head { font-family: var(--font-display); font-size: 1.35rem; color: var(--text); margin-bottom: 18px; }
+    #picker-filter {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px — iOS zoom */
+      padding: 11px 14px; outline: none; transition: border-color 0.2s; margin-bottom: 14px;
+    }
+    #picker-filter:focus { border-color: var(--accent-soft); }
+    #picker-filter::placeholder { color: var(--faint); }
+    .picker-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      width: 100%; padding: 13px 16px; margin-bottom: 8px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      color: var(--text); font-family: var(--font-ui); font-size: 15px;
+      cursor: pointer; text-align: left; transition: border-color 0.2s, background 0.2s;
+    }
+    .picker-row:hover { border-color: var(--accent-soft); background: rgba(255,255,255,0.06); }
+    .picker-fields { font-size: 10.5px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+    .picker-empty { font-size: 12.5px; color: var(--faint); padding: 10px 2px 4px; line-height: 1.6; }
+
+    #new-ex-form {
+      margin-top: 22px; padding: 18px 16px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    }
+    .new-ex-head { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+    #new-ex-name {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px — iOS zoom */
+      padding: 11px 14px; outline: none; transition: border-color 0.2s; margin-bottom: 12px;
+    }
+    #new-ex-name:focus { border-color: var(--accent-soft); }
+    #new-ex-name::placeholder { color: var(--faint); }
+    .chip-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .field-chip {
+      padding: 7px 16px; border-radius: 999px; cursor: pointer;
+      background: transparent; border: 1px solid var(--line-strong); color: var(--dim);
+      font-family: var(--font-ui); font-size: 12.5px; letter-spacing: 0.06em;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .field-chip.on { border-color: var(--accent-soft); color: var(--accent); background: var(--accent-glow); }
+    .picker-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; }
+
+    /* ── detail panel ───────────────────────────────────────────── */
+    .detail-head { font-family: var(--font-display); font-size: 1.35rem; color: var(--text); margin-bottom: 4px; }
+    .detail-sub { font-size: 11.5px; color: var(--dim); letter-spacing: 0.06em; margin-bottom: 20px; }
+    .detail-card {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 16px; margin-bottom: 12px;
+    }
+    .detail-ex { font-family: var(--font-display); font-size: 1.05rem; color: var(--text); margin-bottom: 8px; }
+    .detail-set {
+      display: flex; gap: 14px; align-items: baseline;
+      font-size: 13.5px; color: var(--mid); padding: 4px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .detail-set .n { color: var(--faint); font-size: 11px; min-width: 16px; }
+    .detail-set b { color: var(--text); font-weight: 400; }
+    .detail-set .miss { color: var(--faint); }
+    .detail-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; }
+
+    /* ── timer overlay ──────────────────────────────────────────── */
+    #timer-overlay {
+      position: fixed; inset: 0; z-index: 40;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(6,7,12,0.72);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    .overlay-card {
+      width: min(92vw, 340px); padding: 26px 24px 22px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 18px; box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+      text-align: center; animation: fadeUp 0.22s ease;
+    }
+    .overlay-title { font-family: var(--font-display); font-size: 1.1rem; color: var(--text); margin-bottom: 4px; }
+    .overlay-sub { font-size: 11.5px; color: var(--dim); line-height: 1.55; margin-bottom: 18px; }
+    #timer-log-value {
+      width: 150px; text-align: center;
+      background: var(--panel); border: 1px solid var(--line-strong); border-radius: 12px;
+      color: var(--text); font-family: var(--font-display);
+      font-size: 2rem; padding: 8px 10px; outline: none;
+      font-variant-numeric: tabular-nums; transition: border-color 0.2s;
+      margin-bottom: 14px;
+    }
+    #timer-log-value:focus { border-color: var(--accent-soft); }
+    .adjust-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+    .adjust-btn {
+      padding: 7px 14px; border-radius: 999px; cursor: pointer;
+      background: transparent; border: 1px solid var(--line-strong); color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums; transition: border-color 0.2s, color 0.2s;
+    }
+    .adjust-btn:hover { border-color: var(--accent-soft); color: var(--accent); }
+    .overlay-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 12px 70px; }
+      #version-label { display: none; }
+      .ex-card { padding: 13px 11px 12px; }
+      .set-grid { gap: 8px 5px; }
+      .fld input { padding: 7px 3px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .ex-card { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · train</div>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="units-btn" type="button" role="menuitem">
+      <span class="menu-item-title" id="units-title">Units: lb</span>
+      <span class="menu-item-sub">Switch between lb and kg</span>
+    </button>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download a backup file</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <button class="menu-item" id="reset-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Reset history</span>
+      <span class="menu-item-sub">Erase all workouts on this device</span>
+    </button>
+    <div class="menu-note">Your training log lives only on this device.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+
+  <!-- home / idle -->
+  <div id="home-panel" class="panel">
+    <div class="kicker">Your training log</div>
+    <div class="home-stats" id="home-stats">nothing logged yet</div>
+    <button class="btn primary" id="start-btn">START WORKOUT</button>
+    <button class="btn ghost hidden" id="home-discard-btn">discard the open workout</button>
+    <div class="home-hint" id="home-hint">Start a workout, add exercises, log your sets. Pulling in a known exercise carries last time's numbers forward as goals.</div>
+    <div class="history hidden" id="history">
+      <div class="history-head">History</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- active workout -->
+  <div id="workout-panel" class="panel hidden">
+    <div class="wk-head">
+      <div class="wk-title">Workout</div>
+      <div class="wk-elapsed" id="wk-elapsed"></div>
+    </div>
+    <div id="entries"></div>
+    <div class="wk-actions">
+      <button class="btn" id="add-exercise-btn">+ ADD EXERCISE</button>
+      <button class="btn primary" id="finish-btn">FINISH WORKOUT</button>
+      <button class="btn ghost" id="discard-btn">discard workout</button>
+    </div>
+  </div>
+
+  <!-- exercise picker -->
+  <div id="picker-panel" class="panel hidden">
+    <div class="picker-head">Add an exercise</div>
+    <input id="picker-filter" type="text" placeholder="Filter…" autocomplete="off">
+    <div id="picker-list"></div>
+    <div id="new-ex-form">
+      <div class="new-ex-head">New exercise</div>
+      <input id="new-ex-name" type="text" placeholder="Name — e.g. Bench Press" autocomplete="off">
+      <div class="chip-row" role="group" aria-label="Tracked fields">
+        <button class="field-chip on" type="button" data-field="reps">reps</button>
+        <button class="field-chip" type="button" data-field="weight">weight</button>
+        <button class="field-chip" type="button" data-field="time">timer</button>
+      </div>
+      <button class="btn primary" id="create-ex-btn">CREATE &amp; ADD</button>
+    </div>
+    <div class="picker-actions">
+      <button class="btn ghost" id="picker-back-btn">back to workout</button>
+    </div>
+  </div>
+
+  <!-- past workout detail -->
+  <div id="detail-panel" class="panel hidden">
+    <div class="detail-head" id="detail-title">Workout</div>
+    <div class="detail-sub" id="detail-sub"></div>
+    <div id="detail-entries"></div>
+    <div class="detail-actions">
+      <button class="btn ghost" id="detail-back-btn">back</button>
+      <button class="btn ghost" id="detail-delete-btn">delete this workout</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- timer stop-confirmation -->
+<div id="timer-overlay" class="hidden">
+  <div class="overlay-card">
+    <div class="overlay-title">Log this set's time</div>
+    <div class="overlay-sub">Trim it if you were late stopping the clock.</div>
+    <input id="timer-log-value" type="text" inputmode="numeric" autocomplete="off" aria-label="Time to log">
+    <div class="adjust-row">
+      <button class="adjust-btn" type="button" data-adj="-10">−10s</button>
+      <button class="adjust-btn" type="button" data-adj="-5">−5s</button>
+      <button class="adjust-btn" type="button" data-adj="5">+5s</button>
+    </div>
+    <div class="overlay-actions">
+      <button class="btn primary" id="timer-log-btn">LOG TIME</button>
+      <button class="btn ghost" id="timer-cancel-btn">cancel — keep running</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  Train — log your workouts. Part of the Hill Climbing suite.
+//  Single-file app; state lives in one localStorage blob.
+// ═══════════════════════════════════════════════════════════════════
+
+const VERSION   = 'v0.1 · train';
+const STATE_KEY = 'hill-climbing-train';
+const FIELDS    = ['reps', 'weight', 'time'];
+const LB_PER_KG = 2.2046226218;
+
+// ── State ────────────────────────────────────────────────────────────────────
+// exercises: the user's catalog — { id, name, fields:{reps,weight,time}, createdAt }
+// workouts:  finished workouts — { id, startedAt, finishedAt, entries:[{exerciseId, sets}] }
+//            each set: { target:{reps,weight,time}, actual:{…}, done }
+//            weights stored canonically in lbs; times in integer seconds.
+// active:    in-progress workout (same shape, no finishedAt) + timer:{entryIdx,setIdx,startedAt}|null
+let state = blankState();
+
+function blankState() {
+  return { v: 1, unit: 'lbs', exercises: [], workouts: [], active: null };
+}
+function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function numOrNull(v) {
+  return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+}
+function normalizeVals(raw) {
+  const out = {};
+  FIELDS.forEach(f => { out[f] = numOrNull(raw && raw[f]); });
+  return out;
+}
+function normalizeSet(raw) {
+  return {
+    target: normalizeVals(raw && raw.target),
+    actual: normalizeVals(raw && raw.actual),
+    done: !!(raw && raw.done),
+  };
+}
+function normalizeEntry(raw) {
+  if (!raw || typeof raw.exerciseId !== 'string') return null;
+  return { exerciseId: raw.exerciseId, sets: (Array.isArray(raw.sets) ? raw.sets : []).map(normalizeSet) };
+}
+function normalizeWorkout(raw, needFinished) {
+  if (!raw || typeof raw.id !== 'string' || typeof raw.startedAt !== 'number') return null;
+  const w = {
+    id: raw.id, startedAt: raw.startedAt,
+    entries: (Array.isArray(raw.entries) ? raw.entries : []).map(normalizeEntry).filter(Boolean),
+  };
+  if (needFinished) {
+    if (typeof raw.finishedAt !== 'number') return null;
+    w.finishedAt = raw.finishedAt;
+  } else {
+    const t = raw.timer;
+    w.timer = (t && typeof t.entryIdx === 'number' && typeof t.setIdx === 'number' &&
+               typeof t.startedAt === 'number') ? { entryIdx: t.entryIdx, setIdx: t.setIdx, startedAt: t.startedAt } : null;
+  }
+  return w;
+}
+function normalizeExercise(raw) {
+  if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string' || !raw.name.trim()) return null;
+  const fields = {};
+  FIELDS.forEach(f => { fields[f] = !!(raw.fields && raw.fields[f]); });
+  if (!FIELDS.some(f => fields[f])) fields.reps = true;   // an exercise must track something
+  return { id: raw.id, name: raw.name.trim(), fields, createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : 0 };
+}
+function normalizeInto(target, raw) {
+  if (!raw || typeof raw !== 'object') return;
+  if (raw.unit === 'kg') target.unit = 'kg';
+  if (Array.isArray(raw.exercises)) target.exercises = raw.exercises.map(normalizeExercise).filter(Boolean);
+  if (Array.isArray(raw.workouts))  target.workouts  = raw.workouts.map(w => normalizeWorkout(w, true)).filter(Boolean);
+  if (raw.active) target.active = normalizeWorkout(raw.active, false);
+}
+function load() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  state = blankState();
+  normalizeInto(state, raw);
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+}
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+// Same shared localStorage log the other practices write. hcDayKey is the
+// canonical zero-padded key the hub reads — never reuse another app's date
+// helper here (their month formats differ on purpose).
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+let loggedThisLoad = false;   // one "trained today" flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log.train ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+    loggedThisLoad = true;
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+
+// ── Formatting / parsing ─────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function fmtNum(v) {
+  const r = Math.round(v * 10) / 10;
+  return String(r % 1 === 0 ? Math.round(r) : r);
+}
+// weights: stored in lbs, displayed/entered in the chosen unit
+function displayWeight(lbs) { return state.unit === 'kg' ? lbs / LB_PER_KG : lbs; }
+function storeWeight(v)     { return state.unit === 'kg' ? v * LB_PER_KG : v; }
+function unitLabel()        { return state.unit === 'kg' ? 'kg' : 'lb'; }
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function parseNumInput(v) {
+  const n = parseFloat(String(v).trim().replace(',', '.'));
+  return (isFinite(n) && n >= 0) ? n : null;
+}
+// accepts "m:ss", ":45", or bare seconds
+function parseTimeInput(v) {
+  v = String(v).trim();
+  if (!v) return null;
+  if (v.includes(':')) {
+    const [m, s] = v.split(':');
+    const mm = parseInt(m || '0', 10), ss = parseInt(s || '0', 10);
+    if (!isFinite(mm) || !isFinite(ss) || mm < 0 || ss < 0) return null;
+    return mm * 60 + ss;
+  }
+  const n = parseNumInput(v);
+  return n == null ? null : Math.round(n);
+}
+function fmtField(f, v) {
+  if (v == null) return null;
+  if (f === 'time') return fmtTime(v);
+  if (f === 'weight') return fmtNum(displayWeight(v));
+  return fmtNum(v);
+}
+function dayLabel(ts) {
+  const d = new Date(ts), now = new Date();
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString(undefined, opts);
+}
+
+// ── Catalog / prefill ────────────────────────────────────────────────────────
+function exerciseById(id) { return state.exercises.find(e => e.id === id); }
+function trackedFields(ex) { return FIELDS.filter(f => ex.fields[f]); }
+
+// Scan finished workouts newest-first for the last time this exercise was logged.
+function lastEntryFor(exId) {
+  for (let i = state.workouts.length - 1; i >= 0; i--) {
+    const e = state.workouts[i].entries.find(en => en.exerciseId === exId);
+    if (e && e.sets.length) return e;
+  }
+  return null;
+}
+function blankVals() { return { reps: null, weight: null, time: null }; }
+function blankSet() { return { target: blankVals(), actual: blankVals(), done: false }; }
+
+// Core prefill rule (user-specified): copy last time's sets, each target =
+// max(previous target, previous actual) per tracked field. Actuals start empty.
+function seedSets(ex) {
+  const prev = lastEntryFor(ex.id);
+  if (!prev) return [blankSet()];
+  return prev.sets.map(s => {
+    const t = blankVals();
+    for (const f of trackedFields(ex)) {
+      const a = s.actual[f], g = s.target[f];
+      t[f] = (a == null && g == null) ? null : Math.max(a ?? -Infinity, g ?? -Infinity);
+    }
+    return { target: t, actual: blankVals(), done: false };
+  });
+}
+
+// MRU ordering for the picker: most recently logged first, never-logged after
+// (newest-created first).
+function mruExercises() {
+  const lastUse = {};
+  state.workouts.forEach((w, i) => w.entries.forEach(en => { lastUse[en.exerciseId] = i; }));
+  return [...state.exercises].sort((a, b) => {
+    const la = lastUse[a.id], lb = lastUse[b.id];
+    if (la != null && lb != null) return lb - la;
+    if (la != null) return -1;
+    if (lb != null) return 1;
+    return b.createdAt - a.createdAt;
+  });
+}
+
+// ── Panels ───────────────────────────────────────────────────────────────────
+const homePanel    = document.getElementById('home-panel');
+const workoutPanel = document.getElementById('workout-panel');
+const pickerPanel  = document.getElementById('picker-panel');
+const detailPanel  = document.getElementById('detail-panel');
+const timerOverlay = document.getElementById('timer-overlay');
+
+function swapPanel(panel) {
+  [homePanel, workoutPanel, pickerPanel, detailPanel].forEach(p => p.classList.add('hidden'));
+  panel.classList.remove('hidden');
+  panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
+}
+
+// ── Home ─────────────────────────────────────────────────────────────────────
+function renderHome() {
+  const startBtn = document.getElementById('start-btn');
+  const discardBtn = document.getElementById('home-discard-btn');
+  startBtn.textContent = state.active ? 'RESUME WORKOUT' : 'START WORKOUT';
+  discardBtn.classList.toggle('hidden', !state.active);
+
+  const n = state.workouts.length;
+  document.getElementById('home-stats').textContent =
+    n === 0 ? 'nothing logged yet' : (n === 1 ? '1 workout logged' : n + ' workouts logged');
+  document.getElementById('home-hint').classList.toggle('hidden', n > 0 || !!state.active);
+
+  const hist = document.getElementById('history');
+  const list = document.getElementById('history-list');
+  hist.classList.toggle('hidden', n === 0);
+  list.innerHTML = '';
+  [...state.workouts].reverse().forEach(w => {
+    const sets = w.entries.reduce((a, e) => a + e.sets.length, 0);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'history-row';
+    row.innerHTML = '<span class="history-when">' + esc(dayLabel(w.startedAt)) + '</span>' +
+      '<span class="history-sum">' + w.entries.length + (w.entries.length === 1 ? ' exercise · ' : ' exercises · ') +
+      sets + (sets === 1 ? ' set' : ' sets') + '</span>';
+    row.addEventListener('click', () => { renderDetail(w.id); swapPanel(detailPanel); });
+    list.appendChild(row);
+  });
+}
+
+// ── Active workout ───────────────────────────────────────────────────────────
+function startWorkout() {
+  if (!state.active) {
+    state.active = { id: uid('w_'), startedAt: Date.now(), entries: [], timer: null };
+    markUsage();   // the commit moment — you showed up to train today
+    save();
+  }
+  renderWorkout();
+  swapPanel(workoutPanel);
+}
+function discardWorkout() {
+  if (!state.active) return;
+  const logged = state.active.entries.some(e => e.sets.some(s => FIELDS.some(f => s.actual[f] != null)));
+  if (!confirm(logged ? 'Discard this workout? Logged sets will be lost.' : 'Discard this workout?')) return;
+  state.active = null;
+  save();
+  renderHome();
+  swapPanel(homePanel);
+}
+function finishWorkout() {
+  if (!state.active) return;
+  const cleaned = state.active.entries
+    .map(e => ({ exerciseId: e.exerciseId, sets: e.sets.filter(s => FIELDS.some(f => s.actual[f] != null)) }))
+    .filter(e => e.sets.length);
+  if (!cleaned.length) {
+    if (confirm('No sets logged yet — discard this workout?')) {
+      state.active = null; save(); renderHome(); swapPanel(homePanel);
+    }
+    return;
+  }
+  state.workouts.push({ id: state.active.id, startedAt: state.active.startedAt, finishedAt: Date.now(), entries: cleaned });
+  state.active = null;
+  save();
+  renderHome();
+  swapPanel(homePanel);
+}
+
+function addSet(entryIdx) {
+  const e = state.active.entries[entryIdx];
+  const last = e.sets[e.sets.length - 1];
+  e.sets.push(last ? { target: { ...last.target }, actual: blankVals(), done: false } : blankSet());
+  save(); renderWorkout();
+}
+function removeSet(entryIdx, setIdx) {
+  const e = state.active.entries[entryIdx];
+  const t = state.active.timer;
+  if (t && t.entryIdx === entryIdx && t.setIdx === setIdx) state.active.timer = null;
+  if (t && t.entryIdx === entryIdx && t.setIdx > setIdx) t.setIdx--;
+  e.sets.splice(setIdx, 1);
+  save(); renderWorkout();
+}
+function removeEntry(entryIdx) {
+  const e = state.active.entries[entryIdx];
+  const ex = exerciseById(e.exerciseId);
+  const logged = e.sets.some(s => FIELDS.some(f => s.actual[f] != null));
+  if (logged && !confirm('Remove ' + (ex ? ex.name : 'this exercise') + '? Its logged sets will be lost.')) return;
+  const t = state.active.timer;
+  if (t && t.entryIdx === entryIdx) state.active.timer = null;
+  if (t && t.entryIdx > entryIdx) t.entryIdx--;
+  state.active.entries.splice(entryIdx, 1);
+  save(); renderWorkout();
+}
+function toggleDone(entryIdx, setIdx) {
+  const e = state.active.entries[entryIdx];
+  const ex = exerciseById(e.exerciseId);
+  const s = e.sets[setIdx];
+  if (!s.done) {
+    s.done = true;
+    // one-tap "as planned": copy targets into any still-empty actual
+    if (ex) for (const f of trackedFields(ex)) {
+      if (s.actual[f] == null && s.target[f] != null) s.actual[f] = s.target[f];
+    }
+  } else {
+    s.done = false;   // keep actuals — unchecking isn't erasing
+  }
+  save(); renderWorkout();
+}
+function setValue(entryIdx, setIdx, kind, field, rawValue) {
+  const s = state.active.entries[entryIdx].sets[setIdx];
+  let v = field === 'time' ? parseTimeInput(rawValue) : parseNumInput(rawValue);
+  if (v != null && field === 'weight') v = storeWeight(v);
+  if (v != null && field === 'reps') v = Math.round(v);
+  s[kind][field] = v;
+  save();
+}
+
+function renderWorkout() {
+  if (!state.active) { renderHome(); swapPanel(homePanel); return; }
+  renderElapsed();
+  const wrap = document.getElementById('entries');
+  wrap.innerHTML = '';
+  state.active.entries.forEach((entry, ei) => {
+    const ex = exerciseById(entry.exerciseId);
+    if (!ex) return;
+    const fields = trackedFields(ex);
+    const card = document.createElement('div');
+    card.className = 'ex-card';
+
+    const head = document.createElement('div');
+    head.className = 'ex-head';
+    head.innerHTML = '<div class="ex-name">' + esc(ex.name) + '</div>';
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'ex-remove'; rm.textContent = '×';
+    rm.title = 'Remove exercise'; rm.setAttribute('aria-label', 'Remove exercise');
+    rm.addEventListener('click', () => removeEntry(ei));
+    head.appendChild(rm);
+    card.appendChild(head);
+
+    const legend = document.createElement('div');
+    legend.className = 'ex-legend';
+    legend.textContent = 'goal over actual';
+    card.appendChild(legend);
+
+    const grid = document.createElement('div');
+    grid.className = 'set-grid';
+    grid.style.gridTemplateColumns = '22px ' + fields.map(() => 'minmax(0,1fr)').join(' ') + ' auto';
+
+    // header row
+    grid.appendChild(el('div', 'col-h', ''));
+    fields.forEach(f => grid.appendChild(el('div', 'col-h', f === 'weight' ? unitLabel() : f === 'time' ? 'time' : 'reps')));
+    grid.appendChild(el('div', 'col-h', ''));
+
+    entry.sets.forEach((s, si) => {
+      grid.appendChild(el('div', 'set-num', String(si + 1)));
+
+      fields.forEach(f => {
+        const cell = document.createElement('div');
+        cell.className = 'fld';
+
+        const t = document.createElement('input');
+        t.className = 't'; t.type = 'text'; t.autocomplete = 'off';
+        t.inputMode = f === 'reps' ? 'numeric' : f === 'weight' ? 'decimal' : 'numeric';
+        t.placeholder = f === 'time' ? '0:00' : '—';
+        t.value = fmtField(f, s.target[f]) ?? '';
+        t.title = 'Goal'; t.setAttribute('aria-label', 'Goal ' + f + ', set ' + (si + 1));
+        t.addEventListener('change', () => {
+          setValue(ei, si, 'target', f, t.value);
+          t.value = fmtField(f, state.active.entries[ei].sets[si].target[f]) ?? '';
+        });
+        cell.appendChild(t);
+
+        const a = document.createElement('input');
+        a.className = 'a'; a.type = 'text'; a.autocomplete = 'off';
+        a.inputMode = f === 'reps' ? 'numeric' : f === 'weight' ? 'decimal' : 'numeric';
+        a.placeholder = f === 'time' ? '0:00' : '—';
+        a.value = fmtField(f, s.actual[f]) ?? '';
+        a.title = 'Actual'; a.setAttribute('aria-label', 'Actual ' + f + ', set ' + (si + 1));
+        a.addEventListener('change', () => {
+          setValue(ei, si, 'actual', f, a.value);
+          a.value = fmtField(f, state.active.entries[ei].sets[si].actual[f]) ?? '';
+        });
+
+        if (f === 'time') {
+          const box = document.createElement('div');
+          box.className = 'fld-time';
+          const running = state.active.timer && state.active.timer.entryIdx === ei && state.active.timer.setIdx === si;
+          if (running) { a.readOnly = true; a.classList.add('running'); a.dataset.running = '1'; }
+          box.appendChild(a);
+          const tb = document.createElement('button');
+          tb.type = 'button'; tb.className = 'timer-btn';
+          tb.textContent = running ? '■' : '▶';
+          tb.title = running ? 'Stop timer' : 'Start timer';
+          tb.setAttribute('aria-label', tb.title + ', set ' + (si + 1));
+          tb.dataset.entry = ei; tb.dataset.set = si;
+          tb.addEventListener('click', () => running ? stopTimer() : startTimer(ei, si));
+          box.appendChild(tb);
+          cell.appendChild(box);
+        } else {
+          cell.appendChild(a);
+        }
+        grid.appendChild(cell);
+      });
+
+      const ctl = document.createElement('div');
+      ctl.className = 'set-ctl';
+      const done = document.createElement('button');
+      done.type = 'button'; done.className = 'done-btn' + (s.done ? ' on' : '');
+      done.textContent = '✓'; done.title = s.done ? 'Set done' : 'Mark set done';
+      done.setAttribute('aria-label', done.title + ', set ' + (si + 1));
+      done.addEventListener('click', () => toggleDone(ei, si));
+      ctl.appendChild(done);
+      const srm = document.createElement('button');
+      srm.type = 'button'; srm.className = 'set-remove'; srm.textContent = '×';
+      srm.title = 'Remove set'; srm.setAttribute('aria-label', 'Remove set ' + (si + 1));
+      srm.addEventListener('click', () => removeSet(ei, si));
+      ctl.appendChild(srm);
+      grid.appendChild(ctl);
+    });
+
+    card.appendChild(grid);
+
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'add-set'; add.textContent = '+ add set';
+    add.addEventListener('click', () => addSet(ei));
+    card.appendChild(add);
+
+    wrap.appendChild(card);
+  });
+
+  if (!state.active.entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'home-hint';
+    empty.style.margin = '10px auto 0';
+    empty.style.textAlign = 'center';
+    empty.textContent = 'No exercises yet — add your first below.';
+    wrap.appendChild(empty);
+  }
+}
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  n.className = cls; n.textContent = text;
+  return n;
+}
+function renderElapsed() {
+  const elp = document.getElementById('wk-elapsed');
+  if (!state.active) { elp.textContent = ''; return; }
+  const min = Math.floor((Date.now() - state.active.startedAt) / 60000);
+  elp.textContent = min < 1 ? 'just started' : min + ' min';
+}
+
+// ── Timer ────────────────────────────────────────────────────────────────────
+// The stopwatch is a persisted start timestamp; the display always renders
+// Date.now() − startedAt, so it survives reloads and never drifts.
+function startTimer(entryIdx, setIdx) {
+  if (!state.active) return;
+  if (state.active.timer) {
+    // one timer at a time — pulse the running one instead
+    const t = state.active.timer;
+    const btn = document.querySelector('.timer-btn[data-entry="' + t.entryIdx + '"][data-set="' + t.setIdx + '"]');
+    if (btn) { btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse'); }
+    return;
+  }
+  state.active.timer = { entryIdx, setIdx, startedAt: Date.now() };
+  save();
+  renderWorkout();
+}
+function timerElapsed() {
+  return Math.max(0, Math.round((Date.now() - state.active.timer.startedAt) / 1000));
+}
+function stopTimer() {
+  if (!state.active || !state.active.timer) return;
+  // keep the clock running until the time is confirmed — cancel resumes it
+  document.getElementById('timer-log-value').value = fmtTime(timerElapsed());
+  timerOverlay.classList.remove('hidden');
+  document.getElementById('timer-log-value').focus();
+}
+function adjustLogValue(delta) {
+  const input = document.getElementById('timer-log-value');
+  const cur = parseTimeInput(input.value);
+  input.value = fmtTime(Math.max(0, (cur ?? 0) + delta));
+}
+function confirmLogTime() {
+  if (!state.active || !state.active.timer) { timerOverlay.classList.add('hidden'); return; }
+  const v = parseTimeInput(document.getElementById('timer-log-value').value);
+  if (v == null) { adjustLogValue(0); return; }   // unparseable — snap back to a valid value
+  const { entryIdx, setIdx } = state.active.timer;
+  const entry = state.active.entries[entryIdx];
+  if (entry && entry.sets[setIdx]) entry.sets[setIdx].actual.time = v;
+  state.active.timer = null;
+  save();
+  timerOverlay.classList.add('hidden');
+  renderWorkout();
+}
+function cancelLogTime() {
+  timerOverlay.classList.add('hidden');   // the timer never stopped — keep counting
+}
+// One light interval drives the running-timer display and the header clock.
+setInterval(() => {
+  if (!state.active || workoutPanel.classList.contains('hidden')) return;
+  renderElapsed();
+  if (state.active.timer) {
+    const running = document.querySelector('#entries input.a[data-running="1"]');
+    if (running && document.activeElement !== running) running.value = fmtTime(timerElapsed());
+  }
+}, 250);
+
+// ── Picker / new exercise ────────────────────────────────────────────────────
+function addExerciseToWorkout(ex) {
+  state.active.entries.push({ exerciseId: ex.id, sets: seedSets(ex) });
+  save();
+  renderWorkout();
+  swapPanel(workoutPanel);
+}
+function renderPicker() {
+  const filter = document.getElementById('picker-filter').value.trim().toLowerCase();
+  const inWorkout = new Set(state.active ? state.active.entries.map(e => e.exerciseId) : []);
+  const list = document.getElementById('picker-list');
+  list.innerHTML = '';
+  const options = mruExercises().filter(ex => !inWorkout.has(ex.id) &&
+    (!filter || ex.name.toLowerCase().includes(filter)));
+  options.forEach(ex => {
+    const row = document.createElement('button');
+    row.type = 'button'; row.className = 'picker-row';
+    row.innerHTML = '<span>' + esc(ex.name) + '</span>' +
+      '<span class="picker-fields">' + trackedFields(ex).map(f => f === 'time' ? 'timer' : f).join(' · ') + '</span>';
+    row.addEventListener('click', () => addExerciseToWorkout(ex));
+    list.appendChild(row);
+  });
+  if (!options.length) {
+    const empty = document.createElement('div');
+    empty.className = 'picker-empty';
+    empty.textContent = state.exercises.length
+      ? 'Nothing matches — every exercise is already in this workout, or the filter is too narrow.'
+      : 'No exercises yet — create your first below.';
+    list.appendChild(empty);
+  }
+}
+function createExercise() {
+  const nameInput = document.getElementById('new-ex-name');
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.focus(); return; }
+  const fields = {};
+  document.querySelectorAll('.field-chip').forEach(c => { fields[c.dataset.field] = c.classList.contains('on'); });
+  if (!FIELDS.some(f => fields[f])) { alert('Pick at least one thing to track — reps, weight, or timer.'); return; }
+  // case-insensitive dedupe: an existing exercise by this name is reused as-is
+  const existing = state.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
+  const ex = existing || { id: uid('ex_'), name, fields, createdAt: Date.now() };
+  if (!existing) { state.exercises.push(ex); save(); }
+  nameInput.value = '';
+  const already = state.active.entries.some(e => e.exerciseId === ex.id);
+  if (already) { renderWorkout(); swapPanel(workoutPanel); return; }
+  addExerciseToWorkout(ex);
+}
+
+// ── Past workout detail ──────────────────────────────────────────────────────
+let detailId = null;
+function renderDetail(id) {
+  detailId = id;
+  const w = state.workouts.find(x => x.id === id);
+  if (!w) { renderHome(); swapPanel(homePanel); return; }
+  document.getElementById('detail-title').textContent = dayLabel(w.startedAt);
+  const min = Math.max(1, Math.round((w.finishedAt - w.startedAt) / 60000));
+  document.getElementById('detail-sub').textContent =
+    new Date(w.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) + ' · ' + min + ' min';
+  const wrap = document.getElementById('detail-entries');
+  wrap.innerHTML = '';
+  w.entries.forEach(entry => {
+    const ex = exerciseById(entry.exerciseId);
+    const fields = ex ? trackedFields(ex) : FIELDS.filter(f => entry.sets.some(s => s.target[f] != null || s.actual[f] != null));
+    const card = document.createElement('div');
+    card.className = 'detail-card';
+    card.appendChild(el('div', 'detail-ex', ex ? ex.name : '(deleted exercise)'));
+    entry.sets.forEach((s, si) => {
+      const row = document.createElement('div');
+      row.className = 'detail-set';
+      let html = '<span class="n">' + (si + 1) + '</span>';
+      fields.forEach(f => {
+        const goal = fmtField(f, s.target[f]);
+        const did  = fmtField(f, s.actual[f]);
+        const unit = f === 'weight' ? ' ' + unitLabel() : f === 'reps' ? ' reps' : '';
+        html += '<span>' + (goal != null ? esc(goal) : '<span class="miss">—</span>') +
+                ' → <b>' + (did != null ? esc(did) : '<span class="miss">—</span>') + '</b>' + unit + '</span>';
+      });
+      row.innerHTML = html;
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+}
+function deleteWorkout() {
+  if (!detailId) return;
+  if (!confirm('Delete this workout from your history?')) return;
+  state.workouts = state.workouts.filter(w => w.id !== detailId);
+  detailId = null;
+  save();
+  renderHome();
+  swapPanel(homePanel);
+}
+
+// ── Export / import / reset (your data is yours) ─────────────────────────────
+function exportData() {
+  const payload = { app: 'train', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'train-' + hcDayKey() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object') throw new Error('not a Train export');
+    state = blankState();
+    normalizeInto(state, incoming);
+    state.active = null;   // don't resume a half-workout from an import
+    save();
+    renderHome();
+    swapPanel(homePanel);
+    alert('Imported your training log.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+function resetData() {
+  if (!confirm('Erase your whole training log on this device? Export first if you want a backup.')) return;
+  state = blankState();
+  try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+  renderHome();
+  swapPanel(homePanel);
+}
+function toggleUnits() {
+  state.unit = state.unit === 'kg' ? 'lbs' : 'kg';
+  save();
+  document.getElementById('units-title').textContent = 'Units: ' + unitLabel();
+  // re-render whichever panel is showing so weights re-display converted
+  if (!workoutPanel.classList.contains('hidden')) renderWorkout();
+  else if (!detailPanel.classList.contains('hidden') && detailId) renderDetail(detailId);
+  else renderHome();
+}
+
+// ── Events ───────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startWorkout);
+document.getElementById('home-discard-btn').addEventListener('click', discardWorkout);
+document.getElementById('finish-btn').addEventListener('click', finishWorkout);
+document.getElementById('discard-btn').addEventListener('click', discardWorkout);
+document.getElementById('add-exercise-btn').addEventListener('click', () => {
+  document.getElementById('picker-filter').value = '';
+  document.getElementById('new-ex-name').value = '';
+  // fresh form each visit — stale chips from the last creation are a silent footgun
+  document.querySelectorAll('.field-chip').forEach(c => c.classList.toggle('on', c.dataset.field === 'reps'));
+  renderPicker();
+  swapPanel(pickerPanel);
+});
+document.getElementById('picker-back-btn').addEventListener('click', () => { renderWorkout(); swapPanel(workoutPanel); });
+document.getElementById('picker-filter').addEventListener('input', renderPicker);
+document.getElementById('create-ex-btn').addEventListener('click', createExercise);
+document.getElementById('new-ex-name').addEventListener('keydown', e => { if (e.key === 'Enter') createExercise(); });
+document.querySelectorAll('.field-chip').forEach(c =>
+  c.addEventListener('click', () => c.classList.toggle('on')));
+document.getElementById('detail-back-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
+document.getElementById('detail-delete-btn').addEventListener('click', deleteWorkout);
+document.getElementById('timer-log-btn').addEventListener('click', confirmLogTime);
+document.getElementById('timer-cancel-btn').addEventListener('click', cancelLogTime);
+document.querySelectorAll('.adjust-btn').forEach(b =>
+  b.addEventListener('click', () => adjustLogValue(parseInt(b.dataset.adj, 10))));
+document.getElementById('timer-log-value').addEventListener('keydown', e => { if (e.key === 'Enter') confirmLogTime(); });
+
+// Corner data menu — open/close, close on outside-click or Esc.
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+const importFile = document.getElementById('import-file');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+document.getElementById('units-btn').addEventListener('click', () => { setMenu(false); toggleUnits(); });
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+document.getElementById('units-title').textContent = 'Units: ' + unitLabel();
+renderHome();
+swapPanel(homePanel);
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
