@@ -345,6 +345,35 @@
     }
     .rest-restore:hover { color: var(--accent); border-color: var(--accent-soft); }
 
+    /* ── overview (flat, bottom-up) ─────────────────────────────── */
+    .seg-row {
+      display: inline-flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 16px;
+      padding: 3px; gap: 2px; margin-bottom: 4px;
+    }
+    .seg-btn {
+      padding: 6px 18px; border-radius: 13px; border: none; background: transparent;
+      color: var(--dim); font-family: var(--font-ui); font-size: 12px;
+      letter-spacing: 0.06em; cursor: pointer; transition: background 0.2s, color 0.2s;
+    }
+    .seg-btn.sel { background: rgba(255,255,255,0.1); color: var(--text); }
+    .sec-hint { font-size: 11.5px; color: var(--faint); margin: -6px 0 10px; }
+    .depth-label {
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--faint); margin: 14px 0 6px;
+    }
+    .ov-row {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px;
+      margin-bottom: 6px; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: border-color 0.2s;
+    }
+    .ov-row:hover { border-color: var(--line-strong); }
+    .ov-title { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+    .ov-path { font-size: 11px; color: var(--dim); overflow-wrap: anywhere; }
+    .ov-task { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+
     /* ── history ────────────────────────────────────────────────── */
     .h-head { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 8px; }
     .h-day {
@@ -386,9 +415,10 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · climb</div>
+<div class="corner" id="version-label">v0.2 · climb</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="goals">Goals</button>
+  <button class="mode-btn"        data-view="overview">Overview</button>
   <button class="mode-btn"        data-view="history">History</button>
 </nav>
 <div id="menu">
@@ -418,6 +448,7 @@
 
 <main>
   <section id="goals-view" class="panel"></section>
+  <section id="overview-view" class="panel hidden"></section>
   <section id="history-view" class="panel hidden"></section>
 </main>
 
@@ -425,7 +456,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.1 · climb';
+const VERSION   = 'v0.2 · climb';
 const STATE_KEY = 'hill-climbing-climb';
 const DB_NAME   = 'climb';
 const STORE     = 'events';
@@ -442,12 +473,15 @@ const state = {
 
 // Transient UI state — never persisted; reload lands at the root.
 const ui = {
-  view: 'goals',           // 'goals' | 'history'
+  view: 'goals',           // 'goals' | 'overview' | 'history'
   path: [],                // goal ids from root → current screen
   menuOpenId: null,        // goal id whose ⋯ menu is open
   movingId: null,          // goal id being moved (picker open)
   editing: null,           // { kind: 'goal' | 'goal-head' | 'task', id }
   restingOpen: false,      // the "resting" disclosure at the current level
+  overviewMode: 'goals',   // 'goals' | 'steps' — the Overview tab's toggle
+  ovRestingOpen: false,    // Overview: global resting disclosure
+  ovDoneOpen: false,       // Overview: done-steps disclosure
   confirmKey: null,        // two-tap confirm target ('task-<id>' | 'erase')
   confirmTimer: null,
 };
@@ -562,6 +596,20 @@ function pathTo(goalId) {
 }
 function reindex(parentId) {
   activeChildren(parentId).forEach((g, i) => { g.order = i; });
+}
+function depthOf(goal) {
+  let d = 0, g = goal;
+  while (g && g.parentId) { d++; g = state.goals[g.parentId]; }
+  return d;
+}
+// Every effectively-active goal, in tree (DFS) order — the stable order
+// the Overview groups draw from.
+function dfsActiveGoals() {
+  const out = [];
+  (function walk(parentId) {
+    activeChildren(parentId).forEach(g => { out.push(g); walk(g.id); });
+  })(null);
+  return out;
 }
 
 // ── Storage: defensive load / save (nourish pattern) ────────────────────────
@@ -788,8 +836,9 @@ function deleteTask(id) {
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
-const goalsView   = document.getElementById('goals-view');
-const historyView = document.getElementById('history-view');
+const goalsView    = document.getElementById('goals-view');
+const overviewView = document.getElementById('overview-view');
+const historyView  = document.getElementById('history-view');
 
 function currentParent() { return ui.path.length ? ui.path[ui.path.length - 1] : null; }
 
@@ -979,6 +1028,100 @@ function renderGoals() {
   if (edit) { edit.focus(); edit.select(); }
 }
 
+// ── Overview: every goal (and step) in one flat, bottom-up view ─────────────
+function depthLabel(d) {
+  return d === 0 ? 'top level' : d === 1 ? '1 level deep' : `${d} levels deep`;
+}
+function groupByDepth(items, depthFn) {
+  const m = new Map();               // insertion order preserves DFS order in-group
+  items.forEach(it => { const d = depthFn(it); if (!m.has(d)) m.set(d, []); m.get(d).push(it); });
+  return [...m.entries()].sort((a, b) => b[0] - a[0]);   // deepest first
+}
+function ancestorTitles(goalId, includeSelf) {
+  const ids = pathTo(goalId);
+  return (includeSelf ? ids : ids.slice(0, -1)).map(id => state.goals[id].title);
+}
+function ovGoalRowHTML(g) {
+  const anc = ancestorTitles(g.id, false);
+  return `<button type="button" class="ov-row" data-act="ov-open" data-id="${escAttr(g.id)}">
+    <span class="ov-title">${esc(g.title)}</span>
+    ${anc.length ? `<span class="ov-path">${esc(anc.join(' › '))}</span>` : ''}
+  </button>`;
+}
+function ovGoalSectionHTML(label, hint, goals) {
+  if (!goals.length) return '';
+  let h = `<div class="sec">${label}</div><div class="sec-hint">${hint}</div>`;
+  groupByDepth(goals, g => depthOf(g)).forEach(([d, rows]) => {
+    h += `<div class="depth-label">${depthLabel(d)}</div>` + rows.map(ovGoalRowHTML).join('');
+  });
+  return h;
+}
+function ovTaskRowHTML(t, g) {
+  return `<div class="task-row${t.done ? ' done' : ''}">
+    <button type="button" class="task-check" data-act="task-toggle" data-id="${escAttr(t.id)}"
+      role="checkbox" aria-checked="${t.done}" aria-label="${t.done ? 'Reopen' : 'Complete'} ${escAttr(t.title)}">${CHECK_SVG}</button>
+    <button type="button" class="task-title ov-task" data-act="ov-open" data-id="${escAttr(g.id)}">
+      <span>${esc(t.title)}</span>
+      <span class="ov-path">${esc(ancestorTitles(g.id, true).join(' › '))}</span>
+    </button>
+  </div>`;
+}
+function renderOverview() {
+  let html = `<div class="seg-row" role="tablist">
+    <button type="button" class="seg-btn${ui.overviewMode === 'goals' ? ' sel' : ''}" data-act="ov-mode" data-mode="goals">Goals</button>
+    <button type="button" class="seg-btn${ui.overviewMode === 'steps' ? ' sel' : ''}" data-act="ov-mode" data-mode="steps">Steps</button>
+  </div>`;
+
+  const active = dfsActiveGoals();
+  if (ui.overviewMode === 'goals') {
+    const leaves  = active.filter(g => activeChildren(g.id).length === 0);
+    const parents = active.filter(g => activeChildren(g.id).length > 0);
+    if (!active.length) {
+      html += `<div class="empty">Nothing in play yet.<br>Add a goal on the Goals tab and it will appear here.</div>`;
+    } else {
+      html += ovGoalSectionHTML('Leaves', 'the concrete edges — nothing beneath them', leaves);
+      html += ovGoalSectionHTML('Parents', 'the hills those edges belong to', parents);
+    }
+    const resting = Object.values(state.goals).filter(g => g.status === 'resting')
+      .sort((a, b) => (a.restedAt || 0) - (b.restedAt || 0));
+    if (resting.length) {
+      html += `<details class="resting ov-resting"${ui.ovRestingOpen ? ' open' : ''}>
+        <summary>resting · ${resting.length}</summary>
+        ${resting.map(g => {
+          const anc = ancestorTitles(g.id, false);
+          return `<div class="rest-row">
+            <span class="rest-title">${esc(g.title)}${anc.length ? ` <span class="ov-path">${esc(anc.join(' › '))}</span>` : ''}</span>
+            <button type="button" class="rest-restore" data-act="restore" data-id="${escAttr(g.id)}">Pick it back up</button>
+          </div>`;
+        }).join('')}
+      </details>`;
+    }
+  } else {
+    const open = [], done = [];
+    active.forEach(g => {
+      tasksOf(g.id).sort((a, b) => a.created - b.created)
+        .forEach(t => (t.done ? done : open).push({ t, g }));
+    });
+    if (!open.length && !done.length) {
+      html += `<div class="empty">No steps yet.<br>Open a goal and add a step you could do today.</div>`;
+    } else if (!open.length) {
+      html += `<div class="empty">Every step is done. Add the next one inside a goal.</div>`;
+    } else {
+      groupByDepth(open, x => depthOf(x.g)).forEach(([d, rows]) => {
+        html += `<div class="depth-label">${depthLabel(d)}</div>
+          <div class="task-list">${rows.map(x => ovTaskRowHTML(x.t, x.g)).join('')}</div>`;
+      });
+    }
+    if (done.length) {
+      html += `<details class="resting ov-done"${ui.ovDoneOpen ? ' open' : ''}>
+        <summary>done · ${done.length}</summary>
+        <div class="task-list">${done.map(x => ovTaskRowHTML(x.t, x.g)).join('')}</div>
+      </details>`;
+    }
+  }
+  overviewView.innerHTML = html;
+}
+
 // ── History (read-only mirror of the event log) ─────────────────────────────
 function goalTitle(id) { const g = state.goals[id]; return g ? g.title : '(gone)'; }
 function q(s) { return `“${esc(s)}”`; }
@@ -1032,8 +1175,11 @@ function render() {
   document.querySelectorAll('.mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.view === ui.view));
   goalsView.classList.toggle('hidden', ui.view !== 'goals');
+  overviewView.classList.toggle('hidden', ui.view !== 'overview');
   historyView.classList.toggle('hidden', ui.view !== 'history');
-  if (ui.view === 'goals') renderGoals(); else renderHistory();
+  if (ui.view === 'goals') renderGoals();
+  else if (ui.view === 'overview') renderOverview();
+  else renderHistory();
 }
 function switchView(v) {
   ui.view = v;
@@ -1151,6 +1297,31 @@ goalsView.addEventListener('focusout', (e) => {
 // Track the resting-disclosure state across re-renders.
 goalsView.addEventListener('toggle', (e) => {
   if (e.target.matches('details.resting')) ui.restingOpen = e.target.open;
+}, true);
+
+// ── Overview interactions (own delegated handler — the goals-view one is
+//    scoped to the tree screens) ─────────────────────────────────────────────
+overviewView.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  switch (btn.dataset.act) {
+    case 'ov-mode':
+      ui.overviewMode = btn.dataset.mode === 'steps' ? 'steps' : 'goals';
+      renderOverview(); break;
+    case 'ov-open':
+      ui.view = 'goals';
+      ui.path = pathTo(btn.dataset.id);
+      ui.editing = null; ui.movingId = null; ui.menuOpenId = null; ui.restingOpen = false;
+      clearConfirm(); render(); break;
+    case 'task-toggle':
+      toggleTask(btn.dataset.id); renderOverview(); break;
+    case 'restore':
+      restoreGoal(btn.dataset.id); renderOverview(); break;
+  }
+});
+overviewView.addEventListener('toggle', (e) => {
+  if (e.target.matches('details.ov-resting')) ui.ovRestingOpen = e.target.open;
+  if (e.target.matches('details.ov-done'))    ui.ovDoneOpen = e.target.open;
 }, true);
 
 // Close row menus on outside click.
