@@ -20,6 +20,7 @@
     { "name": "Meditate", "short_name": "Meditate", "url": "/meditate.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
     { "name": "Breathe", "short_name": "Breathe", "url": "/breathe.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
     { "name": "Reflect", "short_name": "Reflect", "url": "/reflect.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
-    { "name": "Nourish", "short_name": "Nourish", "url": "/nourish.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+    { "name": "Nourish", "short_name": "Nourish", "url": "/nourish.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Train", "short_name": "Train", "url": "/train.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }
