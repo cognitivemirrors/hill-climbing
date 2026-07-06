@@ -180,6 +180,18 @@ The most likely future entries here would be: a code path that disables the idle
 ### L26. Levity and Council storage still missing from REQUIREMENTS §1.1 (pre-existing; observed while adding Climb's rows)
 - **Confidence:** confirmed
 - **Where:** REQUIREMENTS.md §1.1. Climb's rows were added in v1.94 with founder sign-off, which makes the remaining gaps conspicuous: `hill-climbing-levity` (Levity ladder + notebook state, added v1.92) has no row and Levity is absent from the `hill-climbing-usage` writer list; Council's two keys are already flagged in L24. Binding doc → founder ratification required; not self-amended in v1.94.
+- **Resolved (v1.98):** §1.1 now carries `hill-climbing-levity`, `hill-climbing-council`, `hill-climbing-council-key`, and `hill-climbing-train` rows, and the `hill-climbing-usage` row lists the Levity and Train writers — folded into the founder-ratified v1.98 sync amendment.
+
+### L27. Opt-in E2EE sync — residual risks of the first operator-held store (v1.98)
+- **Confidence:** confirmed (by design; `hc-sync.js` + `climb.html`, added v1.98)
+- **Severity:** LOW at Tier 0 (opt-in, off by default; the operator is the user; zero-knowledge, so the operator cannot read content) — but it is the suite's **first operator-held store** and first *required-schema* dependency, so the sub-risks below deserve watching before any tier advance.
+- **Where:** `hc-sync.js` (envelope + sync loop), `climb.html` (wiring), Supabase `sync_docs` / `sync_keybundle` + RLS.
+- **Residual risks:**
+  - **RLS is the only guard.** The anon key is public by design; if `supabase-schema.sql` is applied without RLS enabled (or a policy is later dropped), every user's rows become readable to anyone with the anon key. Content stays unreadable (zero-knowledge), but the *metadata* (emails, sizes, counts, timestamps, doc keys) would leak. **Verify RLS is on for both tables after any schema change.** This is the one item that would rise to MEDIUM if misconfigured.
+  - **Passphrase loss = data loss, by design.** If both the passphrase and the recovery code are lost, the synced copy is unrecoverable — no operator reset is possible (that is the point). Setup shows the recovery code once; a user who dismisses it without saving it is at risk. Local device data is unaffected.
+  - **Metadata leakage (accepted, documented).** Even with content encrypted, the operator sees email, ciphertext sizes, row counts (≈ activity volume), timestamps, and doc keys (REQUIREMENTS §1.5). Padding / batching / key-hashing are follow-ups, not shipped.
+  - **Concurrent-edit loss under whole-blob LWW.** Two devices editing `hill-climbing-climb` within one sync window: the later push replaces the whole blob, so the earlier device's *state* changes are dropped (the immutable event log still preserves both in History). Fine for one user across their own devices; a per-entity/CRDT merge is the documented fix before multi-user.
+- **Watch-items:** confirm RLS after any Supabase change; add full **account deletion** (removing the `auth.users` row) before a tier advance; when extending sync to the **Reflect journal** (the most sensitive store), re-review the metadata-leakage acceptance and use a per-entry merge, not whole-blob. Any change that would sync a **credential** (e.g. Council's API key) must be a separate explicit opt-in — never bundled with normal data.
 
 ---
 

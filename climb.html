@@ -99,6 +99,24 @@
     .menu-item.danger .menu-item-title { color: hsl(8,62%,62%); }
     .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
 
+    /* Sync section + status dot on the menu button. */
+    #sync-dot {
+      position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
+      border-radius: 999px; background: var(--faint); pointer-events: none;
+      display: none; transition: background 0.3s;
+    }
+    #sync-dot.on   { display: block; }
+    #sync-dot.ok   { background: hsl(150,48%,55%); }
+    #sync-dot.warn { background: hsl(38,80%,60%); }
+    #sync-dot.err  { background: hsl(8,62%,62%); }
+    #sync-dot.busy { background: var(--accent); }
+    .sync-status { font-size: 11px; color: var(--dim); padding: 2px 10px 8px; line-height: 1.5; }
+    .menu-head .beta {
+      font-size: 8.5px; letter-spacing: 0.12em; color: var(--faint);
+      border: 1px solid var(--faint); border-radius: 6px; padding: 1px 4px; margin-left: 6px;
+      text-transform: uppercase;
+    }
+
     /* Home / all-practices link — returns to the hub. */
     #home-link {
       position: fixed; top: 11px; left: 18px; z-index: 12;
@@ -408,13 +426,14 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · climb</div>
+<div class="corner" id="version-label">v0.4 · climb</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="goals">Goals</button>
   <button class="mode-btn"        data-view="steps">Steps</button>
   <button class="mode-btn"        data-view="history">History</button>
 </nav>
 <div id="menu">
+  <span id="sync-dot" aria-hidden="true"></span>
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
@@ -434,7 +453,29 @@
       <span class="menu-item-title">Delete everything</span>
       <span class="menu-item-sub" id="erase-sub">Goals and history, gone for real</span>
     </button>
-    <div class="menu-note">Your goals live only on this device.</div>
+    <div class="menu-head">Sync <span class="beta">beta</span></div>
+    <div id="sync-status" class="sync-status">This device only</div>
+    <button class="menu-item" id="sync-signin" type="button" role="menuitem">
+      <span class="menu-item-title">Sign in / create account</span>
+      <span class="menu-item-sub">Encrypted sync across your devices</span>
+    </button>
+    <button class="menu-item hidden" id="sync-unlock" type="button" role="menuitem">
+      <span class="menu-item-title">Enter passphrase</span>
+      <span class="menu-item-sub">Unlock sync on this device</span>
+    </button>
+    <button class="menu-item hidden" id="sync-now" type="button" role="menuitem">
+      <span class="menu-item-title">Sync now</span>
+      <span class="menu-item-sub" id="sync-now-sub">Up to date</span>
+    </button>
+    <button class="menu-item hidden" id="sync-signout" type="button" role="menuitem">
+      <span class="menu-item-title">Sign out</span>
+      <span class="menu-item-sub">Stop syncing on this device</span>
+    </button>
+    <button class="menu-item danger hidden" id="sync-delete" type="button" role="menuitem">
+      <span class="menu-item-title">Delete my synced data</span>
+      <span class="menu-item-sub">Erase the encrypted copy on the server</span>
+    </button>
+    <div class="menu-note" id="sync-note">Your goals live only on this device.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -445,14 +486,24 @@
   <section id="history-view" class="panel hidden"></section>
 </main>
 
+<script src="/hc-sync.js"></script>
 <script>
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.3 · climb';
+const VERSION   = 'v0.4 · climb';
 const STATE_KEY = 'hill-climbing-climb';
 const DB_NAME   = 'climb';
 const STORE     = 'events';
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// Fill these in from your Supabase project (Project Settings → API). The anon
+// key is PUBLIC by design — Row-Level Security is the real guard. Until these
+// are set, sync stays dormant and the app is 100% local, exactly as before.
+const SUPABASE_URL      = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-SUPABASE-ANON-KEY';
+const SYNC_BLOB_KEY     = 'ls:hill-climbing-climb';
+const SYNC_EVENTS_NS    = 'idb:climb:events';
 
 // ── State ───────────────────────────────────────────────────────────────────
 // Source of truth is the localStorage blob; the IndexedDB event log is an
@@ -791,6 +842,9 @@ function apply(evt) {
   save();
   idbAppend(evt).catch(() => { /* best-effort; log.snapshot rebaselines later */ });
   markUsage();
+  // Cross-device sync: push this immutable event + the (debounced) state blob.
+  // No-ops until sync is unlocked AND the initial pull has armed pushing.
+  if (window.HCSync) { HCSync.pushLogRecord(SYNC_EVENTS_NS, evt); HCSync.queueBlobPush(SYNC_BLOB_KEY); }
   return evt;
 }
 
@@ -1472,6 +1526,8 @@ async function importData(file) {
     migratedRoot = false;
     ui.path = [state.rootId]; ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
     render();
+    // Imported data should win everywhere: bump the blob clock and re-push all.
+    if (window.HCSync && HCSync.isUnlocked()) { HCSync.queueBlobPush(SYNC_BLOB_KEY); HCSync.push(SYNC_EVENTS_NS); }
     alert('Imported your goals and history.');
   } catch (err) {
     alert('Import failed: ' + err.message);
@@ -1518,8 +1574,94 @@ eraseBtn.addEventListener('click', () => {
   if (ui.confirmKey === 'erase') { clearConfirm(); resetEraseButton(); eraseEverything(); return; }
   armConfirm('erase', resetEraseButton);
   eraseBtn.querySelector('.menu-item-title').textContent = 'Tap again to erase';
-  eraseSub.textContent = 'This cannot be undone';
+  eraseSub.textContent = (window.HCSync && HCSync.isUnlocked())
+    ? 'Clears THIS device — synced copy stays'
+    : 'This cannot be undone';
 });
+
+// ── Sync UI wiring (opt-in, end-to-end encrypted) ───────────────────────────
+const syncStatusEl = document.getElementById('sync-status');
+const syncDot      = document.getElementById('sync-dot');
+const syncNoteEl   = document.getElementById('sync-note');
+function updateSyncUI(st) {
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !on); };
+  const signedOut = st.state === 'signed_out';
+  const locked    = st.state === 'locked';
+  const unlocked  = st.state === 'unlocked';
+  const notConfigured = st.error === 'not_configured';
+  show('sync-signin',  signedOut && !notConfigured);
+  show('sync-unlock',  locked);
+  show('sync-now',     unlocked);
+  show('sync-signout', !signedOut);
+  show('sync-delete',  unlocked);
+  let txt;
+  if (notConfigured)      txt = 'Sync not configured yet';
+  else if (signedOut)     txt = 'This device only — not signed in';
+  else if (locked)        txt = 'Signed in · locked — enter passphrase';
+  else if (st.syncing)    txt = 'Syncing…';
+  else if (st.error && st.error !== 'offline') txt = 'Sync issue — ' + st.error;
+  else if (!st.online || st.error === 'offline') txt = 'Offline — will sync when back';
+  else                    txt = 'Synced · ' + (st.email || '');
+  if (syncStatusEl) syncStatusEl.textContent = txt;
+  if (syncDot) {
+    syncDot.className = '';
+    if (!notConfigured && !signedOut) {
+      syncDot.classList.add('on');
+      if (st.syncing) syncDot.classList.add('busy');
+      else if (st.error && st.error !== 'offline') syncDot.classList.add('err');
+      else if (locked || !st.online || st.error === 'offline') syncDot.classList.add('warn');
+      else syncDot.classList.add('ok');
+    }
+  }
+  const nowSub = document.getElementById('sync-now-sub');
+  if (nowSub) nowSub.textContent = st.syncing ? 'Syncing…' : 'Up to date';
+  if (syncNoteEl) syncNoteEl.textContent = unlocked
+    ? 'End-to-end encrypted — the server stores only unreadable ciphertext.'
+    : 'Your goals live on this device. Sign in to sync them, encrypted, across devices.';
+}
+async function promptUnlock() {
+  if (!(await HCSync.hasKeyBundle())) {
+    const pass = prompt('Create a passphrase to encrypt your synced data.\nIt never leaves your device.');
+    if (!pass) return;
+    const { recoveryCode } = await HCSync.setupEncryption(pass);
+    alert('Sync is on.\n\nSAVE THIS RECOVERY CODE — it is the only way back in if you forget your passphrase:\n\n' + recoveryCode);
+    return;
+  }
+  const pass = prompt('Enter your sync passphrase:');
+  if (pass === null) return;
+  try { await HCSync.unlock(pass); }
+  catch (e) {
+    if (confirm('That did not unlock (' + (e.message || e) + ').\nUse your recovery code instead?')) {
+      const code = prompt('Enter your recovery code:');
+      if (code) await HCSync.unlockWithRecoveryCode(code);
+    }
+  }
+}
+async function syncSignInFlow() {
+  const email = prompt('Email for sync:'); if (!email) return;
+  const password = prompt('Password (min 6 characters):'); if (!password) return;
+  const creating = confirm('Create a NEW account?\n\nOK = create new account\nCancel = sign in to an existing one');
+  if (creating) {
+    const { needsConfirmation } = await HCSync.signup(email.trim(), password);
+    if (needsConfirmation) { alert('Account created. Check your email to confirm, then open this menu and sign in.'); return; }
+    await promptUnlock();          // hasKeyBundle() is false → sets up encryption + shows recovery code
+  } else {
+    await HCSync.login(email.trim(), password);
+    await promptUnlock();
+  }
+}
+function wrapSync(fn) { return async () => { try { await fn(); } catch (e) { alert('Sync: ' + (e.message || e)); } setMenu(false); }; }
+document.getElementById('sync-signin').addEventListener('click', wrapSync(syncSignInFlow));
+document.getElementById('sync-unlock').addEventListener('click', wrapSync(promptUnlock));
+document.getElementById('sync-now').addEventListener('click', wrapSync(() => HCSync.pull()));
+document.getElementById('sync-signout').addEventListener('click', wrapSync(async () => {
+  if (confirm('Sign out of sync on this device? Your goals stay here.')) await HCSync.logout();
+}));
+document.getElementById('sync-delete').addEventListener('click', wrapSync(async () => {
+  if (!confirm('Delete the encrypted copy of your data on the server?\n\nThis does NOT erase this device. Other signed-in devices keep their local copy until they change something.')) return;
+  await HCSync.deleteRemoteData();
+  alert('Your synced data was deleted from the server.');
+}));
 
 document.querySelectorAll('.mode-btn').forEach(b =>
   b.addEventListener('click', () => switchView(b.dataset.view)));
@@ -1531,6 +1673,32 @@ save();                 // persist the root (and any migration) so it's created 
 ui.path = [state.rootId];
 ensureBaseline();
 render();
+
+// ── Cross-device sync (opt-in, end-to-end encrypted) ────────────────────────
+// The synchronous render above is intentional and safe — it only reads. Sync
+// registers its two stores, then init() restores any session and, if unlocked,
+// runs an initial pull before it arms pushing (the render-then-clobber guard).
+if (window.HCSync) {
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                     // remote-apply path — deliberately NOT through apply()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      if (!state.goals[ui.path[0]]) ui.path = [state.rootId];   // remote root changed under us
+      ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
+      render();
+    },
+  });
+  HCSync.registerStore({
+    key: SYNC_EVENTS_NS, kind: 'log',
+    readAll:   () => idbAll(),
+    writeMany: (recs) => idbPutMany(recs).then(() => { if (ui.view === 'history') render(); }),
+    recordId:  (e) => e.id,
+  });
+  HCSync.subscribe(updateSyncUI);
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'climb' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
