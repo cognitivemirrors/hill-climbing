@@ -181,6 +181,17 @@ The most likely future entries here would be: a code path that disables the idle
 - **Confidence:** confirmed
 - **Where:** REQUIREMENTS.md §1.1. Climb's rows were added in v1.94 with founder sign-off, which makes the remaining gaps conspicuous: `hill-climbing-levity` (Levity ladder + notebook state, added v1.92) has no row and Levity is absent from the `hill-climbing-usage` writer list; Council's two keys are already flagged in L24. Binding doc → founder ratification required; not self-amended in v1.94.
 
+### L27. Nourish's Chef mode sends pantry text off-device — third egress feature; extends the L24 binding-doc gap
+- **Confidence:** confirmed (by design; `nourish.html` Chef mode, added v0.13 / global line v1.97-track)
+- **Severity:** LOW *as coded* at Tier 0 (user-initiated, gated behind an explicit consent checkbox + a bring-your-own key, on the user's own account, no operator server) — but, like Council (L24), it touches a **binding** claim and needs founder attention before any tier advance.
+- **Where:** `nourish.html` `callChef()` POSTs the user's free-text pantry list + preferences (and the current cooking level + learned-skill labels) to `https://api.anthropic.com/v1/messages` using a bring-your-own Anthropic key and structured output. This is the **third** off-device path in the suite (after opt-in Web Push, L22, and Council, L24) and the **first inside a previously fully-offline sensor-adjacent app** — Nourish was 100% local before this.
+- **Why it's still defensible at Tier 0:** strictly user-initiated (only on "Write me a recipe"), gated behind a first-run consent checkbox that names the data flow and the third party (Anthropic) in plain language, uses the user's own key (no operator intermediary — consistent with CONSTRAINTS §3 power-distribution), sends nothing beyond the pantry/preferences/level context, stores nothing server-side, and keeps the key + recipe history in local storage only. The pantry list is far less sensitive than Council's personal decisions or the Reflect journal.
+- **Binding-doc gap (needs founder ratification — do NOT self-amend):**
+  - §1.1 data inventory omits the new localStorage key `hill-climbing-nourish-chef` (holds the user's Anthropic API key — a **credential**, kept **out of the Nourish data export** on purpose; plus `history`: recipe titles + self-reported outcomes, cap 20). This is the second API key stored in the suite (cf. `hill-climbing-council-key`, L24); browser localStorage is not a secure secret store.
+  - §1.3/§2.1's "nothing leaves the device (except opt-in Web Push)" now has a **third** exception. The L24 amendment should be widened to name Nourish Chef alongside Council as an off-device, third-party-processed (Anthropic) data flow.
+  - §2.4 "sharing" / §2.2 "what we never collect" should acknowledge that generating a recipe transmits user content to Anthropic under the user's own account/terms.
+- **Open questions for the founder:** (a) same bring-your-own-key posture question as L24 — ratify once for both, or treat cooking (low-sensitivity) differently from Council (high-sensitivity)? (b) is it acceptable that a previously-offline practice now has an opt-in online mode, or should online modes live in a separate clearly-labelled surface? (c) two API keys now sit in localStorage across the suite — worth a shared, documented key-handling stance.
+
 ---
 
 ## How to use this list

@@ -384,6 +384,88 @@
     }
     .extra-remove:hover { color: hsl(8,62%,62%); }
 
+    /* ── chef (LLM recipe from your pantry) ─────────────────────── */
+    #chef-view { max-width: 600px; }
+    .chef-intro { text-align: center; margin-bottom: 24px; }
+    .chef-title { font-family: var(--font-display); font-weight: 400; font-size: 1.6rem; color: var(--text); }
+    .chef-sub { font-size: 12.5px; color: var(--dim); letter-spacing: 0.02em; margin: 8px auto 0; line-height: 1.6; max-width: 460px; }
+
+    /* setup — key + consent gate */
+    .chef-gate { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 24px; animation: fadeUp 0.35s ease; }
+    .consent-note {
+      font-size: 13px; line-height: 1.62; color: var(--text);
+      background: var(--accent-glow); border: 1px solid var(--accent-soft);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 20px;
+    }
+    .consent-note b { color: var(--accent); font-weight: 400; }
+    .chef-gate .block-label { margin-top: 18px; }
+    .chef-field {
+      width: 100%; background: rgba(0,0,0,0.22); border: 1px solid var(--line);
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px so iOS Safari doesn't auto-zoom on focus */
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .chef-field:focus { border-color: var(--accent-soft); }
+    .chef-field::placeholder { color: var(--faint); }
+    textarea.chef-field { min-height: 92px; resize: vertical; line-height: 1.5; }
+    select.chef-field { appearance: none; -webkit-appearance: none; cursor: pointer; }
+    .chef-help { font-size: 11px; color: var(--faint); margin-top: 7px; line-height: 1.55; }
+    .chef-help a { color: var(--accent-soft); }
+    .consent-check { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0 4px; cursor: pointer; font-size: 13px; color: var(--mid); line-height: 1.5; }
+    .consent-check input { margin-top: 2px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+    #chef-gate-msg { color: hsl(8,62%,66%); min-height: 1em; margin-top: 10px; }
+
+    /* generator */
+    .chef-gen { animation: fadeUp 0.35s ease; }
+    .chef-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+    .chip-btn {
+      padding: 7px 14px; border-radius: 14px; border: 1px solid var(--line);
+      background: transparent; color: var(--dim); font-family: var(--font-ui);
+      font-size: 12px; letter-spacing: 0.03em; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .chip-btn:hover { color: var(--text); }
+    .chip-btn.sel { border-color: var(--accent); color: var(--accent); }
+    .chef-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
+    .chef-link { background: none; border: none; cursor: pointer; padding: 0; font-family: var(--font-ui); font-size: 11px; color: var(--faint); letter-spacing: 0.06em; transition: color 0.2s; }
+    .chef-link:hover { color: var(--accent); }
+
+    /* loading + error */
+    .chef-loading { text-align: center; padding: 54px 0; color: var(--mid); font-family: var(--font-display); font-style: italic; font-size: 1.05rem; animation: fadeUp 0.3s ease; }
+    .chef-spinner { width: 34px; height: 34px; margin: 0 auto 20px; border-radius: 50%; border: 2px solid var(--faint); border-top-color: var(--accent); animation: spin 0.85s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .chef-error { background: rgba(190,74,58,0.12); border: 1px solid hsl(8,52%,48%); border-radius: 12px; padding: 13px 16px; font-size: 13px; color: var(--text); line-height: 1.55; margin-top: 20px; }
+
+    /* rendered recipe — reuses .card / .info-block / .skill-tag / .block-label */
+    #chef-result { animation: fadeUp 0.35s ease; }
+    .rec-back { margin: 0 0 14px; }
+    .rec-pantry { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+    .rec-pill { font-size: 11.5px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--mid); }
+    .rec-pill.add { border-color: var(--accent-soft); color: var(--accent); }
+    .comp-list { display: flex; flex-direction: column; gap: 15px; }
+    .comp { border-left: 2px solid var(--accent-soft); padding-left: 14px; }
+    .comp-name { font-size: 13.5px; color: var(--text); letter-spacing: 0.02em; margin-bottom: 5px; }
+    .comp-why { font-size: 13px; color: var(--mid); line-height: 1.55; }
+    .comp-eval { font-size: 12.5px; color: var(--accent); line-height: 1.5; margin-top: 5px; }
+    .comp-eval::before { content: 'How to check — '; color: var(--dim); }
+    .rec-steps { list-style: none; margin: 0; padding: 0; counter-reset: recstep; }
+    .rec-step { position: relative; padding-left: 30px; margin-bottom: 18px; }
+    .rec-step:last-child { margin-bottom: 0; }
+    .rec-step::before {
+      counter-increment: recstep; content: counter(recstep);
+      position: absolute; left: 0; top: 1px; font-variant-numeric: tabular-nums;
+      color: var(--accent); font-family: var(--font-display); font-size: 15px;
+    }
+    .rec-step-action { font-size: 14px; color: var(--text); line-height: 1.55; }
+    .rec-step-tech { font-size: 12.5px; color: var(--mid); line-height: 1.5; margin-top: 6px; }
+    .rec-step-watch { font-size: 12.5px; color: var(--accent); line-height: 1.5; margin-top: 5px; }
+    .rec-step-watch::before { content: '→ '; }
+    .rec-cook { margin-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+    .rec-cook-note { font-size: 11px; color: var(--faint); letter-spacing: 0.04em; }
+    .rec-ack { font-family: var(--font-display); font-style: italic; color: var(--mid); font-size: 1.02rem; text-align: center; margin-top: 22px; line-height: 1.6; }
+
+    @media (max-width: 420px) { .mode-btn { padding: 5px 10px; letter-spacing: 0.04em; } }
+
     /* ── utils ──────────────────────────────────────────────────── */
     .hidden { display: none !important; }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -407,9 +489,10 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.12 · nourish</div>
+<div class="corner" id="version-label">v0.13 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
+  <button class="mode-btn"        data-view="chef">Chef</button>
   <button class="mode-btn"        data-view="shop">Shop</button>
   <button class="mode-btn"        data-view="progress">Progress</button>
 </nav>
@@ -524,6 +607,67 @@
 
   </section>
 
+  <!-- ══ CHEF — LLM recipe from your pantry ═══════════════════════ -->
+  <section id="chef-view" class="hidden">
+    <div class="chef-intro">
+      <div class="chef-title">Cook from your pantry</div>
+      <div class="chef-sub">Tell the kitchen what you have. A chef writes you a recipe and teaches the craft behind it — the skills you’re building, and how to know you’ve nailed them.</div>
+    </div>
+
+    <!-- key + consent gate (until a key is saved and consent is given) -->
+    <div id="chef-gate" class="chef-gate hidden">
+      <div class="consent-note">
+        This is the only part of Hill Climbing that leaves your device. When you generate a recipe, your <b>pantry list and preferences are sent to Anthropic</b> (Claude) to write it. Nothing else is sent — your progress, your key, and your history stay in this browser. You can remove your key any time.
+      </div>
+      <div class="block-label">Anthropic API key</div>
+      <input type="password" id="chef-key" class="chef-field" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" aria-label="Anthropic API key">
+      <div class="chef-help">Stored only in this browser, and never included in your data export. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Requests bill to your own account — a recipe is a few cents.</div>
+      <div class="block-label">Model</div>
+      <select id="chef-model" class="chef-field" aria-label="Model"></select>
+      <label class="consent-check" for="chef-consent">
+        <input type="checkbox" id="chef-consent">
+        <span>I understand my pantry list and preferences are sent to Anthropic when I generate a recipe.</span>
+      </label>
+      <div id="chef-gate-msg" class="chef-help" role="alert"></div>
+      <div class="chef-actions">
+        <button class="btn primary" id="chef-save">SAVE &amp; CONTINUE</button>
+        <button type="button" class="chef-link hidden" id="chef-remove">remove key from this device</button>
+      </div>
+    </div>
+
+    <!-- generator -->
+    <div id="chef-gen" class="chef-gen hidden">
+      <div class="block-label">What’s in your kitchen?</div>
+      <textarea id="chef-pantry" class="chef-field" placeholder="e.g. eggs, an onion, rice, a lemon, some cheddar, half a cabbage…" aria-label="What's in your kitchen"></textarea>
+      <div class="chef-help"><button type="button" id="chef-seed" class="chef-link">↺ fill from my shopping list</button></div>
+
+      <div class="block-label" style="margin-top:18px;">How much time?</div>
+      <div class="chef-row" id="chef-time" role="group" aria-label="Time available">
+        <button type="button" class="chip-btn" data-time="This should be a quick meal — about 20 minutes, few pans.">Quick</button>
+        <button type="button" class="chip-btn sel" data-time="">No rush</button>
+        <button type="button" class="chip-btn" data-time="Treat this as a project — I have plenty of time and want to learn something involved.">A project</button>
+      </div>
+
+      <div class="block-label" style="margin-top:18px;">Anything else? <span style="color:var(--faint);text-transform:none;letter-spacing:0.02em;">(optional)</span></div>
+      <input type="text" id="chef-prefs" class="chef-field" placeholder="dietary needs, a craving, equipment you have or don’t…" aria-label="Other preferences">
+
+      <div class="chef-actions">
+        <button class="btn primary" id="chef-generate">WRITE ME A RECIPE</button>
+        <button type="button" class="chef-link" id="chef-settings">key &amp; model</button>
+      </div>
+      <div id="chef-error" class="chef-error hidden" role="alert"></div>
+    </div>
+
+    <!-- loading -->
+    <div id="chef-loading" class="chef-loading hidden">
+      <div class="chef-spinner"></div>
+      Reading your pantry and writing your recipe…
+    </div>
+
+    <!-- result (built by renderRecipe) -->
+    <div id="chef-result" class="hidden"></div>
+  </section>
+
   <!-- ══ PROGRESS ══════════════════════════════════════════════ -->
   <section id="progress-view" class="hidden">
     <div class="prog-summary">
@@ -582,7 +726,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.12 · nourish';
+const VERSION  = 'v0.13 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
@@ -1769,6 +1913,7 @@ function recordOutcome(outcomeKey) {
 const cookView    = document.getElementById('cook-view');
 const progressView= document.getElementById('progress-view');
 const shopView    = document.getElementById('shop-view');
+const chefView    = document.getElementById('chef-view');
 const homePanel   = document.getElementById('home-panel');
 const challengePanel = document.getElementById('challenge-panel');
 const cookingPanel= document.getElementById('cooking-panel');
@@ -1906,12 +2051,15 @@ function switchView(v) {
   cookView.classList.toggle('hidden', v !== 'cook');
   progressView.classList.toggle('hidden', v !== 'progress');
   shopView.classList.toggle('hidden', v !== 'shop');
+  chefView.classList.toggle('hidden', v !== 'chef');
   if (v === 'cook') {
     // returning to Cook always lands on home (or resumes an active cook)
     if (state.active) { const ac = byId(state.active.id); if (ac) { showCooking(ac); return; } }
     renderHome(); swapPanel(homePanel);
   } else if (v === 'progress') {
     renderProgress();
+  } else if (v === 'chef') {
+    renderChef();
   } else {
     renderShop();
   }
@@ -2214,9 +2362,409 @@ document.getElementById('extra-add').addEventListener('submit', e => {
   input.focus();
 });
 
+// ── Chef: an LLM recipe from your pantry (BYOK, opt-in) ──────────────────────
+// The suite's first Nourish feature that leaves the device: the pantry list +
+// preferences are sent to Anthropic (Claude) to write and teach a recipe.
+// Gated behind an explicit consent + a key the user pastes in, kept only in this
+// browser under its own localStorage key — deliberately NOT in `state`, so it
+// never rides along in the data export. Mirrors council.html's browser-direct
+// pattern; adds structured output so the recipe comes back in a fixed shape.
+// (Egress flagged in KNOWN_RISKS L27 against REQUIREMENTS §1.3/§2.1, not amended.)
+const CHEF_LS = 'hill-climbing-nourish-chef';
+const CHEF_URL = 'https://api.anthropic.com/v1/messages';
+const CHEF_MODELS = {
+  'claude-opus-4-8': 'Opus 4.8 — best teaching',
+  'claude-sonnet-5': 'Sonnet 5 — cheaper & faster',
+};
+const chef = { key: '', model: 'claude-opus-4-8', consented: false, history: [], timeHint: '', lastRecipe: null };
+let chefStage = 'gen';   // 'gen' | 'result' — what to show when the tab is ready
+
+function loadChef() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHEF_LS) || '{}');
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.key === 'string') chef.key = raw.key;
+      if (CHEF_MODELS[raw.model]) chef.model = raw.model;
+      chef.consented = !!raw.consented;
+      if (Array.isArray(raw.history)) chef.history = raw.history;
+    }
+  } catch (e) { /* ignore a corrupt blob */ }
+}
+function saveChef() {
+  try {
+    localStorage.setItem(CHEF_LS, JSON.stringify({
+      key: chef.key, model: chef.model, consented: chef.consented,
+      history: chef.history.slice(-20),
+    }));
+  } catch (e) { /* private mode / quota — never break the flow */ }
+}
+
+// Seed the pantry box from the shopping have-marks + the user's own extras.
+function pantrySeed() {
+  const have = Object.keys(state.pantry);
+  const extras = state.extras.map(e => e.name);
+  return [...new Set([...have, ...extras].filter(Boolean))].join(', ');
+}
+
+// The structured shape we ask Claude to return — mirrors the app's own teaching
+// vocabulary (skill focus, why-it-works, the competencies, and the "nailed it"
+// tell) so a generated recipe reads like a hand-written challenge card.
+const RECIPE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: { type: 'string' },
+    summary: { type: 'string', description: 'One or two sentences: what the dish is and why it suits their pantry.' },
+    servings: { type: 'string' },
+    time: { type: 'string', description: 'Rough total time, e.g. "about 30 minutes".' },
+    skill_focus: { type: 'string', description: 'The single headline technique, a few words.' },
+    uses_from_pantry: { type: 'array', items: { type: 'string' }, description: 'Ingredients drawn from what they said they have.' },
+    shopping_additions: { type: 'array', items: { type: 'string' }, description: 'A small number of things not in their pantry, if any.' },
+    competencies: {
+      type: 'array',
+      description: 'The transferable skills this dish builds.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          why_it_matters: { type: 'string' },
+          how_to_evaluate: { type: 'string', description: 'A concrete, observable way to judge whether they have it.' },
+        },
+        required: ['name', 'why_it_matters', 'how_to_evaluate'],
+      },
+    },
+    steps: {
+      type: 'array',
+      description: 'The method, taught as an expert would.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          action: { type: 'string', description: 'What to do.' },
+          technique: { type: 'string', description: 'The craft it teaches — the why.' },
+          watch_for: { type: 'string', description: 'The sensory cue that it is working (sound, colour, smell, feel).' },
+        },
+        required: ['action', 'technique', 'watch_for'],
+      },
+    },
+    nailed_it_when: { type: 'string', description: 'How the finished dish tells you it worked.' },
+    if_it_goes_wrong: { type: 'string', description: 'The most likely stumble and how to save it.' },
+  },
+  required: ['title', 'summary', 'servings', 'time', 'skill_focus', 'uses_from_pantry',
+    'shopping_additions', 'competencies', 'steps', 'nailed_it_when', 'if_it_goes_wrong'],
+};
+
+const CHEF_SYSTEM = [
+  'You are the chef-instructor for Nourish, a calm learn-to-cook practice. A home cook tells you what is in their kitchen and you write ONE recipe they can make mostly from it, and teach the craft behind it.',
+  '',
+  'Principles:',
+  '- Cook from what they have. Suggest only a small number of additions, and only when genuinely needed; prefer swaps from their pantry.',
+  '- Teach transferable technique, not just this dish. Every step names the move it teaches and the sensory cue that tells them it is working (sound, colour, smell, feel) — not just a time.',
+  '- Name the competencies the dish builds, and for each give an honest, concrete way to evaluate it, phrased as something they can observe.',
+  '- Pitch the difficulty and depth to the cook’s stated level and the skills they have already practised.',
+  '- Warm, specific, and plain. Never gushing, never gamified, no praise inflation. Struggling is normal and how the edge is found.',
+  '- Real cooking only. If the request can’t be a sensible dish, cook the most reasonable interpretation of their pantry.',
+  '',
+  'Return only the structured recipe.',
+].join('\n');
+
+// ── Chef DOM helpers + rendering ─────────────────────────────────────────────
+function chEl(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function chId(id) { return document.getElementById(id); }
+
+function populateModelSelect() {
+  const sel = chId('chef-model');
+  if (!sel) return;
+  sel.innerHTML = '';
+  Object.keys(CHEF_MODELS).forEach(id => {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = CHEF_MODELS[id];
+    if (id === chef.model) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function renderChef() {
+  const gate = chId('chef-gate'), gen = chId('chef-gen');
+  const loading = chId('chef-loading'), result = chId('chef-result');
+  loading.classList.add('hidden');
+  chId('chef-error').classList.add('hidden');
+  const ready = !!(chef.key && chef.consented);
+  gate.classList.toggle('hidden', ready);
+  if (!ready) {
+    gen.classList.add('hidden'); result.classList.add('hidden');
+    chId('chef-key').value = chef.key;
+    chId('chef-consent').checked = chef.consented;
+    chId('chef-gate-msg').textContent = '';
+    chId('chef-remove').classList.toggle('hidden', !chef.key);
+    populateModelSelect();
+    return;
+  }
+  if (chefStage === 'result' && chef.lastRecipe) {
+    gen.classList.add('hidden'); result.classList.remove('hidden');
+  } else {
+    gen.classList.remove('hidden'); result.classList.add('hidden');
+    const box = chId('chef-pantry');
+    if (!box.value.trim()) box.value = pantrySeed();
+  }
+}
+
+// Reveal the key/model gate on demand (from "key & model").
+function showChefGate() {
+  chId('chef-gate').classList.remove('hidden');
+  chId('chef-gen').classList.add('hidden');
+  chId('chef-result').classList.add('hidden');
+  chId('chef-loading').classList.add('hidden');
+  chId('chef-key').value = chef.key;
+  chId('chef-consent').checked = chef.consented;
+  chId('chef-gate-msg').textContent = '';
+  chId('chef-remove').classList.toggle('hidden', !chef.key);
+  populateModelSelect();
+}
+
+function saveChefSettings() {
+  const key = chId('chef-key').value.trim();
+  const consent = chId('chef-consent').checked;
+  const model = chId('chef-model').value;
+  const msg = chId('chef-gate-msg');
+  if (!key) { msg.textContent = 'Paste your Anthropic API key to continue.'; return; }
+  if (!consent) { msg.textContent = 'Tick the box to confirm your pantry list is sent to Anthropic.'; return; }
+  chef.key = key; chef.model = model; chef.consented = true;
+  saveChef();
+  chefStage = 'gen';
+  renderChef();
+}
+
+function removeChefKey() {
+  chef.key = ''; chef.consented = false;
+  saveChef();
+  showChefGate();
+}
+
+function buildChefPrompt(ctx) {
+  return [
+    'Here is what I have and want. Write me one recipe and teach me the technique.',
+    '',
+    'In my kitchen: ' + ctx.pantry,
+    'Feeds: ' + ctx.servings,
+    'Time: ' + (ctx.timeHint || 'no strong constraint'),
+    'Other preferences: ' + (ctx.prefs || 'none'),
+    '',
+    'My level: about ' + ctx.level + ' of ' + ctx.maxLevel + ' on a beginner→confident cooking ladder.',
+    'Skills I have already practised: ' + (ctx.learned.length ? ctx.learned.join(', ') : 'just starting out') + '.',
+  ].join('\n');
+}
+
+async function callChef(ctx) {
+  let res;
+  try {
+    res = await fetch(CHEF_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': chef.key,
+        'anthropic-version': '2023-06-01',
+        // Required for direct browser access to the Anthropic API.
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: chef.model,
+        max_tokens: 6000,
+        system: CHEF_SYSTEM,
+        output_config: { format: { type: 'json_schema', schema: RECIPE_SCHEMA } },
+        messages: [{ role: 'user', content: buildChefPrompt(ctx) }],
+      }),
+    });
+  } catch (netErr) {
+    throw new Error('Couldn’t reach Anthropic. Check your connection and try again.');
+  }
+  let data;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('That API key was rejected. Check it under “key & model”.');
+    if (res.status === 429) throw new Error('Anthropic is rate-limiting the key right now. Give it a moment and try again.');
+    const detail = data && data.error && data.error.message ? data.error.message : '';
+    throw new Error(detail || ('The API returned an error (' + res.status + ').'));
+  }
+  if (data && data.stop_reason === 'refusal') {
+    throw new Error('The model declined this one. Try rephrasing your pantry or preferences.');
+  }
+  const block = data && Array.isArray(data.content) && data.content.find(b => b.type === 'text');
+  if (!block || !block.text) throw new Error('No recipe came back. Try again.');
+  try { return JSON.parse(block.text); }
+  catch (e) { throw new Error('The recipe came back malformed. Try again.'); }
+}
+
+async function generateRecipe() {
+  const pantry = chId('chef-pantry').value.trim();
+  const prefs = chId('chef-prefs').value.trim();
+  const errBox = chId('chef-error');
+  errBox.classList.add('hidden');
+  if (!pantry) { errBox.textContent = 'Add a few things from your kitchen first.'; errBox.classList.remove('hidden'); return; }
+
+  chId('chef-gen').classList.add('hidden');
+  chId('chef-result').classList.add('hidden');
+  chId('chef-loading').classList.remove('hidden');
+
+  const learned = [...learnedSkills()].map(k => SKILL_LABELS[k] || k);
+  const ctx = {
+    pantry, prefs, timeHint: chef.timeHint, servings: state.servings,
+    level: state.level, maxLevel: lvlMax(), learned,
+  };
+  try {
+    const recipe = await callChef(ctx);
+    chef.lastRecipe = recipe;
+    chefStage = 'result';
+    renderRecipe(recipe);
+    chId('chef-loading').classList.add('hidden');
+    chId('chef-result').classList.remove('hidden');
+  } catch (e) {
+    chId('chef-loading').classList.add('hidden');
+    chId('chef-gen').classList.remove('hidden');
+    errBox.textContent = (e && e.message) || 'Something went wrong. Try again.';
+    errBox.classList.remove('hidden');
+  }
+}
+
+// Build the recipe card (all model text via textContent — never innerHTML).
+function renderRecipe(r) {
+  const root = chId('chef-result');
+  root.innerHTML = '';
+
+  const back = chEl('div', 'rec-back');
+  const backBtn = chEl('button', 'btn ghost', '‹ new recipe');
+  backBtn.type = 'button';
+  backBtn.addEventListener('click', () => { chefStage = 'gen'; renderChef(); });
+  back.appendChild(backBtn);
+  root.appendChild(back);
+
+  const card = chEl('div', 'card');
+  const top = chEl('div', 'card-top');
+  top.appendChild(chEl('span', 'skill-tag', r.skill_focus || 'a dish'));
+  top.appendChild(chEl('span', 'time-chip', r.time ? '~ ' + r.time : ''));
+  card.appendChild(top);
+  card.appendChild(chEl('div', 'card-title', r.title || 'Your recipe'));
+
+  card.appendChild(chEl('div', 'block-label', 'The dish'));
+  card.appendChild(chEl('div', 'challenge-brief', r.summary || ''));
+
+  // pantry usage + any additions
+  const uses = Array.isArray(r.uses_from_pantry) ? r.uses_from_pantry : [];
+  const adds = Array.isArray(r.shopping_additions) ? r.shopping_additions : [];
+  if (uses.length || adds.length) {
+    const b = chEl('div', 'info-block');
+    b.appendChild(chEl('div', 'block-label', 'From your pantry' + (adds.length ? ' (+ a little shopping)' : '')));
+    const wrap = chEl('div', 'rec-pantry');
+    uses.forEach(x => wrap.appendChild(chEl('span', 'rec-pill', x)));
+    adds.forEach(x => wrap.appendChild(chEl('span', 'rec-pill add', x)));
+    b.appendChild(wrap);
+    card.appendChild(b);
+  }
+
+  // competencies
+  const comps = Array.isArray(r.competencies) ? r.competencies : [];
+  if (comps.length) {
+    const b = chEl('div', 'info-block');
+    b.appendChild(chEl('div', 'block-label', 'The skills you’re building'));
+    const list = chEl('div', 'comp-list');
+    comps.forEach(c => {
+      const item = chEl('div', 'comp');
+      item.appendChild(chEl('div', 'comp-name', c.name || ''));
+      if (c.why_it_matters) item.appendChild(chEl('div', 'comp-why', c.why_it_matters));
+      if (c.how_to_evaluate) item.appendChild(chEl('div', 'comp-eval', c.how_to_evaluate));
+      list.appendChild(item);
+    });
+    b.appendChild(list);
+    card.appendChild(b);
+  }
+
+  // steps, taught
+  const steps = Array.isArray(r.steps) ? r.steps : [];
+  if (steps.length) {
+    const b = chEl('div', 'info-block');
+    b.appendChild(chEl('div', 'block-label', 'How to cook it'));
+    const ol = chEl('ol', 'rec-steps');
+    steps.forEach(s => {
+      const li = chEl('li', 'rec-step');
+      li.appendChild(chEl('div', 'rec-step-action', s.action || ''));
+      if (s.technique) li.appendChild(chEl('div', 'rec-step-tech', s.technique));
+      if (s.watch_for) li.appendChild(chEl('div', 'rec-step-watch', s.watch_for));
+      ol.appendChild(li);
+    });
+    b.appendChild(ol);
+    card.appendChild(b);
+  }
+
+  if (r.nailed_it_when) {
+    const b = chEl('div', 'info-block tell');
+    b.appendChild(chEl('div', 'block-label', 'You’ve nailed it when'));
+    b.appendChild(chEl('p', null, r.nailed_it_when));
+    card.appendChild(b);
+  }
+  if (r.if_it_goes_wrong) {
+    const b = chEl('div', 'info-block');
+    b.appendChild(chEl('div', 'block-label', 'If it goes sideways'));
+    b.appendChild(chEl('p', null, r.if_it_goes_wrong));
+    card.appendChild(b);
+  }
+  root.appendChild(card);
+
+  // commit-to-cook → self-report (off-ladder; logs usage like finishCooking)
+  const cook = chEl('div', 'rec-cook');
+  const cookBtn = chEl('button', 'btn primary', 'COOK THIS');
+  cookBtn.type = 'button';
+  const note = chEl('div', 'rec-cook-note', 'Logs today on your hub — no scoring, no streak.');
+  cook.append(cookBtn, note);
+  cookBtn.addEventListener('click', () => {
+    markUsage();
+    cook.innerHTML = '';
+    cook.appendChild(chEl('div', 'report-q', 'When you’re done — how did it go?'));
+    const outs = chEl('div', 'outcomes');
+    Object.keys(OUTCOMES).forEach(key => {
+      const oc = OUTCOMES[key];
+      const btn = chEl('button', 'outcome-btn');
+      btn.type = 'button';
+      btn.style.setProperty('--oc', oc.color);
+      btn.appendChild(chEl('span', 'outcome-swatch'));
+      btn.appendChild(chEl('span', null, oc.label));
+      btn.appendChild(chEl('span', 'outcome-sub', oc.sub));
+      btn.addEventListener('click', () => {
+        chef.history.push({ title: r.title || 'a recipe', outcome: key, ts: Date.now() });
+        saveChef();
+        cook.innerHTML = '';
+        cook.appendChild(chEl('div', 'rec-ack',
+          oc.success ? 'Lovely — that one’s in your hands now.'
+                     : 'That’s how cooking is learned. Come back to it whenever you like.'));
+      });
+      outs.appendChild(btn);
+    });
+    cook.appendChild(outs);
+  });
+  root.appendChild(cook);
+}
+
+// ── Chef events ──────────────────────────────────────────────────────────────
+chId('chef-save').addEventListener('click', saveChefSettings);
+chId('chef-remove').addEventListener('click', removeChefKey);
+chId('chef-settings').addEventListener('click', showChefGate);
+chId('chef-generate').addEventListener('click', generateRecipe);
+chId('chef-seed').addEventListener('click', () => { chId('chef-pantry').value = pantrySeed(); });
+document.querySelectorAll('#chef-time .chip-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#chef-time .chip-btn').forEach(x => x.classList.remove('sel'));
+  b.classList.add('sel');
+  chef.timeHint = b.dataset.time || '';
+}));
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById('version-label').textContent = VERSION;
 load();
+loadChef();
 switchView('cook');   // lands on home, or resumes a mid-cook challenge
 </script>
 
