@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0e14">
+  <title>Your Data · Hill Climbing</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <style>
+    :root {
+      /* Shared Hill Climbing design tokens (mirrors index.html). */
+      --bg-base: #0a0b12;
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.52);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --line:  rgba(255,255,255,0.10);
+      --panel: rgba(255,255,255,0.04);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --accent: #b9a8f0;
+      --accent-soft: rgba(160,140,220,0.45);
+      --warn: hsl(6,72%,66%);
+      --warn-soft: hsla(6,72%,60%,0.4);
+      --good: hsl(150,45%,60%);
+      --secret: hsl(38,80%,66%);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; min-height: 100%;
+      background:
+        radial-gradient(ellipse 90% 55% at 50% 0%, rgba(40,40,72,0.28), transparent 70%),
+        var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    body { min-height: 100vh; padding: 64px 20px 96px; }
+    .wrap { max-width: 780px; margin: 0 auto; }
+
+    /* ── Back-to-hub (matches every practice app) ─────────────────── */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 20;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+    .corner {
+      position: fixed; top: 15px; right: 18px; z-index: 20;
+      font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--faint); font-family: var(--font-ui);
+    }
+
+    /* ── Masthead ─────────────────────────────────────────────────── */
+    header { text-align: center; margin-bottom: 26px; }
+    h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+      text-shadow: 0 0 40px rgba(150,140,210,0.2);
+    }
+    header p {
+      font-family: var(--font-display); font-style: italic;
+      margin-top: 12px; font-size: 0.92rem; color: var(--dim); line-height: 1.5;
+    }
+    header p b { color: var(--mid); font-style: normal; font-weight: 400; }
+
+    /* ── Overview stats ───────────────────────────────────────────── */
+    .overview {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+      margin: 22px 0 20px;
+    }
+    .stat {
+      flex: 1 1 130px; min-width: 0; text-align: center;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px 12px;
+    }
+    .stat .n {
+      font-family: var(--font-display); font-size: 1.5rem; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat .l {
+      margin-top: 4px; font-size: 0.6rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .stat.secret .n { color: var(--secret); }
+
+    /* ── Toolbar ──────────────────────────────────────────────────── */
+    .toolbar {
+      position: sticky; top: 0; z-index: 15;
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      padding: 12px 0 14px; margin-bottom: 8px;
+      background: linear-gradient(to bottom, var(--bg-base) 72%, transparent);
+    }
+    #search {
+      flex: 1 1 240px; min-width: 0;
+      font-family: var(--font-ui); font-size: 0.9rem; color: var(--text);
+      background: rgba(0,0,0,0.32); border: 1px solid var(--line);
+      border-radius: 10px; padding: 11px 14px;
+      transition: border-color 0.2s;
+    }
+    #search:focus { outline: none; border-color: var(--accent-soft); }
+    #search::placeholder { color: var(--dim); }
+    .btn {
+      font-family: var(--font-ui); font-size: 0.8rem; cursor: pointer;
+      color: var(--mid); background: var(--panel);
+      border: 1px solid var(--line); border-radius: 9px;
+      padding: 10px 13px; white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .btn:hover { color: var(--text); border-color: var(--mid); }
+    .btn.danger { color: var(--warn); border-color: var(--warn-soft); }
+    .btn.danger:hover { background: rgba(200,70,60,0.12); }
+
+    .search-status { font-size: 0.72rem; color: var(--dim); margin: 0 0 14px 2px; min-height: 1em; }
+
+    /* ── App group ────────────────────────────────────────────────── */
+    .group { margin-bottom: 26px; }
+    .group-head {
+      display: flex; align-items: center; gap: 10px;
+      margin: 0 2px 12px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .group-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--ac, var(--dim)); }
+    .group-name {
+      font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text);
+    }
+    .group-sub { font-size: 0.72rem; color: var(--dim); margin-left: auto; }
+
+    /* ── Store card ───────────────────────────────────────────────── */
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 13px; margin-bottom: 10px; overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .card.empty { opacity: 0.5; }
+    .card.open { border-color: var(--accent-soft); }
+    .card-head {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 15px; cursor: pointer; user-select: none;
+    }
+    .card.empty .card-head { cursor: default; }
+    .disc {
+      flex: none; width: 16px; margin-top: 2px; color: var(--dim);
+      transition: transform 0.2s; font-size: 0.7rem; line-height: 1;
+    }
+    .card.open .disc { transform: rotate(90deg); }
+    .card.empty .disc { visibility: hidden; }
+    .card-main { flex: 1 1 auto; min-width: 0; }
+    .card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .card-title .name { font-size: 0.94rem; color: var(--text); }
+    .card-title .badge {
+      font-size: 0.56rem; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim);
+    }
+    .badge.personal { color: var(--secret); border-color: hsla(38,70%,60%,0.4); }
+    .badge.secret { color: var(--warn); border-color: var(--warn-soft); }
+    .card-summary { margin-top: 5px; font-size: 0.78rem; color: var(--mid); line-height: 1.45; }
+    .card-key {
+      margin-top: 6px; font-family: var(--mono); font-size: 0.68rem; color: var(--dim);
+      word-break: break-all;
+    }
+    .card-key .kind { color: var(--faint); }
+    .card-size {
+      flex: none; text-align: right; font-family: var(--mono);
+      font-size: 0.68rem; color: var(--dim); padding-top: 2px; white-space: nowrap;
+    }
+
+    .card-body { display: none; border-top: 1px solid var(--line); padding: 4px 15px 15px; }
+    .card.open .card-body { display: block; }
+    .body-tools {
+      display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 0 10px;
+    }
+    .tool {
+      font-family: var(--font-ui); font-size: 0.72rem; cursor: pointer;
+      color: var(--dim); background: transparent;
+      border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tool:hover { color: var(--text); border-color: var(--mid); }
+    .tool.confirm { color: var(--warn); border-color: var(--warn-soft); }
+
+    /* ── JSON tree ────────────────────────────────────────────────── */
+    .tree {
+      font-family: var(--mono); font-size: 0.74rem; line-height: 1.65;
+      color: var(--text); overflow-x: auto;
+    }
+    .tree .row { white-space: pre; }
+    .tree .node > .row { cursor: pointer; }
+    .tree .tw { color: var(--dim); display: inline-block; width: 1em; }
+    .tree .k { color: hsl(200,50%,70%); }
+    .tree .col { color: var(--faint); }
+    .tree .s { color: hsl(150,45%,66%); }        /* string */
+    .tree .num { color: hsl(38,72%,68%); }       /* number */
+    .tree .bool { color: hsl(288,55%,74%); }     /* boolean */
+    .tree .nul { color: var(--dim); }            /* null */
+    .tree .meta { color: var(--faint); font-style: italic; }
+    .tree .time { color: var(--faint); }
+    .tree .kids { display: block; }
+    .tree .kids.hidden { display: none; }
+    .tree .more {
+      color: var(--accent); cursor: pointer; text-decoration: underline dotted;
+    }
+    .tree mark { background: rgba(200,170,90,0.32); color: #fff; border-radius: 2px; }
+    .tree .reveal {
+      margin-left: 8px; font-family: var(--font-ui); font-size: 0.62rem;
+      color: var(--dim); cursor: pointer; text-decoration: underline dotted;
+    }
+    .raw {
+      font-family: var(--mono); font-size: 0.72rem; line-height: 1.55; color: var(--mid);
+      white-space: pre-wrap; word-break: break-word;
+      background: rgba(0,0,0,0.28); border: 1px solid var(--line);
+      border-radius: 8px; padding: 12px; max-height: 420px; overflow: auto;
+    }
+
+    /* ── Non-personal browser storage ─────────────────────────────── */
+    .aux { margin-top: 30px; }
+    .aux-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 11px; padding: 13px 15px; margin-bottom: 9px;
+    }
+    .aux-item .ax-main { flex: 1 1 auto; min-width: 0; }
+    .aux-item .ax-name { font-size: 0.88rem; color: var(--text); }
+    .aux-item .ax-sub { margin-top: 4px; font-size: 0.75rem; color: var(--mid); line-height: 1.45; }
+    .aux-item .ax-sub .mono { font-family: var(--mono); font-size: 0.9em; word-break: break-all; }
+
+    /* ── Danger zone ──────────────────────────────────────────────── */
+    .danger-zone {
+      margin-top: 34px; padding: 18px; border-radius: 13px;
+      border: 1px solid var(--warn-soft); background: rgba(200,70,60,0.05);
+    }
+    .danger-zone h3 {
+      font-family: var(--font-display); font-weight: 400; font-size: 0.85rem;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--warn); margin-bottom: 8px;
+    }
+    .danger-zone p { font-size: 0.78rem; color: var(--mid); line-height: 1.5; margin-bottom: 13px; }
+
+    footer {
+      margin-top: 40px; text-align: center;
+      font-size: 0.6rem; color: var(--faint);
+      letter-spacing: 0.2em; text-transform: uppercase;
+    }
+    .empty-note { text-align: center; color: var(--dim); font-size: 0.85rem; padding: 40px 0; }
+
+    /* ── Toast ────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+      z-index: 40; max-width: calc(100% - 40px);
+      background: rgba(24,24,38,0.96); border: 1px solid var(--line);
+      border-radius: 11px; padding: 12px 18px; color: var(--text); font-size: 0.82rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+      opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 90px; }
+      h1 { font-size: 1.4rem; }
+      .card-size { display: none; }
+      .stat { flex-basis: 44%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner">v0.1 · data</div>
+
+<div class="wrap">
+  <header>
+    <h1>Your Data</h1>
+    <p>Everything Hill Climbing keeps about you lives <b>on this device, in this browser</b> — nothing here has ever left it.<br>This page reads it back so you can see, search, export, or erase it.</p>
+  </header>
+
+  <div class="overview" id="overview"></div>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search keys and values…" autocomplete="off" spellcheck="false" aria-label="Search all data">
+    <button class="btn" id="expand-all" type="button">Expand all</button>
+    <button class="btn" id="export-all" type="button">Export all</button>
+    <button class="btn" id="refresh" type="button" title="Re-read from storage">Refresh</button>
+  </div>
+  <div class="search-status" id="search-status"></div>
+
+  <div id="stores"><div class="empty-note">Reading your data…</div></div>
+
+  <section class="aux" id="aux"></section>
+
+  <section class="danger-zone">
+    <h3>Erase everything</h3>
+    <p>Permanently deletes all Hill Climbing data stored in this browser — every practice, every journal entry, your API key, all of it. This cannot be undone. Export a backup first if you might want it back.</p>
+    <button class="btn danger" id="erase-all" type="button">Erase all my data…</button>
+  </section>
+
+  <footer>hill climbing · private · on-device</footer>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Your Data — a read/explore/export/erase view over everything the Hill
+//  Climbing suite stores in this browser. Same-origin as every app, so it shares
+//  their localStorage and can open their IndexedDB databases directly.
+//
+//  Principles this page holds to:
+//   • It only READS by default; nothing is sent anywhere, ever (zero network).
+//   • Every value is rendered with textContent — never innerHTML — so free-text
+//     journal entries, reports, and API keys can't inject markup.
+//   • IndexedDB is opened WITHOUT a version and never creates a store, mirroring
+//     the hub's technique so it can't corrupt reflect's journal or climb's log.
+//   • Secrets (API keys) are masked on screen; you reveal them deliberately.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const VERSION = 'v0.1 · data';
+
+// Accent + label per app (colours mirror the hub cards).
+const APPS = {
+  meditate: { label: 'Meditate', color: '#b9a8f0' },
+  breathe:  { label: 'Breathe',  color: 'hsl(200,76%,68%)' },
+  reflect:  { label: 'Reflect',  color: 'hsl(38,80%,66%)' },
+  nourish:  { label: 'Nourish',  color: 'hsl(150,45%,60%)' },
+  levity:   { label: 'Levity',   color: 'hsl(348,78%,72%)' },
+  climb:    { label: 'Climb',    color: 'hsl(230,65%,72%)' },
+  train:    { label: 'Train',    color: 'hsl(20,72%,66%)' },
+  anime:    { label: 'Anime',    color: 'hsl(288,74%,72%)' },
+  council:  { label: 'Council',  color: 'hsl(215,28%,72%)' },
+  shared:   { label: 'Hub · shared', color: 'hsl(0,0%,62%)' },
+  other:    { label: 'Unrecognised', color: 'hsl(0,0%,50%)' },
+};
+const APP_ORDER = ['meditate','breathe','reflect','nourish','levity','climb','train','anime','council','shared','other'];
+
+// ── Store registry ───────────────────────────────────────────────────────────
+// Every place the suite writes user data. `summarize(v)` turns a parsed value
+// into a one-line human description; it must never throw (wrapped at the call
+// site, but keep it defensive anyway). `sensitive`: 'personal' = your own words
+// / choices; 'secret' = credentials. `secretKeys` = leaf key names to mask in the
+// tree; `rawSecret` = the whole string value is a credential.
+const REGISTRY = [
+  // ── Meditate ──
+  { key: 'stillness-game', kind: 'ls', app: 'meditate', name: 'Stillness game state',
+    summarize: v => `round ${v.round ?? '?'} · ${v.totalWins ?? 0} total wins · best hold ${fmtNum(v.best)}s · ${v.todayWins ?? 0} today` },
+  { key: 'hill-climbing-timed-minutes', kind: 'ls', app: 'meditate', name: 'Timed-sit length',
+    summarize: v => `${v} minute sit` },
+  { key: 'hill-combing-last-trajectory', kind: 'ls', app: 'meditate', name: 'Last session replay',
+    summarize: v => `${(v.samples||[]).length} motion samples · ${v.mode||'?'} round · ${v.won ? 'completed' : 'ended early'}${v.timestamp ? ' · ' + shortDate(v.timestamp) : ''}` },
+  { key: 'hill-combing-reports', kind: 'ls', app: 'meditate', name: 'Notes you sent', sensitive: 'personal',
+    summarize: v => `${v.length} note${v.length===1?'':'s'} written to the app` },
+  { key: 'hill-combing-acknowledged-v1', kind: 'ls', app: 'meditate', name: 'Safety notice acknowledged',
+    summarize: () => 'you dismissed the safety modal' },
+  { key: 'hill-climbing-introduced-v1', kind: 'ls', app: 'meditate', name: 'Intro seen',
+    summarize: () => 'the first-run walkthrough has been shown' },
+  // ── Breathe ──
+  { key: 'breathe-session-duration', kind: 'ls', app: 'breathe', name: 'Session length',
+    summarize: v => `${v} minute sessions` },
+  // ── Reflect ──
+  { key: 'journal', store: 'entries', kind: 'idb', app: 'reflect', name: 'Journal entries', sensitive: 'personal',
+    summarize: rows => `${rows.length} entr${rows.length===1?'y':'ies'}${rows.length ? ' · newest ' + shortDate(newest(rows,'created')) : ''}` },
+  // ── Nourish ──
+  { key: 'hill-climbing-nourish', kind: 'ls', app: 'nourish', name: 'Cooking progress',
+    summarize: v => {
+      const tracks = v.tracks || {};
+      const parts = Object.keys(tracks).map(t => `${t} lvl ${tracks[t].level ?? '?'}`);
+      const cleared = Object.values(tracks).reduce((n,t)=>n + (t.cleared ? t.cleared.length : 0), 0);
+      return `${parts.join(' · ') || 'no tracks yet'} · ${cleared} dish${cleared===1?'':'es'} cleared`;
+    } },
+  { key: 'hill-climbing-nourish-chef', kind: 'ls', app: 'nourish', name: 'Chef mode (AI recipes)', sensitive: 'secret', secretKeys: ['key'],
+    summarize: v => `${(v.history||[]).length} recipe${(v.history||[]).length===1?'':'s'} · API key ${v.key ? 'saved on device' : 'not set'} · ${v.consented ? 'consented' : 'not consented'}` },
+  // ── Levity ──
+  { key: 'hill-climbing-levity', kind: 'ls', app: 'levity', name: 'Comedy practice',
+    summarize: v => `level ${v.level ?? '?'} · streak ${v.streak ?? 0}${Array.isArray(v.cleared) ? ' · ' + v.cleared.length + ' cleared' : ''}` },
+  // ── Climb ──
+  { key: 'hill-climbing-climb', kind: 'ls', app: 'climb', name: 'Goals & steps',
+    summarize: v => `${countKeys(v.goals)} goal${countKeys(v.goals)===1?'':'s'} · ${countKeys(v.tasks)} step${countKeys(v.tasks)===1?'':'s'}` },
+  { key: 'climb', store: 'events', kind: 'idb', app: 'climb', name: 'Goal change log',
+    summarize: rows => `${rows.length} recorded change${rows.length===1?'':'s'} (append-only history)` },
+  // ── Train ──
+  { key: 'hill-climbing-train', kind: 'ls', app: 'train', name: 'Workout log',
+    summarize: v => `${(v.exercises||[]).length} exercise${(v.exercises||[]).length===1?'':'s'} · ${(v.workouts||[]).length} workout${(v.workouts||[]).length===1?'':'s'} · units ${v.unit || '?'}` },
+  // ── Council ──
+  { key: 'hill-climbing-council-key', kind: 'ls', app: 'council', name: 'Anthropic API key', sensitive: 'secret', rawSecret: true,
+    summarize: v => `a saved API key (${maskSecret(String(v))})` },
+  { key: 'hill-climbing-council', kind: 'ls', app: 'council', name: 'Board deliberations', sensitive: 'personal',
+    summarize: v => `${v.length} deliberation${v.length===1?'':'s'} about your own decisions` },
+  // ── Hub / shared ──
+  { key: 'hill-climbing-usage', kind: 'ls', app: 'shared', name: 'Usage calendar',
+    summarize: v => {
+      const apps = Object.keys(v).filter(k => k !== 'v' && v[k] && typeof v[k] === 'object');
+      const total = apps.reduce((n,a)=>n + countKeys(v[a]), 0);
+      return `${total} active-day marks across ${apps.length} app${apps.length===1?'':'s'}`;
+    } },
+  { key: 'hill-climbing-install-dismissed', kind: 'ls', app: 'shared', name: 'Install prompt dismissed',
+    summarize: v => `dismissed ${shortDate(Number(v))}` },
+];
+
+// Apps that deliberately store nothing — surfaced so the inventory is honest.
+const NO_DATA_APPS = [
+  { app: 'anime', note: 'The cel-shading filter runs entirely live — it keeps nothing.' },
+];
+
+const el = id => document.getElementById(id);
+let MODEL = [];          // gathered store items
+let searchTerm = '';
+
+// ── Formatting helpers ───────────────────────────────────────────────────────
+function fmtBytes(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(n < 10*1024 ? 1 : 0) + ' KB';
+  return (n/1024/1024).toFixed(1) + ' MB';
+}
+function byteLen(str) { try { return new Blob([str]).size; } catch { return str ? str.length : 0; } }
+function fmtNum(n) { return (typeof n === 'number' && isFinite(n)) ? Math.round(n) : (n ?? '?'); }
+function countKeys(o) { return (o && typeof o === 'object') ? Object.keys(o).length : 0; }
+function newest(rows, field) {
+  let m = 0; for (const r of rows) { const t = r && r[field]; if (typeof t === 'number' && t > m) m = t; } return m;
+}
+function maskSecret(s) {
+  if (!s) return 'none';
+  s = String(s);
+  if (s.length <= 8) return '••••';
+  return s.slice(0, 6) + '…' + s.slice(-4);
+}
+// Recognise a millisecond epoch so timestamps get a readable annotation.
+const TIME_KEYS = new Set(['created','updated','ts','t','timestamp','at','startedat','finishedat','doneat','restedat','createdat','lastused']);
+function looksLikeTime(key, val) {
+  if (typeof val !== 'number' || !isFinite(val)) return false;
+  if (TIME_KEYS.has(String(key).toLowerCase())) return val > 1e11;
+  return val > 1.3e12 && val < 2.2e12;   // ~2011–2039 in ms
+}
+function shortDate(ms) {
+  if (!ms || !isFinite(ms)) return '?';
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch { return '?'; }
+}
+function fullDate(ms) {
+  try { return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch { return String(ms); }
+}
+
+// ── IndexedDB: read a store WITHOUT ever creating one ─────────────────────────
+// Opens with no version so a future schema bump never throws VersionError, and
+// refuses to create anything. If our open accidentally creates the DB (it didn't
+// exist), we delete it again — exactly the hub's guard against orphaning reflect's
+// journal store. Any failure resolves to an empty array; the page still renders.
+function readIdbStore(dbName, storeName) {
+  return new Promise(resolve => {
+    let settled = false, created = false;
+    const done = v => { if (!settled) { settled = true; resolve(v); } };
+    let req;
+    try { req = indexedDB.open(dbName); }
+    catch { return done({ rows: [], missing: true }); }
+    req.onupgradeneeded = () => { created = true; /* never create a store */ };
+    req.onerror   = () => done({ rows: [], missing: true });
+    req.onblocked = () => done({ rows: [], missing: true });
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        if (created || !db.objectStoreNames.contains(storeName)) {
+          db.close();
+          if (created) { try { indexedDB.deleteDatabase(dbName); } catch {} }
+          return done({ rows: [], missing: true });
+        }
+        const g = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+        g.onsuccess = () => { db.close(); done({ rows: g.result || [], missing: false }); };
+        g.onerror   = () => { db.close(); done({ rows: [], missing: true }); };
+      } catch { try { db.close(); } catch {} done({ rows: [], missing: true }); }
+    };
+  });
+}
+// Clear a store's contents without dropping the store (keeps schema intact).
+function clearIdbStore(dbName, storeName) {
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.open(dbName); } catch { return resolve(false); }
+    req.onupgradeneeded = () => {};
+    req.onerror = () => resolve(false);
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        if (!db.objectStoreNames.contains(storeName)) { db.close(); return resolve(true); }
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror    = () => { db.close(); resolve(false); };
+      } catch { try { db.close(); } catch {} resolve(false); }
+    };
+  });
+}
+function deleteIdb(dbName) {
+  return new Promise(resolve => {
+    try {
+      const r = indexedDB.deleteDatabase(dbName);
+      r.onsuccess = r.onerror = r.onblocked = () => resolve();
+    } catch { resolve(); }
+  });
+}
+
+// ── Gather everything ─────────────────────────────────────────────────────────
+async function gather() {
+  const items = [];
+  const seenLs = new Set();
+
+  for (const def of REGISTRY) {
+    const item = { def, present: false, value: undefined, raw: '', bytes: 0, error: null, idbMissing: false };
+    if (def.kind === 'ls') {
+      seenLs.add(def.key);
+      const raw = localStorage.getItem(def.key);
+      if (raw !== null) {
+        item.present = true; item.raw = raw; item.bytes = byteLen(def.key) + byteLen(raw);
+        if (def.rawSecret) { item.value = raw; }
+        else { try { item.value = JSON.parse(raw); } catch { item.value = raw; } }
+      }
+    } else if (def.kind === 'idb') {
+      const { rows, missing } = await readIdbStore(def.key, def.store);
+      item.idbMissing = missing;
+      if (!missing) {
+        item.present = rows.length > 0 || !missing;
+        item.value = rows;
+        item.raw = safeStringify(rows);
+        item.bytes = byteLen(item.raw);
+        // A live-but-empty store still counts as "present but empty".
+        item.present = !missing;
+        if (rows.length === 0) item.emptyStore = true;
+      }
+    }
+    // Precompute a lowercase search haystack.
+    item.hay = ((def.key + ' ' + def.name + ' ' + APPS[def.app].label + ' ' +
+      (item.present ? item.raw : '')) || '').toLowerCase();
+    items.push(item);
+  }
+
+  // Any localStorage key we don't recognise → an "other" bucket so nothing hides.
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (seenLs.has(k)) continue;
+    const raw = localStorage.getItem(k);
+    let value; try { value = JSON.parse(raw); } catch { value = raw; }
+    const def = { key: k, kind: 'ls', app: 'other', name: k, summarize: () => 'not written by a known Hill Climbing app' };
+    items.push({ def, present: true, value, raw, bytes: byteLen(k) + byteLen(raw), error: null,
+      hay: (k + ' ' + raw).toLowerCase() });
+  }
+  return items;
+}
+function safeStringify(v) { try { return JSON.stringify(v); } catch { return String(v); } }
+
+// ── JSON tree (DOM-only, textContent — safe for arbitrary user text) ──────────
+const CHILD_CAP = 80;   // render this many children before an on-demand "+N more"
+
+function makeTree(value, def) {
+  const root = document.createElement('div');
+  root.className = 'tree';
+  root.appendChild(buildNode(value, null, def, ''));
+  return root;
+}
+function buildNode(value, key, def, keyPath) {
+  const wrap = document.createElement('div');
+  const t = typeof value;
+  const isArr = Array.isArray(value);
+  const isObj = value !== null && t === 'object';
+
+  if (isObj) {
+    wrap.className = 'node';
+    const row = document.createElement('div'); row.className = 'row';
+    const tw = span('tw', '▸');
+    row.appendChild(tw);
+    if (key !== null) { row.appendChild(span('k', keyLabel(key))); row.appendChild(span('col', ': ')); }
+    const n = isArr ? value.length : Object.keys(value).length;
+    row.appendChild(span('meta', isArr ? `[ ${n} ] ` : `{ ${n} } `));
+    wrap.appendChild(row);
+
+    const kids = document.createElement('div'); kids.className = 'kids hidden';
+    wrap.appendChild(kids);
+    let filled = false;
+    const fill = () => {
+      if (filled) return; filled = true;
+      const entries = isArr ? value.map((v,i)=>[i,v]) : Object.entries(value);
+      renderChildren(kids, entries, 0, Math.min(CHILD_CAP, entries.length), def, keyPath);
+    };
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const hidden = kids.classList.toggle('hidden');
+      tw.textContent = hidden ? '▸' : '▾';
+      if (!hidden) fill();
+    });
+    wrap._expand = () => { fill(); kids.classList.remove('hidden'); tw.textContent = '▾'; };
+    return wrap;
+  }
+
+  // Leaf
+  wrap.className = 'row';
+  if (key !== null) { wrap.appendChild(span('k', keyLabel(key))); wrap.appendChild(span('col', ': ')); }
+  appendLeaf(wrap, value, key, def, keyPath);
+  return wrap;
+}
+function renderChildren(container, entries, from, to, def, parentPath) {
+  for (let i = from; i < to; i++) {
+    const [k, v] = entries[i];
+    const path = (parentPath ? parentPath + '.' : '') + k;
+    container.appendChild(buildNode(v, k, def, path));
+  }
+  if (to < entries.length) {
+    const more = document.createElement('div'); more.className = 'row';
+    const link = span('more', `＋ ${entries.length - to} more`);
+    link.addEventListener('click', e => {
+      e.stopPropagation();
+      container.removeChild(more);
+      renderChildren(container, entries, to, Math.min(to + 200, entries.length), def, parentPath);
+    });
+    more.appendChild(link);
+    container.appendChild(more);
+  }
+}
+function appendLeaf(wrap, value, key, def, keyPath) {
+  const secret = def && (def.rawSecret || (def.secretKeys && def.secretKeys.includes(String(key))));
+  const t = typeof value;
+  if (secret && value) {
+    const real = String(value);
+    const s = span('s', maskSecret(real));
+    wrap.appendChild(span('col', '"')); wrap.appendChild(s); wrap.appendChild(span('col', '"'));
+    let shown = false;
+    const btn = span('reveal', 'reveal');
+    btn.addEventListener('click', e => {
+      e.stopPropagation(); shown = !shown;
+      s.textContent = shown ? real : maskSecret(real);
+      btn.textContent = shown ? 'hide' : 'reveal';
+    });
+    wrap.appendChild(btn);
+    return;
+  }
+  if (value === null) { wrap.appendChild(span('nul', 'null')); return; }
+  if (t === 'string') {
+    wrap.appendChild(span('col', '"'));
+    wrap.appendChild(span('s', value));
+    wrap.appendChild(span('col', '"'));
+    return;
+  }
+  if (t === 'number') {
+    wrap.appendChild(span('num', String(value)));
+    if (looksLikeTime(key, value)) wrap.appendChild(span('time', '  · ' + fullDate(value)));
+    return;
+  }
+  if (t === 'boolean') { wrap.appendChild(span('bool', String(value))); return; }
+  wrap.appendChild(span('nul', String(value)));
+}
+// Expand every collapsed node in a tree (used for search, so matches render).
+// Repeats in passes because nested nodes only exist after their parent fills.
+// Bounded by node count so a huge store can't lock the page.
+function deepExpand(treeEl, maxNodes = 4000) {
+  let count = 0;
+  for (let pass = 0; pass < 400; pass++) {
+    let didWork = false;
+    const nodes = treeEl.querySelectorAll('.node');
+    for (const n of nodes) {
+      const kids = n.querySelector(':scope > .kids');
+      if (kids && kids.classList.contains('hidden') && n._expand) {
+        n._expand(); didWork = true;
+        if (++count > maxNodes) return;
+      }
+    }
+    if (!didWork) break;
+  }
+}
+function keyLabel(k) { return typeof k === 'number' ? String(k) : JSON.stringify(k).slice(1,-1); }
+function span(cls, text) { const s = document.createElement('span'); s.className = cls; s.textContent = text; return s; }
+
+// ── Card rendering ────────────────────────────────────────────────────────────
+function renderAll() {
+  const host = el('stores');
+  host.textContent = '';
+
+  const present = MODEL.filter(i => i.present);
+  const anyData = present.length > 0;
+
+  // Group present items by app in APP_ORDER.
+  const byApp = {};
+  for (const it of MODEL) (byApp[it.def.app] ||= []).push(it);
+
+  let shownCards = 0, matchedCards = 0;
+  for (const app of APP_ORDER) {
+    const list = (byApp[app] || []).filter(i => i.present);
+    const noteApp = NO_DATA_APPS.find(n => n.app === app);
+    if (!list.length && !noteApp) continue;
+
+    const group = document.createElement('section'); group.className = 'group';
+    const head = document.createElement('div'); head.className = 'group-head';
+    const dot = document.createElement('span'); dot.className = 'group-dot';
+    dot.style.setProperty('--ac', APPS[app].color);
+    head.appendChild(dot);
+    head.appendChild(span('group-name', APPS[app].label));
+    const bytes = list.reduce((n,i)=>n+i.bytes, 0);
+    if (list.length) head.appendChild(span('group-sub', `${list.length} store${list.length===1?'':'s'} · ${fmtBytes(bytes)}`));
+    group.appendChild(head);
+
+    let groupHasVisible = false;
+    for (const it of list) {
+      const matches = !searchTerm || it.hay.includes(searchTerm);
+      if (matches) matchedCards++;
+      const card = renderCard(it, matches);
+      if (card.style.display !== 'none') { groupHasVisible = true; shownCards++; }
+      group.appendChild(card);
+    }
+    if (noteApp && (!searchTerm)) {
+      const line = document.createElement('div');
+      line.className = 'card empty';
+      const h = document.createElement('div'); h.className = 'card-head';
+      h.appendChild(span('disc', '▸'));
+      const m = document.createElement('div'); m.className = 'card-main';
+      const title = document.createElement('div'); title.className = 'card-title';
+      title.appendChild(span('name', 'No stored data'));
+      m.appendChild(title);
+      m.appendChild(span('card-summary', noteApp.note));
+      h.appendChild(m);
+      line.appendChild(h);
+      group.appendChild(line);
+      groupHasVisible = true;
+    }
+    if (groupHasVisible) host.appendChild(group);
+  }
+
+  if (!anyData) {
+    host.innerHTML = '';
+    host.appendChild(Object.assign(document.createElement('div'),
+      { className: 'empty-note', textContent: 'No data stored yet. Use any practice and it will show up here.' }));
+  }
+
+  // Search status line.
+  const ss = el('search-status');
+  if (searchTerm) {
+    ss.textContent = matchedCards
+      ? `${matchedCards} store${matchedCards===1?'':'s'} match “${searchTerm}”.`
+      : `Nothing matches “${searchTerm}”.`;
+  } else { ss.textContent = ''; }
+}
+
+function renderCard(it, matches) {
+  const def = it.def;
+  const card = document.createElement('div');
+  card.className = 'card';
+  if (!matches) { card.style.display = 'none'; return card; }
+
+  const head = document.createElement('div'); head.className = 'card-head';
+  head.appendChild(span('disc', '▸'));
+
+  const main = document.createElement('div'); main.className = 'card-main';
+  const title = document.createElement('div'); title.className = 'card-title';
+  title.appendChild(span('name', def.name));
+  if (def.sensitive === 'personal') title.appendChild(span('badge personal', 'personal'));
+  if (def.sensitive === 'secret')   title.appendChild(span('badge secret', 'secret'));
+  if (it.emptyStore) title.appendChild(span('badge', 'empty'));
+  main.appendChild(title);
+
+  let summary = '';
+  if (it.emptyStore) summary = 'the store exists but holds nothing yet';
+  else { try { summary = def.summarize ? def.summarize(it.value) : ''; } catch { summary = ''; } }
+  if (summary) main.appendChild(span('card-summary', summary));
+
+  const keyLine = document.createElement('div'); keyLine.className = 'card-key';
+  keyLine.appendChild(span('kind', def.kind === 'idb' ? 'IndexedDB · ' : 'localStorage · '));
+  keyLine.appendChild(document.createTextNode(def.kind === 'idb' ? `${def.key} → ${def.store}` : def.key));
+  main.appendChild(keyLine);
+  head.appendChild(main);
+
+  head.appendChild(span('card-size', fmtBytes(it.bytes)));
+  card.appendChild(head);
+
+  const body = document.createElement('div'); body.className = 'card-body';
+  card.appendChild(body);
+
+  let built = false;
+  const build = () => {
+    if (built) return; built = true;
+    const tools = document.createElement('div'); tools.className = 'body-tools';
+    const treeWrap = document.createElement('div');
+    let rawShown = false, rawEl = null;
+
+    const tree = makeTree(it.value, def);
+    treeWrap.appendChild(tree);
+
+    const toggleRaw = tool('Raw JSON', () => {
+      rawShown = !rawShown;
+      if (rawShown) {
+        if (!rawEl) { rawEl = document.createElement('pre'); rawEl.className = 'raw';
+          rawEl.textContent = prettyRaw(it); }
+        tree.style.display = 'none'; treeWrap.appendChild(rawEl); toggleRaw.textContent = 'Tree view';
+      } else { tree.style.display = ''; if (rawEl) rawEl.remove(); toggleRaw.textContent = 'Raw JSON'; }
+    });
+    const copyBtn = tool('Copy', () => {
+      const text = prettyRaw(it);
+      navigator.clipboard?.writeText(text).then(
+        () => toast('Copied to clipboard'),
+        () => toast('Copy failed — select the raw view manually'));
+    });
+    const dlBtn = tool('Download', () => download(fileName(def) + '.json', prettyRaw(it)));
+
+    tools.appendChild(toggleRaw); tools.appendChild(copyBtn); tools.appendChild(dlBtn);
+    if (def.app !== 'other' || true) tools.appendChild(makeDelete(it));
+    body.appendChild(tools);
+    body.appendChild(treeWrap);
+    // Expand the top level by default so opening a card shows structure at once.
+    const top = tree.firstChild;
+    if (top && top._expand) top._expand();
+    // While searching, fully expand so the match is actually in the DOM to mark.
+    if (searchTerm) { deepExpand(tree); highlight(tree, searchTerm); }
+  };
+
+  const isEmptyLeaf = it.emptyStore;
+  head.addEventListener('click', () => {
+    if (isEmptyLeaf) return;
+    const open = card.classList.toggle('open');
+    head.querySelector('.disc').textContent = open ? '▾' : '▸';
+    if (open) build();
+  });
+
+  // Auto-open when a search is active (so matches are visible immediately).
+  if (searchTerm && !isEmptyLeaf) {
+    card.classList.add('open');
+    head.querySelector('.disc').textContent = '▾';
+    build();
+  }
+  return card;
+}
+
+function makeDelete(it) {
+  const btn = tool('Delete', null);
+  let armed = false, timer = null;
+  btn.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true; btn.classList.add('confirm'); btn.textContent = 'Delete — tap to confirm';
+      timer = setTimeout(() => { armed = false; btn.classList.remove('confirm'); btn.textContent = 'Delete'; }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    await deleteStore(it);
+    toast(`Deleted “${it.def.name}”`);
+    reload();
+  });
+  return btn;
+}
+
+async function deleteStore(it) {
+  const def = it.def;
+  if (def.kind === 'ls') { try { localStorage.removeItem(def.key); } catch {} }
+  else if (def.kind === 'idb') { await clearIdbStore(def.key, def.store); }
+}
+
+function prettyRaw(it) {
+  try { return JSON.stringify(it.value, null, 2); }
+  catch { return it.raw || String(it.value); }
+}
+function fileName(def) {
+  return 'hillclimbing-' + String(def.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g,'');
+}
+function tool(label, fn) {
+  const b = document.createElement('button'); b.className = 'tool'; b.type = 'button'; b.textContent = label;
+  if (fn) b.addEventListener('click', fn);
+  return b;
+}
+
+// ── Search highlight (walks Text nodes; never touches markup) ─────────────────
+function highlight(container, term) {
+  const low = term.toLowerCase();
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const targets = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue.toLowerCase().includes(low)) targets.push(node);
+  }
+  for (const text of targets) {
+    const val = text.nodeValue; const lowVal = val.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let i = 0, idx;
+    while ((idx = lowVal.indexOf(low, i)) !== -1) {
+      if (idx > i) frag.appendChild(document.createTextNode(val.slice(i, idx)));
+      const mark = document.createElement('mark'); mark.textContent = val.slice(idx, idx + low.length);
+      frag.appendChild(mark);
+      i = idx + low.length;
+    }
+    if (i < val.length) frag.appendChild(document.createTextNode(val.slice(i)));
+    text.parentNode.replaceChild(frag, text);
+  }
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+function renderOverview() {
+  const present = MODEL.filter(i => i.present);
+  const bytes = present.reduce((n,i)=>n+i.bytes, 0);
+  const secrets = present.filter(i => i.def.sensitive === 'secret').length;
+  const personal = present.filter(i => i.def.sensitive === 'personal').length;
+  const ov = el('overview');
+  ov.textContent = '';
+  ov.appendChild(stat(present.length, 'stores in use'));
+  ov.appendChild(stat(fmtBytes(bytes), 'total size'));
+  ov.appendChild(stat(personal, 'personal'));
+  ov.appendChild(stat(secrets, 'secrets', secrets > 0));
+}
+function stat(n, label, isSecret) {
+  const d = document.createElement('div'); d.className = 'stat' + (isSecret ? ' secret' : '');
+  d.appendChild(Object.assign(document.createElement('div'), { className: 'n', textContent: String(n) }));
+  d.appendChild(Object.assign(document.createElement('div'), { className: 'l', textContent: label }));
+  return d;
+}
+
+// ── Auxiliary browser storage (non-personal / infra) ──────────────────────────
+async function renderAux() {
+  const host = el('aux'); host.textContent = '';
+  const head = document.createElement('div'); head.className = 'group-head';
+  head.appendChild(span('group-name', 'Also in your browser'));
+  head.appendChild(span('group-sub', 'not personal data'));
+  host.appendChild(head);
+
+  // Offline app-shell cache (service worker).
+  const cacheItem = auxItem('Offline app cache', 'Copies of the app’s own files so it works without a connection. Contains no information about you.');
+  host.appendChild(cacheItem.root);
+  try {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      let total = 0;
+      for (const nm of names) { const c = await caches.open(nm); total += (await c.keys()).length; }
+      cacheItem.sub.textContent = names.length
+        ? `${total} cached file${total===1?'':'s'} across ${names.length} cache${names.length===1?'':'s'}. Contains no information about you.`
+        : 'Nothing cached yet.';
+      if (names.length) {
+        const clr = tool('Clear cache', async () => {
+          await Promise.all(names.map(n => caches.delete(n)));
+          toast('Offline cache cleared'); renderAux();
+        });
+        clr.style.marginTop = '10px'; cacheItem.main.appendChild(clr);
+      }
+    } else { cacheItem.sub.textContent = 'Not supported in this browser.'; }
+  } catch { cacheItem.sub.textContent = 'Could not read the cache.'; }
+
+  // Web Push subscription (reminders). Read-only here; managed on the hub.
+  const pushItem = auxItem('Daily-reminder subscription', 'Checking…');
+  host.appendChild(pushItem.root);
+  try {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      if (sub) {
+        let host2 = '';
+        try { host2 = new URL(sub.endpoint).host; } catch {}
+        pushItem.sub.innerHTML = '';
+        pushItem.sub.appendChild(document.createTextNode('Reminders are on. Your device is registered with a push service'));
+        if (host2) { pushItem.sub.appendChild(document.createTextNode(' (')); const m = span('mono', host2); pushItem.sub.appendChild(m); pushItem.sub.appendChild(document.createTextNode(')')); }
+        pushItem.sub.appendChild(document.createTextNode('. Turn it off from the hub’s “Daily reminders”.'));
+      } else {
+        pushItem.sub.textContent = 'Off — no reminder subscription on this device.';
+      }
+    } else { pushItem.sub.textContent = 'Push notifications aren’t supported in this browser.'; }
+  } catch { pushItem.sub.textContent = 'Could not check the subscription.'; }
+}
+function auxItem(name, sub) {
+  const root = document.createElement('div'); root.className = 'aux-item';
+  const main = document.createElement('div'); main.className = 'ax-main';
+  main.appendChild(span('ax-name', name));
+  const s = document.createElement('div'); s.className = 'ax-sub'; s.textContent = sub;
+  main.appendChild(s); root.appendChild(main);
+  return { root, main, sub: s };
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+async function exportAll() {
+  const bundle = {
+    app: 'Hill Climbing',
+    exportedAt: new Date().toISOString(),
+    origin: location.origin,
+    note: 'A complete copy of everything Hill Climbing stores in this browser. Keep it private — it may include your API key and personal writing.',
+    localStorage: {},
+    indexedDB: {},
+  };
+  let hasSecret = false;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i); const raw = localStorage.getItem(k);
+    let v; try { v = JSON.parse(raw); } catch { v = raw; }
+    bundle.localStorage[k] = v;
+    if (/key/i.test(k) || /council-key/.test(k)) hasSecret = true;
+  }
+  for (const def of REGISTRY) {
+    if (def.kind !== 'idb') continue;
+    const { rows, missing } = await readIdbStore(def.key, def.store);
+    if (!missing) (bundle.indexedDB[def.key] ||= {})[def.store] = rows;
+  }
+  const stamp = new Date().toISOString().slice(0, 10);
+  download(`hill-climbing-data-${stamp}.json`, JSON.stringify(bundle, null, 2));
+  toast(hasSecret ? 'Backup downloaded — it includes your API key, keep it private.' : 'Backup downloaded.');
+}
+
+function download(name, text) {
+  try {
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch { toast('Download failed'); }
+}
+
+// ── Erase everything ──────────────────────────────────────────────────────────
+let eraseArmed = false, eraseTimer = null;
+async function eraseAll() {
+  const btn = el('erase-all');
+  if (!eraseArmed) {
+    eraseArmed = true; btn.textContent = 'Tap again to erase EVERYTHING';
+    eraseTimer = setTimeout(() => { eraseArmed = false; btn.textContent = 'Erase all my data…'; }, 4500);
+    return;
+  }
+  clearTimeout(eraseTimer); eraseArmed = false; btn.textContent = 'Erasing…'; btn.disabled = true;
+  try { localStorage.clear(); } catch {}
+  // Drop both known IndexedDB databases entirely.
+  const dbs = new Set();
+  for (const def of REGISTRY) if (def.kind === 'idb') dbs.add(def.key);
+  try {
+    if (indexedDB.databases) {
+      const list = await indexedDB.databases();
+      list.forEach(d => d && d.name && dbs.add(d.name));
+    }
+  } catch {}
+  for (const name of dbs) { if (name !== 'journal') await deleteIdb(name); }
+  // The journal holds your most personal writing — delete it too, but last, so a
+  // failure earlier doesn't leave a half-erased impression that it survived.
+  if (dbs.has('journal')) await deleteIdb('journal');
+  btn.disabled = false; btn.textContent = 'Erase all my data…';
+  toast('All Hill Climbing data erased from this browser.');
+  reload();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg) {
+  const t = el('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────────
+let expandedAll = false;
+async function reload() {
+  MODEL = await gather();
+  renderOverview();
+  renderAll();
+  renderAux();
+}
+function init() {
+  el('search').addEventListener('input', e => {
+    searchTerm = e.target.value.trim().toLowerCase();
+    renderAll();
+  });
+  el('refresh').addEventListener('click', () => { toast('Re-read from storage'); reload(); });
+  el('export-all').addEventListener('click', exportAll);
+  el('erase-all').addEventListener('click', eraseAll);
+  el('expand-all').addEventListener('click', () => {
+    expandedAll = !expandedAll;
+    document.querySelectorAll('.card').forEach(c => {
+      if (c.classList.contains('empty')) return;
+      const open = c.classList.contains('open');
+      if (expandedAll && !open) c.querySelector('.card-head').click();
+      if (!expandedAll && open) c.querySelector('.card-head').click();
+    });
+    el('expand-all').textContent = expandedAll ? 'Collapse all' : 'Expand all';
+  });
+  reload();
+}
+init();
+</script>
+</body>
+</html>

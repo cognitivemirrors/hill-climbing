@@ -124,6 +124,8 @@
       margin-top: 52px; font-size: 0.62rem; color: var(--faint);
       letter-spacing: 0.2em; text-transform: uppercase;
     }
+    footer a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s; }
+    footer a:hover { color: var(--mid); border-bottom-color: var(--faint); }
 
     /* ── This-week dashboard ──────────────────────────────────── */
     .dashboard {
@@ -554,7 +556,7 @@
     </div>
   </section>
 
-  <footer>hill climbing · private · on-device</footer>
+  <footer>hill climbing · private · on-device · <a href="data.html">your data</a></footer>
 
   <!-- ── Account & sync page (full-screen; opened by the chip or #account) ──── -->
   <div id="account-view" role="dialog" aria-modal="true" aria-label="Account and sync">
