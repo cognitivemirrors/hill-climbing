@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0e14">
+  <title>Anime · Hill Climbing</title>
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.52);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --line:  rgba(255,255,255,0.10);
+      --panel: rgba(255,255,255,0.04);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      /* app accent — a vivid ink-violet, distinct from the other cards */
+      --accent: hsl(288, 74%, 72%);
+      --accent-soft: hsla(288, 68%, 66%, 0.45);
+      --accent-glow: hsla(288, 74%, 58%, 0.18);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 30%, rgba(70,40,80,0.28), transparent 70%),
+        var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 54px 18px 72px;
+      user-select: none;
+    }
+
+    /* ── Home link + version label (suite convention) ─────────────── */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--dim); border: 1px solid var(--line); border-radius: 9px;
+      background: rgba(0,0,0,0.2); text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+    #version-label {
+      position: fixed; top: 22px; left: 62px; z-index: 11;
+      font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    /* ── Masthead ─────────────────────────────────────────────────── */
+    header { text-align: center; margin-bottom: 26px; animation: fadeUp 0.7s ease; }
+    h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.9rem; letter-spacing: 0.34em; text-indent: 0.34em;
+      text-transform: uppercase; color: var(--text);
+      text-shadow: 0 0 48px var(--accent-glow);
+    }
+    header p {
+      font-family: var(--font-display); font-style: italic;
+      margin-top: 12px; font-size: 0.9rem; color: var(--dim); letter-spacing: 0.03em;
+    }
+
+    /* ── Camera stage ─────────────────────────────────────────────── */
+    .stage {
+      position: relative; width: 100%; max-width: 640px;
+      aspect-ratio: 4 / 3;
+      border-radius: 18px; overflow: hidden;
+      background: #05060a;
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 0 34px var(--accent-glow);
+      animation: fadeUp 0.7s ease backwards; animation-delay: 0.08s;
+    }
+    #view { display: block; width: 100%; height: 100%; object-fit: cover; background: #05060a; }
+
+    /* start / message overlay */
+    .overlay {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 28px;
+      background: radial-gradient(ellipse at center, rgba(30,16,34,0.6), rgba(5,6,10,0.9));
+      transition: opacity 0.4s ease;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .overlay .lens {
+      width: 58px; height: 58px; margin-bottom: 20px; color: var(--accent);
+      opacity: 0.9; animation: pulse 3.4s ease-in-out infinite;
+    }
+    .overlay h2 {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.15rem;
+      letter-spacing: 0.06em; margin-bottom: 10px; color: var(--text);
+    }
+    .overlay p { font-size: 0.82rem; line-height: 1.6; color: var(--mid); max-width: 340px; }
+    .overlay .note {
+      margin-top: 16px; font-size: 0.72rem; color: var(--dim);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .overlay .note svg { width: 13px; height: 13px; flex: none; }
+
+    .btn {
+      font-family: var(--font-ui); font-size: 0.8rem; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text);
+      background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+      padding: 12px 22px; cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--accent-soft); color: var(--accent); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary {
+      color: #120a16; background: var(--accent); border-color: transparent;
+      font-weight: 600; margin-top: 24px;
+    }
+    .btn.primary:hover:not(:disabled) { color: #120a16; box-shadow: 0 8px 26px var(--accent-glow); }
+
+    /* recording dot on the stage */
+    #rec-badge {
+      position: absolute; top: 12px; right: 12px; z-index: 6;
+      display: none; align-items: center; gap: 7px;
+      padding: 6px 11px; border-radius: 20px;
+      background: rgba(10,6,12,0.62); border: 1px solid var(--line);
+      font-size: 0.68rem; letter-spacing: 0.1em; color: var(--text); font-variant-numeric: tabular-nums;
+    }
+    #rec-badge.on { display: flex; }
+    #rec-badge .dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4d68; animation: blink 1.1s steps(2, jump-none) infinite; }
+
+    /* ── Preset chips ─────────────────────────────────────────────── */
+    .presets {
+      display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+      margin-top: 22px; max-width: 640px;
+    }
+    .chip {
+      font-family: var(--font-ui); font-size: 0.74rem; letter-spacing: 0.04em;
+      color: var(--mid); background: var(--panel);
+      border: 1px solid var(--line); border-radius: 20px;
+      padding: 8px 16px; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .chip:hover { color: var(--text); border-color: var(--accent-soft); }
+    .chip.active { color: #120a16; background: var(--accent); border-color: transparent; font-weight: 600; }
+
+    /* ── Controls ─────────────────────────────────────────────────── */
+    .controls {
+      width: 100%; max-width: 640px; margin-top: 20px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px;
+      padding: 20px 22px; border: 1px solid var(--line); border-radius: 16px;
+      background: var(--panel);
+    }
+    .ctrl { display: flex; flex-direction: column; gap: 6px; }
+    .ctrl label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim);
+    }
+    .ctrl label .val { color: var(--mid); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    input[type=range] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+      border-radius: 3px; background: rgba(255,255,255,0.12); outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%;
+      background: var(--accent); border: 2px solid #0a0b12; box-shadow: 0 0 8px var(--accent-glow); cursor: pointer;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--accent); border: 2px solid #0a0b12; cursor: pointer;
+    }
+
+    /* ── Action bar ───────────────────────────────────────────────── */
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
+    #status { margin-top: 16px; font-size: 0.74rem; color: var(--dim); text-align: center; min-height: 1.1em; letter-spacing: 0.02em; }
+    #status.warn { color: hsl(38, 80%, 66%); }
+
+    footer {
+      margin-top: 30px; font-size: 0.68rem; color: var(--faint);
+      text-align: center; line-height: 1.6; max-width: 460px;
+    }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+    @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.25; } }
+
+    @media (max-width: 560px) {
+      body { padding: 52px 12px 60px; }
+      #version-label { display: none; }
+      h1 { font-size: 1.55rem; letter-spacing: 0.26em; text-indent: 0.26em; }
+      .controls { grid-template-columns: 1fr; gap: 12px; padding: 16px 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div id="version-label">v0.1 · anime</div>
+
+<header>
+  <h1>Anime</h1>
+  <p>show up on camera as a drawing of yourself</p>
+</header>
+
+<div class="stage">
+  <canvas id="view" width="640" height="480"></canvas>
+
+  <div id="rec-badge"><span class="dot"></span><span id="rec-time">0:00</span></div>
+
+  <div class="overlay" id="overlay">
+    <svg class="lens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>
+    <h2 id="ov-title">Turn yourself into an anime frame</h2>
+    <p id="ov-body">Point your webcam at yourself and this draws you as a cel-shaded character in real time — flattened colour, ink outlines, a painted look. Then snapshot or record a clip.</p>
+    <div class="note" id="ov-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+      </svg>
+      <span>Everything runs on your device. No video ever leaves this browser.</span>
+    </div>
+    <button class="btn primary" id="start-btn">Enable camera</button>
+  </div>
+</div>
+
+<div class="presets" id="presets">
+  <button class="chip active" data-preset="cel">Cel</button>
+  <button class="chip" data-preset="shoujo">Shoujo</button>
+  <button class="chip" data-preset="ghibli">Soft</button>
+  <button class="chip" data-preset="manga">Manga</button>
+  <button class="chip" data-preset="neon">Neon</button>
+</div>
+
+<div class="controls" id="controls">
+  <div class="ctrl">
+    <label>Smoothing <span class="val" id="v-smooth"></span></label>
+    <input type="range" id="s-smooth" min="0" max="6" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Colour bands <span class="val" id="v-levels"></span></label>
+    <input type="range" id="s-levels" min="2" max="10" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Ink lines <span class="val" id="v-ink"></span></label>
+    <input type="range" id="s-ink" min="0" max="100" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Saturation <span class="val" id="v-sat"></span></label>
+    <input type="range" id="s-sat" min="0" max="200" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Warmth <span class="val" id="v-warm"></span></label>
+    <input type="range" id="s-warm" min="-40" max="40" step="1">
+  </div>
+  <div class="ctrl">
+    <label>Glow <span class="val" id="v-glow"></span></label>
+    <input type="range" id="s-glow" min="0" max="100" step="1">
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn" id="snap-btn" disabled>Snapshot</button>
+  <button class="btn" id="rec-btn" disabled>Record clip</button>
+</div>
+
+<div id="status"></div>
+
+<footer>
+  A gentle way to get used to being on camera. Nothing here is uploaded, stored, or
+  analysed — the drawing is made and thrown away frame by frame, on your machine.
+</footer>
+
+<script>
+'use strict';
+
+// ── Anime · v0.1 ───────────────────────────────────────────────────────────
+// A real-time "anime / cel-shading" filter over the webcam, in pure Canvas 2D.
+// Pipeline per frame, at a reduced working resolution for speed:
+//   1. mirror the video onto a small work canvas
+//   2. box-blur each colour channel  → flattened, painted skin
+//   3. contrast · saturation · warmth · posterize  → flat "cel" colour bands
+//   4. Sobel edges on the blurred luminance  → dark ink outlines
+//   5. upscale onto the display canvas (soft interpolation adds to the look)
+//   6. optional bloom via canvas filter blur  → the dreamy glow
+// No models, no network, no dependencies. Frames are never kept.
+
+const VERSION = 'v0.1 · anime';
+document.getElementById('version-label').textContent = VERSION;
+
+// ── Presets ────────────────────────────────────────────────────────────────
+// smooth: blur radius (px)   levels: posterize bands   ink: 0..100 outline
+// sat: 0..200 (%)   warm: -40..40   glow: 0..100
+// c / bn: contrast · brightness, set by preset only (not surfaced as sliders).
+const PRESETS = {
+  cel:    { smooth: 2, levels: 6,  ink: 55, sat: 138, warm: 12,  glow: 12, c: 1.10, bn: 6  },
+  shoujo: { smooth: 4, levels: 7,  ink: 34, sat: 124, warm: 20,  glow: 46, c: 1.02, bn: 18 },
+  ghibli: { smooth: 3, levels: 8,  ink: 30, sat: 116, warm: 8,   glow: 22, c: 1.04, bn: 9  },
+  manga:  { smooth: 2, levels: 3,  ink: 88, sat: 0,   warm: 0,   glow: 0,  c: 1.36, bn: 4  },
+  neon:   { smooth: 2, levels: 5,  ink: 72, sat: 184, warm: -16, glow: 56, c: 1.14, bn: -6 },
+};
+
+// live parameters (start on the Cel preset)
+let P = Object.assign({}, PRESETS.cel);
+
+// ── DOM ────────────────────────────────────────────────────────────────────
+const view      = document.getElementById('view');       // visible display canvas
+const dispCtx   = view.getContext('2d');
+const overlay   = document.getElementById('overlay');
+const ovTitle   = document.getElementById('ov-title');
+const ovBody    = document.getElementById('ov-body');
+const ovNote    = document.getElementById('ov-note');
+const startBtn  = document.getElementById('start-btn');
+const snapBtn   = document.getElementById('snap-btn');
+const recBtn    = document.getElementById('rec-btn');
+const recBadge  = document.getElementById('rec-badge');
+const recTime   = document.getElementById('rec-time');
+const statusEl  = document.getElementById('status');
+
+// hidden source video + offscreen work canvas
+const video    = document.createElement('video');
+video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+const work     = document.createElement('canvas');
+const workCtx  = work.getContext('2d', { willReadFrequently: true });
+
+let stream = null;
+let running = false;
+let rafId = 0;
+
+// canvas.filter support (for the glow bloom). Older Safari lacks it → we skip glow.
+const SUPPORTS_FILTER = (() => {
+  try { const t = document.createElement('canvas').getContext('2d'); t.filter = 'blur(1px)'; return t.filter === 'blur(1px)'; }
+  catch (e) { return false; }
+})();
+
+// ── Reusable processing buffers (resized when the working resolution changes) ─
+let bufN = 0, rf, gf, bf, tmp, blurL, em;
+function ensureBuffers(n) {
+  if (n === bufN) return;
+  bufN = n;
+  rf = new Float32Array(n); gf = new Float32Array(n); bf = new Float32Array(n);
+  tmp = new Float32Array(n); blurL = new Float32Array(n); em = new Float32Array(n);
+}
+
+// ── Separable box blur (edge-clamped, O(1) per pixel via a sliding sum) ──────
+function boxBlurH(src, dst, w, h, r) {
+  const win = 2 * r + 1, inv = 1 / win;
+  for (let y = 0; y < h; y++) {
+    const b = y * w;
+    let sum = 0;
+    for (let k = -r; k <= r; k++) sum += src[b + Math.min(w - 1, Math.max(0, k))];
+    for (let x = 0; x < w; x++) {
+      dst[b + x] = sum * inv;
+      const xa = x + r + 1 < w ? x + r + 1 : w - 1;
+      const xb = x - r > 0 ? x - r : 0;
+      sum += src[b + xa] - src[b + xb];
+    }
+  }
+}
+function boxBlurV(src, dst, w, h, r) {
+  const win = 2 * r + 1, inv = 1 / win;
+  for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let k = -r; k <= r; k++) sum += src[Math.min(h - 1, Math.max(0, k)) * w + x];
+    for (let y = 0; y < h; y++) {
+      dst[y * w + x] = sum * inv;
+      const ya = y + r + 1 < h ? y + r + 1 : h - 1;
+      const yb = y - r > 0 ? y - r : 0;
+      sum += src[ya * w + x] - src[yb * w + x];
+    }
+  }
+}
+function blurChannel(ch, w, h, r) { boxBlurH(ch, tmp, w, h, r); boxBlurV(tmp, ch, w, h, r); }
+
+// ── The filter ───────────────────────────────────────────────────────────────
+function process(data, w, h) {
+  const n = w * h;
+  ensureBuffers(n);
+
+  // load RGB into float buffers
+  for (let i = 0, j = 0; i < n; i++, j += 4) { rf[i] = data[j]; gf[i] = data[j + 1]; bf[i] = data[j + 2]; }
+
+  // 1 · smoothing
+  const r = P.smooth | 0;
+  if (r > 0) { blurChannel(rf, w, h, r); blurChannel(gf, w, h, r); blurChannel(bf, w, h, r); }
+
+  // blurred luminance drives the outline pass (cleaner than raw pixels)
+  for (let i = 0; i < n; i++) blurL[i] = 0.299 * rf[i] + 0.587 * gf[i] + 0.114 * bf[i];
+
+  // 2 · Sobel edge magnitude (interior only; borders left untouched below)
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const tl = blurL[i - w - 1], t = blurL[i - w], tr = blurL[i - w + 1];
+      const l  = blurL[i - 1],                      rr = blurL[i + 1];
+      const bl = blurL[i + w - 1], bb = blurL[i + w], br = blurL[i + w + 1];
+      const gx = (tr + 2 * rr + br) - (tl + 2 * l + bl);
+      const gy = (bl + 2 * bb + br) - (tl + 2 * t + tr);
+      em[i] = Math.sqrt(gx * gx + gy * gy);
+    }
+  }
+
+  // 3 · per-pixel colour grade + posterize + ink
+  const c = P.c, bn = P.bn, s = P.sat / 100, warm = P.warm;
+  const L = P.levels | 0, step = 255 / (L - 1);
+  const edgeAmt = P.ink / 100, thr = 140 - edgeAmt * 112, kbase = 0.35 + 0.65 * edgeAmt;
+
+  for (let y = 0; y < h; y++) {
+    const yb = y * w, edgeRow = y > 0 && y < h - 1;
+    for (let x = 0; x < w; x++) {
+      const i = yb + x, j = i << 2;
+      let R = rf[i], G = gf[i], B = bf[i];
+
+      // contrast + brightness
+      R = (R - 128) * c + 128 + bn; G = (G - 128) * c + 128 + bn; B = (B - 128) * c + 128 + bn;
+      // saturation, around this pixel's luminance
+      const lum = 0.299 * R + 0.587 * G + 0.114 * B;
+      R = lum + (R - lum) * s; G = lum + (G - lum) * s; B = lum + (B - lum) * s;
+      // warmth (push red up, blue down)
+      R += warm; B -= warm;
+      // clamp
+      R = R < 0 ? 0 : R > 255 ? 255 : R;
+      G = G < 0 ? 0 : G > 255 ? 255 : G;
+      B = B < 0 ? 0 : B > 255 ? 255 : B;
+      // posterize into flat cel bands
+      R = Math.round(R / step) * step; G = Math.round(G / step) * step; B = Math.round(B / step) * step;
+      // ink outline
+      if (edgeRow && x > 0 && x < w - 1) {
+        const e = em[i];
+        if (e > thr) {
+          let tt = (e - thr) / 170; if (tt > 1) tt = 1;
+          const m = 1 - tt * kbase;
+          R *= m; G *= m; B *= m;
+        }
+      }
+      data[j] = R; data[j + 1] = G; data[j + 2] = B;   // alpha untouched
+    }
+  }
+}
+
+// ── Render loop ──────────────────────────────────────────────────────────────
+function frame() {
+  if (!running) return;
+  if (video.readyState >= 2) {
+    const w = work.width, h = work.height;
+    // mirror the source onto the work canvas (selfie view)
+    workCtx.save();
+    workCtx.setTransform(-1, 0, 0, 1, w, 0);
+    workCtx.drawImage(video, 0, 0, w, h);
+    workCtx.restore();
+
+    const img = workCtx.getImageData(0, 0, w, h);
+    process(img.data, w, h);
+    workCtx.putImageData(img, 0, 0);
+
+    // upscale onto the visible canvas — the interpolation softens it further
+    dispCtx.imageSmoothingEnabled = true;
+    dispCtx.imageSmoothingQuality = 'high';
+    dispCtx.drawImage(work, 0, 0, view.width, view.height);
+
+    // bloom / glow: a blurred, brightened copy screened on top
+    if (P.glow > 0 && SUPPORTS_FILTER) {
+      dispCtx.save();
+      dispCtx.globalCompositeOperation = 'lighter';
+      dispCtx.globalAlpha = (P.glow / 100) * 0.55;
+      dispCtx.filter = 'blur(' + (view.width * 0.012).toFixed(1) + 'px) brightness(1.28)';
+      dispCtx.drawImage(work, 0, 0, view.width, view.height);
+      dispCtx.restore();
+      dispCtx.filter = 'none';
+    }
+  }
+  rafId = requestAnimationFrame(frame);
+}
+
+// ── Camera ───────────────────────────────────────────────────────────────────
+async function startCamera() {
+  startBtn.disabled = true;
+  setStatus('Waking the camera…');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+  } catch (err) {
+    startBtn.disabled = false;
+    if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+      showOverlayMessage('Camera blocked',
+        'Your browser blocked camera access. Allow it for this page in the site settings, then reload.');
+    } else if (err && err.name === 'NotFoundError') {
+      showOverlayMessage('No camera found', 'This device does not seem to have a camera available.');
+    } else {
+      showOverlayMessage('Could not start the camera', (err && err.message) ? err.message : 'Unknown error.');
+    }
+    setStatus('');
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  await new Promise(res => {
+    if (video.readyState >= 2) res();
+    else video.onloadedmetadata = res;
+  });
+
+  // choose a working resolution (fast) and a display resolution (crisp)
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  const workW = Math.min(448, vw), workH = Math.round(workW * vh / vw);
+  const dispW = Math.min(720, vw),  dispH = Math.round(dispW * vh / vw);
+  work.width = workW; work.height = workH;
+  view.width = dispW; view.height = dispH;
+  view.style.aspectRatio = vw + ' / ' + vh;
+  document.querySelector('.stage').style.aspectRatio = vw + ' / ' + vh;
+
+  // if the camera drops (unplug / revoke), stop cleanly
+  stream.getVideoTracks()[0].addEventListener('ended', () => {
+    stopRecording();
+    running = false; cancelAnimationFrame(rafId);
+    showOverlayMessage('Camera disconnected', 'The camera stopped. Reload the page to start again.');
+  });
+
+  overlay.classList.add('hidden');
+  snapBtn.disabled = false;
+  recBtn.disabled  = false;
+  running = true;
+  setStatus('On-device · ' + activePresetName());
+  frame();
+}
+
+// ── Snapshot ─────────────────────────────────────────────────────────────────
+function snapshot() {
+  if (!running) return;
+  view.toBlob(blob => {
+    if (!blob) return;
+    downloadBlob(blob, 'anime-' + stamp() + '.png');
+    flash('Snapshot saved');
+  }, 'image/png');
+}
+
+// ── Recording (MediaRecorder over the display canvas stream) ─────────────────
+let recorder = null, recChunks = [], recStart = 0, recTimer = 0;
+function pickMime() {
+  const opts = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  for (const m of opts) if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+function toggleRecording() { recorder ? stopRecording() : startRecording(); }
+
+function startRecording() {
+  if (!running || recorder) return;
+  if (!window.MediaRecorder || !view.captureStream) {
+    flash('Recording is not supported in this browser', true); return;
+  }
+  const mime = pickMime();
+  const capStream = view.captureStream(30);
+  try {
+    recorder = mime ? new MediaRecorder(capStream, { mimeType: mime }) : new MediaRecorder(capStream);
+  } catch (e) { flash('Could not start recording', true); recorder = null; return; }
+
+  recChunks = [];
+  recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(recChunks, { type: mime || 'video/webm' });
+    if (blob.size) downloadBlob(blob, 'anime-' + stamp() + '.webm');
+    recChunks = [];
+  };
+  recorder.start();
+
+  recStart = performance.now();
+  recBadge.classList.add('on');
+  recBtn.textContent = 'Stop';
+  recBtn.style.borderColor = '#ff4d68';
+  updateRecTime();
+  recTimer = setInterval(updateRecTime, 250);
+}
+function stopRecording() {
+  if (!recorder) return;
+  try { recorder.stop(); } catch (e) {}
+  recorder = null;
+  clearInterval(recTimer);
+  recBadge.classList.remove('on');
+  recBtn.textContent = 'Record clip';
+  recBtn.style.borderColor = '';
+  flash('Clip saved');
+}
+function updateRecTime() {
+  const s = Math.floor((performance.now() - recStart) / 1000);
+  recTime.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// ── Controls wiring ──────────────────────────────────────────────────────────
+const SLIDERS = [
+  ['smooth', 's-smooth', 'v-smooth', v => v],
+  ['levels', 's-levels', 'v-levels', v => v],
+  ['ink',    's-ink',    'v-ink',    v => v + '%'],
+  ['sat',    's-sat',    'v-sat',    v => v + '%'],
+  ['warm',   's-warm',   'v-warm',   v => (v > 0 ? '+' : '') + v],
+  ['glow',   's-glow',   'v-glow',   v => v + '%'],
+];
+function syncSliders() {
+  for (const [key, sid, vid, fmt] of SLIDERS) {
+    const el = document.getElementById(sid);
+    el.value = P[key];
+    document.getElementById(vid).textContent = fmt(P[key]);
+  }
+}
+for (const [key, sid, vid, fmt] of SLIDERS) {
+  const el = document.getElementById(sid);
+  el.addEventListener('input', () => {
+    P[key] = Number(el.value);
+    document.getElementById(vid).textContent = fmt(P[key]);
+    // moving a slider means we've left the exact preset — clear the active chip
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    if (running) setStatus('On-device · custom');
+  });
+}
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const preset = PRESETS[chip.dataset.preset];
+    if (!preset) return;
+    P = Object.assign({}, preset);
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    syncSliders();
+    if (running) setStatus('On-device · ' + activePresetName());
+  });
+});
+
+startBtn.addEventListener('click', startCamera);
+snapBtn.addEventListener('click', snapshot);
+recBtn.addEventListener('click', toggleRecording);
+
+// ── Small helpers ────────────────────────────────────────────────────────────
+function activePresetName() {
+  const a = document.querySelector('.chip.active');
+  return a ? a.textContent : 'custom';
+}
+function setStatus(txt, warn) {
+  statusEl.textContent = txt;
+  statusEl.classList.toggle('warn', !!warn);
+}
+let flashTimer = 0;
+function flash(txt, warn) {
+  setStatus(txt, warn);
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    if (running) setStatus('On-device · ' + activePresetName());
+    else setStatus('');
+  }, 2000);
+}
+function showOverlayMessage(title, body) {
+  ovTitle.textContent = title;
+  ovBody.textContent = body;
+  ovNote.style.display = 'none';
+  startBtn.textContent = 'Try again';
+  startBtn.disabled = false;
+  overlay.classList.remove('hidden');
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+// draw initial slider labels
+syncSliders();
+</script>
+</body>
+</html>
