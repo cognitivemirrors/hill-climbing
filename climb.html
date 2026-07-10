@@ -497,11 +497,10 @@ const DB_NAME   = 'climb';
 const STORE     = 'events';
 
 // ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
-// Fill these in from your Supabase project (Project Settings → API). The anon
-// key is PUBLIC by design — Row-Level Security is the real guard. Until these
-// are set, sync stays dormant and the app is 100% local, exactly as before.
-const SUPABASE_URL      = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-SUPABASE-ANON-KEY';
+// Supabase project credentials. The key is a PUBLIC publishable key — safe to
+// ship in the client; Row-Level Security is the real guard (see supabase-schema.sql).
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
 const SYNC_BLOB_KEY     = 'ls:hill-climbing-climb';
 const SYNC_EVENTS_NS    = 'idb:climb:events';
 
