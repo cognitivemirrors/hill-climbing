@@ -279,9 +279,116 @@
     @media (max-width: 600px) {
       #install-banner { bottom: 14px; padding: 12px 14px; gap: 12px; }
     }
+
+    /* ── Account chip + sign-in / sync page ───────────────────────── */
+    #account-chip {
+      position: fixed; top: 16px; right: 18px; z-index: 60;
+      display: none; align-items: center; gap: 8px;
+      font-family: var(--font-ui); font-size: 0.72rem; letter-spacing: 0.05em;
+      color: var(--mid); background: rgba(255,255,255,0.05);
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 7px 14px; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    #account-chip.ready { display: inline-flex; }
+    #account-chip:hover { color: var(--text); border-color: rgba(255,255,255,0.22); }
+    #account-chip .ac-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+    #account-chip .ac-dot.ok   { background: hsl(150,48%,55%); }
+    #account-chip .ac-dot.warn { background: hsl(38,80%,60%); }
+    #account-chip .ac-dot.busy { background: #b9a8f0; }
+    #account-chip .ac-dot.err  { background: hsl(8,62%,62%); }
+
+    #account-view {
+      position: fixed; inset: 0; z-index: 100; display: none;
+      align-items: flex-start; justify-content: center;
+      padding: 64px 22px 48px; overflow-y: auto; user-select: none;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 30%, rgba(40,40,72,0.45), transparent 70%),
+        rgba(8,9,15,0.97);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    }
+    #account-view.show { display: flex; }
+    .acct-card { width: 100%; max-width: 380px; animation: fadeUp 0.32s ease; }
+    .acct-back {
+      display: inline-flex; align-items: center; gap: 6px; background: none; border: none;
+      cursor: pointer; color: var(--dim); font-family: var(--font-ui); font-size: 0.8rem;
+      padding: 4px 0; margin-bottom: 24px;
+    }
+    .acct-back:hover { color: var(--text); }
+    .acct-h { font-family: var(--font-display); font-size: 1.5rem; color: var(--text); letter-spacing: 0.02em; margin-bottom: 8px; }
+    .acct-lede { font-size: 0.85rem; color: var(--mid); line-height: 1.55; margin-bottom: 24px; }
+    .acct-lede b { color: var(--text); font-weight: 600; }
+    .acct-tabs {
+      display: flex; gap: 4px; margin-bottom: 22px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+      border-radius: 12px; padding: 4px;
+    }
+    .acct-tab {
+      flex: 1; padding: 10px; border: none; border-radius: 9px; cursor: pointer;
+      background: transparent; color: var(--dim); font-family: var(--font-ui);
+      font-size: 0.85rem; letter-spacing: 0.02em; transition: background 0.2s, color 0.2s;
+    }
+    .acct-tab.active { background: rgba(255,255,255,0.09); color: var(--text); }
+    .acct-panel { display: none; }
+    .acct-panel.show { display: block; }
+    .acct-field { margin-bottom: 16px; }
+    .acct-field label {
+      display: block; font-size: 0.7rem; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 7px;
+    }
+    .acct-field input {
+      width: 100%; padding: 12px 14px; font-family: var(--font-ui); font-size: 0.95rem;
+      color: var(--text); background: rgba(0,0,0,0.28); user-select: text;
+      border: 1px solid var(--line); border-radius: 10px; outline: none; transition: border-color 0.2s;
+    }
+    .acct-field input:focus { border-color: rgba(160,140,220,0.6); }
+    .acct-btn {
+      width: 100%; padding: 13px; margin-top: 6px; cursor: pointer;
+      font-family: var(--font-ui); font-size: 0.92rem; color: #fff;
+      background: rgba(144,128,208,0.92); border: 1px solid rgba(170,156,224,0.9);
+      border-radius: 10px; transition: background 0.2s, opacity 0.2s;
+    }
+    .acct-btn:hover { background: rgba(160,144,224,1); }
+    .acct-btn[disabled] { opacity: 0.55; cursor: default; }
+    .acct-link {
+      display: inline-block; margin-top: 16px; background: none; border: none;
+      color: var(--dim); font-family: var(--font-ui); font-size: 0.8rem; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 3px;
+    }
+    .acct-link:hover { color: var(--text); }
+    .acct-err { display: none; margin: 2px 0 12px; font-size: 0.8rem; color: hsl(8,72%,70%); line-height: 1.45; }
+    .acct-err.show { display: block; }
+    .acct-note { margin-top: 18px; font-size: 0.75rem; color: var(--faint); line-height: 1.55; }
+    .acct-reco-box {
+      margin: 4px 0 18px; padding: 18px 16px; text-align: center; user-select: all;
+      font-family: ui-monospace, Menlo, monospace; font-size: 1.05rem; letter-spacing: 0.08em;
+      color: var(--text); background: rgba(0,0,0,0.32);
+      border: 1px dashed rgba(170,156,224,0.6); border-radius: 10px; word-break: break-all;
+    }
+    .acct-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 0; border-bottom: 1px solid var(--line);
+    }
+    .acct-row .r-label { font-size: 0.8rem; color: var(--dim); }
+    .acct-row .r-value { font-size: 0.85rem; color: var(--text); user-select: text; }
+    .acct-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .acct-action {
+      width: 100%; padding: 13px 14px; cursor: pointer;
+      font-family: var(--font-ui); font-size: 0.85rem; text-align: left;
+      color: var(--text); background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line); border-radius: 10px; transition: background 0.2s, color 0.2s;
+    }
+    .acct-action:hover { background: rgba(255,255,255,0.07); }
+    .acct-action.danger { color: hsl(8,62%,66%); }
+    .acct-action.danger:hover { background: rgba(200,80,70,0.12); }
   </style>
 </head>
 <body>
+
+  <button id="account-chip" type="button" aria-haspopup="dialog" aria-label="Account and sync">
+    <span class="ac-dot" aria-hidden="true"></span>
+    <span id="ac-chip-text">Sign in</span>
+  </button>
 
   <header>
     <h1>Hill Climbing</h1>
@@ -448,6 +555,102 @@
   </section>
 
   <footer>hill climbing · private · on-device</footer>
+
+  <!-- ── Account & sync page (full-screen; opened by the chip or #account) ──── -->
+  <div id="account-view" role="dialog" aria-modal="true" aria-label="Account and sync">
+    <div class="acct-card">
+      <button class="acct-back" id="acct-back" type="button">← Back to practices</button>
+
+      <!-- Log in / Sign up -->
+      <div class="acct-panel" id="p-auth">
+        <div class="acct-h">Sync your practice</div>
+        <div class="acct-lede">Sign in to sync your data across devices — end-to-end encrypted, so only you can read it.</div>
+        <div class="acct-tabs">
+          <button class="acct-tab active" id="tab-login" type="button">Log in</button>
+          <button class="acct-tab" id="tab-signup" type="button">Sign up</button>
+        </div>
+        <form id="form-login" autocomplete="on">
+          <div class="acct-field"><label for="login-email">Email</label><input id="login-email" type="email" autocomplete="email" required></div>
+          <div class="acct-field"><label for="login-pw">Password</label><input id="login-pw" type="password" autocomplete="current-password" required></div>
+          <div class="acct-err" id="login-err"></div>
+          <button class="acct-btn" id="login-btn" type="submit">Log in</button>
+        </form>
+        <form id="form-signup" style="display:none" autocomplete="on">
+          <div class="acct-field"><label for="signup-email">Email</label><input id="signup-email" type="email" autocomplete="email" required></div>
+          <div class="acct-field"><label for="signup-pw">Password</label><input id="signup-pw" type="password" autocomplete="new-password" minlength="6" required></div>
+          <div class="acct-err" id="signup-err"></div>
+          <button class="acct-btn" id="signup-btn" type="submit">Create account</button>
+          <div class="acct-note">Your password protects your account. Next you'll set a separate passphrase that encrypts your data — we never see either.</div>
+        </form>
+      </div>
+
+      <!-- Set passphrase -->
+      <div class="acct-panel" id="p-setup">
+        <div class="acct-h">Set your passphrase</div>
+        <div class="acct-lede">This encrypts your data on your device and never leaves it. <b>We can't reset it</b>, so choose something you'll remember — you'll also get a recovery code.</div>
+        <form id="form-setup">
+          <div class="acct-field"><label for="setup-pass">Passphrase</label><input id="setup-pass" type="password" autocomplete="new-password" required></div>
+          <div class="acct-field"><label for="setup-pass2">Confirm passphrase</label><input id="setup-pass2" type="password" autocomplete="new-password" required></div>
+          <div class="acct-err" id="setup-err"></div>
+          <button class="acct-btn" id="setup-btn" type="submit">Turn on sync</button>
+        </form>
+      </div>
+
+      <!-- Recovery code -->
+      <div class="acct-panel" id="p-reco">
+        <div class="acct-h">Save your recovery code</div>
+        <div class="acct-lede">This is the <b>only</b> way back in if you forget your passphrase. Store it somewhere safe — it won't be shown again.</div>
+        <div class="acct-reco-box" id="reco-code">—</div>
+        <button class="acct-btn" id="reco-copy" type="button">Copy code</button>
+        <div class="acct-actions"><button class="acct-action" id="reco-done" type="button" style="text-align:center;">I've saved it — continue</button></div>
+      </div>
+
+      <!-- Unlock -->
+      <div class="acct-panel" id="p-unlock">
+        <div class="acct-h">Enter your passphrase</div>
+        <div class="acct-lede">Unlock sync on this device.</div>
+        <form id="form-unlock">
+          <div class="acct-field"><label for="unlock-pass" id="unlock-label">Passphrase</label><input id="unlock-pass" type="password" autocomplete="current-password" required></div>
+          <div class="acct-err" id="unlock-err"></div>
+          <button class="acct-btn" id="unlock-btn" type="submit">Unlock</button>
+        </form>
+        <button class="acct-link" id="unlock-reco-toggle" type="button">Use a recovery code instead</button>
+      </div>
+
+      <!-- Email confirmation notice -->
+      <div class="acct-panel" id="p-confirm">
+        <div class="acct-h">Check your email</div>
+        <div class="acct-lede">We sent a confirmation link to <b id="confirm-email"></b>. Click it, then come back and log in.</div>
+        <button class="acct-btn" id="confirm-back" type="button">Back to log in</button>
+      </div>
+
+      <!-- Change passphrase -->
+      <div class="acct-panel" id="p-change">
+        <div class="acct-h">Change passphrase</div>
+        <div class="acct-lede">Enter your current passphrase, then a new one. Your data isn't re-encrypted, so this is quick.</div>
+        <form id="form-change">
+          <div class="acct-field"><label for="change-old">Current passphrase</label><input id="change-old" type="password" required></div>
+          <div class="acct-field"><label for="change-new">New passphrase</label><input id="change-new" type="password" autocomplete="new-password" required></div>
+          <div class="acct-err" id="change-err"></div>
+          <button class="acct-btn" id="change-btn" type="submit">Update passphrase</button>
+        </form>
+        <button class="acct-link" id="change-cancel" type="button">Cancel</button>
+      </div>
+
+      <!-- Signed in + unlocked -->
+      <div class="acct-panel" id="p-account">
+        <div class="acct-h">Your account</div>
+        <div class="acct-lede">Sync is on. Your data is end-to-end encrypted — the server stores only unreadable ciphertext.</div>
+        <div class="acct-row"><span class="r-label">Signed in</span><span class="r-value" id="account-email">—</span></div>
+        <div class="acct-row"><span class="r-label">Sync</span><span class="r-value" id="account-sync">On</span></div>
+        <div class="acct-actions">
+          <button class="acct-action" id="account-change" type="button">Change passphrase</button>
+          <button class="acct-action" id="account-signout" type="button">Sign out on this device <span style="color:var(--faint)">· local data stays</span></button>
+          <button class="acct-action danger" id="account-delete" type="button">Delete my synced data</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Install prompt. Hidden by default; shown by JS only when the app is
        installable (or, on iOS Safari, with a Share-sheet hint). -->
@@ -786,6 +989,192 @@
         subBox.focus(); subBox.select();   // fallback: manual long-press copy
       }
     });
+  })();
+  </script>
+
+  <!-- ── Account & sync (end-to-end encrypted; see hc-sync.js) ─────────────── -->
+  <script src="/hc-sync.js"></script>
+  <script>
+  (function () {
+    // Public publishable key — safe to ship; Row-Level Security is the guard.
+    const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+    if (!window.HCSync) return;
+
+    const $ = (id) => document.getElementById(id);
+    const view = $('account-view');
+    const chip = $('account-chip');
+    const chipText = $('ac-chip-text');
+    const chipDot = chip.querySelector('.ac-dot');
+    const PANELS = ['p-auth','p-setup','p-reco','p-unlock','p-confirm','p-change','p-account'];
+    const showPanel = (id) => PANELS.forEach(p => $(p).classList.toggle('show', p === id));
+    const err = (id, msg) => { const e = $(id); e.textContent = msg || ''; e.classList.toggle('show', !!msg); };
+    const clearErrs = () => ['login-err','signup-err','setup-err','unlock-err','change-err'].forEach(i => err(i, ''));
+    const busy = (btn, on, label) => { btn.disabled = on; if (on && label) btn.textContent = label; else if (!on && btn.dataset.label) btn.textContent = btn.dataset.label; };
+    function friendly(ex) {
+      const m = (ex && (ex.message || ex.error_description)) || 'Something went wrong.';
+      if (/Invalid login/i.test(m)) return 'Wrong email or password.';
+      if (/already registered/i.test(m)) return 'That email already has an account — try Log in.';
+      if (/at least 6|Password should be/i.test(m)) return 'Password must be at least 6 characters.';
+      if (/Failed to fetch|NetworkError|offline/i.test(m)) return 'Network error — check your connection.';
+      if (/not ready/i.test(m)) return 'Sync is still starting — try again in a moment.';
+      return m;
+    }
+
+    // ── open / close (page-like; reflected in the URL hash) ──
+    function openAccount() {
+      view.classList.add('show');
+      if (location.hash !== '#account') history.pushState(null, '', '#account');
+      routePanel();
+    }
+    function closeAccount() {
+      view.classList.remove('show');
+      if (location.hash === '#account') history.pushState(null, '', location.pathname + location.search);
+    }
+    chip.addEventListener('click', openAccount);
+    $('acct-back').addEventListener('click', closeAccount);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view.classList.contains('show')) closeAccount(); });
+    window.addEventListener('hashchange', () => { if (location.hash === '#account') openAccount(); else view.classList.remove('show'); });
+
+    async function routePanel() {
+      clearErrs();
+      const s = HCSync.getStatus();
+      if (s.error === 'not_configured') { showPanel('p-auth'); err('login-err', "Sync isn't configured on this deployment yet."); return; }
+      if (s.state === 'unlocked') return showPanel('p-account');
+      if (s.state === 'locked') { showPanel((await HCSync.hasKeyBundle()) ? 'p-unlock' : 'p-setup'); return; }
+      showPanel('p-auth');
+    }
+
+    // ── tabs ──
+    function setTab(which) {
+      $('tab-login').classList.toggle('active', which === 'login');
+      $('tab-signup').classList.toggle('active', which === 'signup');
+      $('form-login').style.display  = which === 'login'  ? '' : 'none';
+      $('form-signup').style.display = which === 'signup' ? '' : 'none';
+      clearErrs();
+    }
+    $('tab-login').addEventListener('click', () => setTab('login'));
+    $('tab-signup').addEventListener('click', () => setTab('signup'));
+
+    // ── log in ──
+    $('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearErrs();
+      const btn = $('login-btn'); btn.dataset.label = 'Log in'; busy(btn, true, 'Logging in…');
+      try {
+        await HCSync.login($('login-email').value.trim(), $('login-pw').value);
+        $('login-pw').value = '';
+        await routePanel();               // → unlock (has keybundle) or setup
+      } catch (ex) { err('login-err', friendly(ex)); }
+      busy(btn, false);
+    });
+
+    // ── sign up ──
+    $('form-signup').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearErrs();
+      const btn = $('signup-btn'); btn.dataset.label = 'Create account'; busy(btn, true, 'Creating…');
+      try {
+        const email = $('signup-email').value.trim();
+        const { needsConfirmation } = await HCSync.signup(email, $('signup-pw').value);
+        $('signup-pw').value = '';
+        if (needsConfirmation) { $('confirm-email').textContent = email; showPanel('p-confirm'); }
+        else showPanel('p-setup');
+      } catch (ex) { err('signup-err', friendly(ex)); }
+      busy(btn, false);
+    });
+    $('confirm-back').addEventListener('click', () => { setTab('login'); showPanel('p-auth'); });
+
+    // ── set passphrase ──
+    $('form-setup').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearErrs();
+      const p1 = $('setup-pass').value, p2 = $('setup-pass2').value;
+      if (p1.length < 8) return err('setup-err', 'Use at least 8 characters.');
+      if (p1 !== p2)     return err('setup-err', "The passphrases don't match.");
+      const btn = $('setup-btn'); btn.dataset.label = 'Turn on sync'; busy(btn, true, 'Encrypting…');
+      try {
+        const { recoveryCode } = await HCSync.setupEncryption(p1);
+        $('setup-pass').value = $('setup-pass2').value = '';
+        $('reco-code').textContent = recoveryCode;
+        showPanel('p-reco');
+      } catch (ex) { err('setup-err', friendly(ex)); }
+      busy(btn, false);
+    });
+
+    // ── recovery code ──
+    $('reco-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('reco-code').textContent); $('reco-copy').textContent = 'Copied ✓'; setTimeout(() => { $('reco-copy').textContent = 'Copy code'; }, 1500); } catch (e) {}
+    });
+    $('reco-done').addEventListener('click', () => showPanel('p-account'));
+
+    // ── unlock (passphrase or recovery code) ──
+    let unlockMode = 'pass';
+    $('unlock-reco-toggle').addEventListener('click', () => {
+      unlockMode = unlockMode === 'pass' ? 'reco' : 'pass';
+      $('unlock-label').textContent = unlockMode === 'pass' ? 'Passphrase' : 'Recovery code';
+      $('unlock-pass').type = unlockMode === 'pass' ? 'password' : 'text';
+      $('unlock-pass').value = '';
+      $('unlock-reco-toggle').textContent = unlockMode === 'pass' ? 'Use a recovery code instead' : 'Use your passphrase instead';
+      err('unlock-err', '');
+    });
+    $('form-unlock').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearErrs();
+      const btn = $('unlock-btn'); btn.dataset.label = 'Unlock'; busy(btn, true, 'Unlocking…');
+      try {
+        const v = $('unlock-pass').value;
+        if (unlockMode === 'pass') await HCSync.unlock(v); else await HCSync.unlockWithRecoveryCode(v);
+        $('unlock-pass').value = '';
+        showPanel('p-account');
+      } catch (ex) { err('unlock-err', friendly(ex)); }
+      busy(btn, false);
+    });
+
+    // ── account actions ──
+    $('account-change').addEventListener('click', () => { clearErrs(); $('change-old').value = $('change-new').value = ''; showPanel('p-change'); });
+    $('change-cancel').addEventListener('click', () => showPanel('p-account'));
+    $('form-change').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearErrs();
+      const btn = $('change-btn'); btn.dataset.label = 'Update passphrase'; busy(btn, true, 'Updating…');
+      try {
+        if ($('change-new').value.length < 8) throw new Error('Use at least 8 characters.');
+        await HCSync.changePassphrase($('change-old').value, $('change-new').value);
+        showPanel('p-account');
+      } catch (ex) { err('change-err', friendly(ex)); }
+      busy(btn, false);
+    });
+    $('account-signout').addEventListener('click', async () => {
+      await HCSync.logout();
+      setTab('login'); showPanel('p-auth');
+    });
+    let delArmed = false, delTimer = null;
+    const delBtn = $('account-delete');
+    delBtn.addEventListener('click', async () => {
+      if (!delArmed) {
+        delArmed = true; delBtn.textContent = 'Tap again to delete the server copy';
+        delTimer = setTimeout(() => { delArmed = false; delBtn.textContent = 'Delete my synced data'; }, 4000);
+        return;
+      }
+      clearTimeout(delTimer); delArmed = false;
+      delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+      try { await HCSync.deleteRemoteData(); } catch (e) {}
+      delBtn.disabled = false; delBtn.textContent = 'Delete my synced data';
+      routePanel();
+    });
+
+    // ── chip reflects state; never re-routes panels (would disrupt typing) ──
+    function renderChip(s) {
+      chipDot.className = 'ac-dot';
+      if (s.error === 'not_configured') { chipText.textContent = 'Sign in'; return; }
+      if (s.state === 'unlocked') {
+        chipText.textContent = 'Synced';
+        chipDot.classList.add(s.syncing ? 'busy' : (s.error && s.error !== 'offline' ? 'err' : (!s.online ? 'warn' : 'ok')));
+      } else if (s.state === 'locked') { chipText.textContent = 'Unlock'; chipDot.classList.add('warn'); }
+      else { chipText.textContent = 'Sign in'; }
+    }
+    HCSync.subscribe(renderChip);
+    chip.classList.add('ready');
+
+    if (location.hash === '#account') openAccount();
+    HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'hub' })
+      .then(() => { renderChip(HCSync.getStatus()); if (view.classList.contains('show')) routePanel(); });
   })();
   </script>
 

@@ -426,7 +426,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.4 · climb</div>
+<div class="corner" id="version-label">v0.5 · climb</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="goals">Goals</button>
   <button class="mode-btn"        data-view="steps">Steps</button>
@@ -453,28 +453,12 @@
       <span class="menu-item-title">Delete everything</span>
       <span class="menu-item-sub" id="erase-sub">Goals and history, gone for real</span>
     </button>
-    <div class="menu-head">Sync <span class="beta">beta</span></div>
+    <div class="menu-head">Sync</div>
     <div id="sync-status" class="sync-status">This device only</div>
-    <button class="menu-item" id="sync-signin" type="button" role="menuitem">
-      <span class="menu-item-title">Sign in / create account</span>
-      <span class="menu-item-sub">Encrypted sync across your devices</span>
-    </button>
-    <button class="menu-item hidden" id="sync-unlock" type="button" role="menuitem">
-      <span class="menu-item-title">Enter passphrase</span>
-      <span class="menu-item-sub">Unlock sync on this device</span>
-    </button>
-    <button class="menu-item hidden" id="sync-now" type="button" role="menuitem">
-      <span class="menu-item-title">Sync now</span>
-      <span class="menu-item-sub" id="sync-now-sub">Up to date</span>
-    </button>
-    <button class="menu-item hidden" id="sync-signout" type="button" role="menuitem">
-      <span class="menu-item-title">Sign out</span>
-      <span class="menu-item-sub">Stop syncing on this device</span>
-    </button>
-    <button class="menu-item danger hidden" id="sync-delete" type="button" role="menuitem">
-      <span class="menu-item-title">Delete my synced data</span>
-      <span class="menu-item-sub">Erase the encrypted copy on the server</span>
-    </button>
+    <a class="menu-item" id="sync-manage" href="index.html#account" role="menuitem">
+      <span class="menu-item-title">Manage sync</span>
+      <span class="menu-item-sub" id="sync-manage-sub">Sign in at the hub</span>
+    </a>
     <div class="menu-note" id="sync-note">Your goals live only on this device.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
@@ -491,7 +475,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.4 · climb';
+const VERSION   = 'v0.5 · climb';
 const STATE_KEY = 'hill-climbing-climb';
 const DB_NAME   = 'climb';
 const STORE     = 'events';
@@ -1578,30 +1562,29 @@ eraseBtn.addEventListener('click', () => {
     : 'This cannot be undone';
 });
 
-// ── Sync UI wiring (opt-in, end-to-end encrypted) ───────────────────────────
-const syncStatusEl = document.getElementById('sync-status');
-const syncDot      = document.getElementById('sync-dot');
-const syncNoteEl   = document.getElementById('sync-note');
+// ── Sync status wiring (sign-in / account management lives at the hub) ───────
+// This app only reflects sync STATE and links to index.html#account — no auth
+// prompts here. Same-origin session + key are shared, so signing in at the hub
+// unlocks sync in every app automatically.
+const syncStatusEl  = document.getElementById('sync-status');
+const syncDot       = document.getElementById('sync-dot');
+const syncNoteEl    = document.getElementById('sync-note');
+const syncManageSub = document.getElementById('sync-manage-sub');
 function updateSyncUI(st) {
-  const show = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !on); };
   const signedOut = st.state === 'signed_out';
   const locked    = st.state === 'locked';
   const unlocked  = st.state === 'unlocked';
   const notConfigured = st.error === 'not_configured';
-  show('sync-signin',  signedOut && !notConfigured);
-  show('sync-unlock',  locked);
-  show('sync-now',     unlocked);
-  show('sync-signout', !signedOut);
-  show('sync-delete',  unlocked);
-  let txt;
-  if (notConfigured)      txt = 'Sync not configured yet';
-  else if (signedOut)     txt = 'This device only — not signed in';
-  else if (locked)        txt = 'Signed in · locked — enter passphrase';
-  else if (st.syncing)    txt = 'Syncing…';
-  else if (st.error && st.error !== 'offline') txt = 'Sync issue — ' + st.error;
-  else if (!st.online || st.error === 'offline') txt = 'Offline — will sync when back';
-  else                    txt = 'Synced · ' + (st.email || '');
-  if (syncStatusEl) syncStatusEl.textContent = txt;
+  let txt, manage;
+  if (notConfigured)      { txt = 'Sync not configured';               manage = 'Set up at the hub'; }
+  else if (signedOut)     { txt = 'This device only — not signed in';  manage = 'Sign in at the hub'; }
+  else if (locked)        { txt = 'Signed in · locked';                manage = 'Unlock at the hub'; }
+  else if (st.syncing)    { txt = 'Syncing…';                          manage = 'Account & sign-out'; }
+  else if (st.error && st.error !== 'offline') { txt = 'Sync issue — ' + st.error; manage = 'Account & sign-out'; }
+  else if (!st.online || st.error === 'offline') { txt = 'Offline — will sync when back'; manage = 'Account & sign-out'; }
+  else                    { txt = 'Synced · ' + (st.email || '');      manage = 'Account & sign-out'; }
+  if (syncStatusEl)  syncStatusEl.textContent  = txt;
+  if (syncManageSub) syncManageSub.textContent = manage;
   if (syncDot) {
     syncDot.className = '';
     if (!notConfigured && !signedOut) {
@@ -1612,55 +1595,10 @@ function updateSyncUI(st) {
       else syncDot.classList.add('ok');
     }
   }
-  const nowSub = document.getElementById('sync-now-sub');
-  if (nowSub) nowSub.textContent = st.syncing ? 'Syncing…' : 'Up to date';
   if (syncNoteEl) syncNoteEl.textContent = unlocked
     ? 'End-to-end encrypted — the server stores only unreadable ciphertext.'
-    : 'Your goals live on this device. Sign in to sync them, encrypted, across devices.';
+    : 'Your goals live on this device. Sign in at the hub to sync them, encrypted, across devices.';
 }
-async function promptUnlock() {
-  if (!(await HCSync.hasKeyBundle())) {
-    const pass = prompt('Create a passphrase to encrypt your synced data.\nIt never leaves your device.');
-    if (!pass) return;
-    const { recoveryCode } = await HCSync.setupEncryption(pass);
-    alert('Sync is on.\n\nSAVE THIS RECOVERY CODE — it is the only way back in if you forget your passphrase:\n\n' + recoveryCode);
-    return;
-  }
-  const pass = prompt('Enter your sync passphrase:');
-  if (pass === null) return;
-  try { await HCSync.unlock(pass); }
-  catch (e) {
-    if (confirm('That did not unlock (' + (e.message || e) + ').\nUse your recovery code instead?')) {
-      const code = prompt('Enter your recovery code:');
-      if (code) await HCSync.unlockWithRecoveryCode(code);
-    }
-  }
-}
-async function syncSignInFlow() {
-  const email = prompt('Email for sync:'); if (!email) return;
-  const password = prompt('Password (min 6 characters):'); if (!password) return;
-  const creating = confirm('Create a NEW account?\n\nOK = create new account\nCancel = sign in to an existing one');
-  if (creating) {
-    const { needsConfirmation } = await HCSync.signup(email.trim(), password);
-    if (needsConfirmation) { alert('Account created. Check your email to confirm, then open this menu and sign in.'); return; }
-    await promptUnlock();          // hasKeyBundle() is false → sets up encryption + shows recovery code
-  } else {
-    await HCSync.login(email.trim(), password);
-    await promptUnlock();
-  }
-}
-function wrapSync(fn) { return async () => { try { await fn(); } catch (e) { alert('Sync: ' + (e.message || e)); } setMenu(false); }; }
-document.getElementById('sync-signin').addEventListener('click', wrapSync(syncSignInFlow));
-document.getElementById('sync-unlock').addEventListener('click', wrapSync(promptUnlock));
-document.getElementById('sync-now').addEventListener('click', wrapSync(() => HCSync.pull()));
-document.getElementById('sync-signout').addEventListener('click', wrapSync(async () => {
-  if (confirm('Sign out of sync on this device? Your goals stay here.')) await HCSync.logout();
-}));
-document.getElementById('sync-delete').addEventListener('click', wrapSync(async () => {
-  if (!confirm('Delete the encrypted copy of your data on the server?\n\nThis does NOT erase this device. Other signed-in devices keep their local copy until they change something.')) return;
-  await HCSync.deleteRemoteData();
-  alert('Your synced data was deleted from the server.');
-}));
 
 document.querySelectorAll('.mode-btn').forEach(b =>
   b.addEventListener('click', () => switchView(b.dataset.view)));
