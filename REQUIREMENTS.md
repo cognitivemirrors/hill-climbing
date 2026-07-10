@@ -57,7 +57,7 @@ The `journal` store is the only one holding **free-form personal prose** — the
 
 - **Tier 0–1: zero outbound network traffic** at any time (other than the initial HTML/JS load), **except the three user-initiated, opt-in flows below** (Web Push reminders, Council, and end-to-end-encrypted sync). No analytics, telemetry, ads, error reporting, or third-party scripts.
 - **Opt-in Web Push reminders (all tiers, off by default; added v1.76).** If — and only if — the user explicitly enables reminders on the hub, the browser registers a push subscription with its platform push service (Google / Apple / Mozilla) and receives pushes sent by the project's own GitHub Actions sender. This is user-initiated, revocable at any time ("Turn off"), and carries no analytics or behavioural data — the payload is a fixed practice prompt drawn from a hand-authored rotation. The subscription endpoint is the user's to copy into the sender's GitHub Actions secret. This was the *first* exception to "nothing leaves the device"; see also Council (L24) and end-to-end-encrypted sync below.
-- **Opt-in end-to-end-encrypted cross-device sync (all tiers, off by default; added v1.98).** If the user signs in and turns on sync, their data is encrypted on-device and stored as ciphertext on a backend (see §1.5). Only ciphertext plus metadata (doc keys, sizes, timestamps, and the account email) leave the device; **content never does — the operator cannot read it.** **Tier reconciliation:** §3.1 gates *operator-readable* server submission at Tier ≥ 2. E2EE sync is permitted from **Tier 0** on the principle that what that gate protects — operator power over user data — does not arise when the operator holds no key and cannot decrypt. The encryption guarantee, not the tier, is the safeguard. Founder-ratified (v1.98).
+- **Opt-in end-to-end-encrypted cross-device sync (all tiers, off by default; added v1.99).** If the user signs in and turns on sync, their data is encrypted on-device and stored as ciphertext on a backend (see §1.5). Only ciphertext plus metadata (doc keys, sizes, timestamps, and the account email) leave the device; **content never does — the operator cannot read it.** **Tier reconciliation:** §3.1 gates *operator-readable* server submission at Tier ≥ 2. E2EE sync is permitted from **Tier 0** on the principle that what that gate protects — operator power over user data — does not arise when the operator holds no key and cannot decrypt. The encryption guarantee, not the tier, is the safeguard. Founder-ratified (v1.99).
 - **Tier ≥ 2: adverse-event reports may POST to a backend** *with explicit per-report consent at submission time*. No silent transmission.
 - **All tiers: no microphone, no audio recording, no behavioral telemetry, no fingerprinting, no cookies for tracking.**
 
@@ -68,7 +68,7 @@ The `journal` store is the only one holding **free-form personal prose** — the
 - **Tier ≥ 2:** server-side report-deletion endpoint with same SLA as data-export (24 h).
 - **Synced copy (Tier 0, present today):** for any app with sync enabled, an in-app "Delete my synced data" removes the user's `sync_docs` + `sync_keybundle` rows from the backend, and signing out drops the device's cached key. Full account deletion (removing the Supabase `auth.users` row) is a documented follow-up before any tier advance.
 
-### 1.5 Off-device storage (opt-in, end-to-end encrypted cross-device sync — added v1.98)
+### 1.5 Off-device storage (opt-in, end-to-end encrypted cross-device sync — added v1.99)
 
 Sync is **off by default** and opt-in. When a user turns it on, their data is encrypted **on the device** and stored on a backend (Supabase: Postgres + Auth) that holds only ciphertext. This is the third off-device flow in the suite (after opt-in Web Push and Council), and the first where the operator stores user *content* at all — which is precisely why it is designed so the operator **cannot read it**.
 
@@ -82,13 +82,13 @@ Sync is **off by default** and opt-in. When a user turns it on, their data is en
 
 **Row isolation** is enforced by Postgres Row-Level Security (`user_id = auth.uid()`) on every table; the anon API key shipped in the client is public by design and grants nothing without a valid session.
 
-**Metadata that is NOT protected (documented honestly).** Even though content is unreadable, the operator can see, per account: the email, ciphertext **sizes**, row **counts** (≈ number of edits ≈ activity volume), **timestamps**, and `doc_key`s (which app, and that an event log exists). Content never leaves the device in the clear; this metadata does. Reducing it (padding, batching, key hashing) is a documented follow-up, not shipped in v1.98.
+**Metadata that is NOT protected (documented honestly).** Even though content is unreadable, the operator can see, per account: the email, ciphertext **sizes**, row **counts** (≈ number of edits ≈ activity volume), **timestamps**, and `doc_key`s (which app, and that an event log exists). Content never leaves the device in the clear; this metadata does. Reducing it (padding, batching, key hashing) is a documented follow-up, not shipped in v1.99.
 
 **Device-local sync support (never synced):** `hill-climbing-sync-meta` (localStorage: a random device id, per-store logical clocks, and pull cursors), the `hc-sync` IndexedDB (holds the cached DEK as a non-extractable `CryptoKey`), and Supabase's own session token. None of these is a synced document.
 
 **Retention & deletion.** Server rows persist until deleted. The user can delete the entire server copy in-app ("Delete my synced data" removes their `sync_docs` + `sync_keybundle` rows), and signing out drops the device's cached key — satisfying CONSTRAINTS P1 (real deletion, no shadow copies) and C3 (stopping is honored) for the synced copy.
 
-**Scope in v1.98:** the sync foundation (`hc-sync.js`) plus the **Climb** app only (its `hill-climbing-climb` state blob and `climb`/`events` log). Extending to the other apps — especially the Reflect `journal`, the single most sensitive store — follows the same pattern and same encryption, one app at a time.
+**Scope in v1.99:** the sync foundation (`hc-sync.js`) plus the **Climb** app only (its `hill-climbing-climb` state blob and `climb`/`events` log). Extending to the other apps — especially the Reflect `journal`, the single most sensitive store — follows the same pattern and same encryption, one app at a time.
 
 ---
 
