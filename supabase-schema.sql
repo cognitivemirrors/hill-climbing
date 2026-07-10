@@ -65,7 +65,7 @@ create policy kb_delete on public.sync_keybundle for delete using  (user_id = au
 -- (equal clock → higher device_id wins the tiebreak). A stale push is a no-op.
 create or replace function public.sync_put_blob(
   p_doc_key text, p_ct text, p_iv text, p_updated_at bigint, p_device text
-) returns void language sql security invoker as $$
+) returns void language sql security invoker set search_path = '' as $$
   insert into public.sync_docs (user_id, doc_key, ciphertext, iv, updated_at, device_id)
   values (auth.uid(), p_doc_key, p_ct, p_iv, p_updated_at, p_device)
   on conflict (user_id, doc_key) do update
@@ -79,17 +79,18 @@ $$;
 -- Log: append-only, immutable. Insert-if-absent (union-by-id).
 create or replace function public.sync_put_log(
   p_doc_key text, p_ct text, p_iv text, p_updated_at bigint, p_device text
-) returns void language sql security invoker as $$
+) returns void language sql security invoker set search_path = '' as $$
   insert into public.sync_docs (user_id, doc_key, ciphertext, iv, updated_at, device_id)
   values (auth.uid(), p_doc_key, p_ct, p_iv, p_updated_at, p_device)
   on conflict (user_id, doc_key) do nothing;
 $$;
 
 -- ── after running this ────────────────────────────────────────────────────────
--- 1. Authentication → Providers → Email: enable it. For the pilot, either turn
---    OFF "Confirm email" (fastest) or be ready to click the confirmation link.
+-- 1. Authentication → Providers → Email is ON by default (nothing to do). For the
+--    smoothest pilot, turn OFF "Confirm email" — otherwise sign-up sends a link you
+--    must click once before the first sign-in (the app handles both paths).
 -- 2. Once your own account exists, consider disabling open sign-ups
 --    (Authentication → Sign In / Providers → "Allow new users to sign up")
---    since the anon key is public. RLS still isolates each user's rows.
--- 3. Put the project URL + anon public key into climb.html's SUPABASE_URL /
---    SUPABASE_ANON_KEY constants (Project Settings → API).
+--    since the publishable key is public. RLS still isolates each user's rows.
+-- 3. Put the project URL + publishable key (Project Settings → API) into
+--    climb.html's SUPABASE_URL / SUPABASE_ANON_KEY constants.
