@@ -139,7 +139,9 @@
       display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
       font-size: 12px; color: var(--mid);
       background: rgba(255,255,255,0.03); border: 1px solid var(--line);
-      border-radius: 999px; padding: 8px 15px; margin-bottom: 24px;
+      /* Not a full pill: it wraps to 2+ lines on narrow screens, where a 999px
+         radius reads as an over-rounded blob. A moderate radius stays clean. */
+      border-radius: 14px; padding: 10px 15px; margin-bottom: 24px;
     }
     .sees-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft); flex: none; }
     .sees-link {
