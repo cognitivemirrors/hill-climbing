@@ -390,9 +390,30 @@
 const VERSION   = 'v0.1 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
-const LS_KEY    = 'hill-climbing-companion-key';    // this app's Anthropic key (device-local)
-const COUNCIL_KEY = 'hill-climbing-council-key';    // reuse Council's key as a convenience default
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
+
+// ── Suite-wide Anthropic API key (a single key for the whole hub) ────────────
+// One canonical store shared across Council, Companion, and Nourish's chef so a
+// key entered in any of them works everywhere. Legacy per-app keys are migrated
+// once (copied into the canonical store, then deleted) so nobody re-enters.
+// Device-local only — never synced (hc-sync registers no store for it).
+const API_KEY_LS    = 'hill-climbing-api-key';
+const LEGACY_KEY_LS = ['hill-climbing-council-key', 'hill-climbing-companion-key'];
+function readApiKey() {
+  try {
+    const k = localStorage.getItem(API_KEY_LS);
+    if (k) return k;
+    for (const lk of LEGACY_KEY_LS) {
+      const v = localStorage.getItem(lk);
+      if (v) { localStorage.setItem(API_KEY_LS, v); localStorage.removeItem(lk); return v; }
+    }
+  } catch (_) {}
+  return '';
+}
+function writeApiKey(v) { try { localStorage.setItem(API_KEY_LS, v); } catch (_) {} }
+function clearApiKey() {
+  try { localStorage.removeItem(API_KEY_LS); LEGACY_KEY_LS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
+}
 const SYNC_BLOB_KEY = 'ls:hill-climbing-companion';
 const CONV_CAP  = 60;
 
@@ -429,7 +450,7 @@ const OPENING_NUDGE =
 "(I've just opened the app and haven't said anything yet. Open the conversation: greet me warmly and, from what you've been shown, offer a brief, specific check-in on where I seem to be right now — something you actually noticed across my goals, journal, or recent weeks. Keep it short, and end by inviting me to say what's on my mind. Don't list everything you can see.)";
 
 // ── State ────────────────────────────────────────────────────────────────────
-let apiKey = localStorage.getItem(LS_KEY) || localStorage.getItem(COUNCIL_KEY) || '';
+let apiKey = readApiKey();
 let store  = loadStore();          // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
 let active = null;                 // the open conversation (a reference into store.conversations)
 let busy = false;
@@ -818,7 +839,7 @@ function showSetup(force) {
       '<ul>' +
         '<li>Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (opens Anthropic).</li>' +
         '<li>Billed to your Anthropic account — a reply is a few cents.</li>' +
-        '<li>Stored only here, in this browser. Remove it any time from the menu.</li>' +
+        '<li>Stored only here, in this browser — one key shared across the hub’s AI apps (set it in Council or Nourish and it works here too). Remove it any time from the menu.</li>' +
       '</ul>' +
       '<input class="key" id="key-input" type="password" spellcheck="false" autocomplete="off" placeholder="sk-ant-…" value="' + esc(apiKey) + '">' +
       '<div class="key-err" id="key-err"></div>' +
@@ -834,7 +855,7 @@ function showSetup(force) {
     const v = input.value.trim();
     if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
     apiKey = v;
-    try { localStorage.setItem(LS_KEY, v); } catch (_) {}
+    writeApiKey(v);
     s.classList.add('hidden');
     switchView('talk');
     msgBox.focus();
@@ -843,7 +864,7 @@ function showSetup(force) {
   const rm = document.getElementById('key-remove');
   if (rm) rm.addEventListener('click', () => {
     apiKey = '';
-    try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    clearApiKey();
     showSetup(true);
   });
 }
