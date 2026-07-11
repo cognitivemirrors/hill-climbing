@@ -279,12 +279,12 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner">v0.1 · data</div>
+<div class="corner">v0.2 · data</div>
 
 <div class="wrap">
   <header>
     <h1>Your Data</h1>
-    <p>Everything Hill Climbing keeps about you lives <b>on this device, in this browser</b> — nothing here has ever left it.<br>This page reads it back so you can see, search, export, or erase it.</p>
+    <p>Everything here lives <b>on this device, in this browser</b>. By default nothing leaves it — and if you turn on cross-device sync, only <b>end-to-end-encrypted</b> copies do (shown below).<br>This page reads it all back so you can see, search, export, or erase it.</p>
   </header>
 
   <div class="overview" id="overview"></div>
@@ -299,11 +299,14 @@
 
   <div id="stores"><div class="empty-note">Reading your data…</div></div>
 
+  <section class="aux" id="sync"></section>
+
   <section class="aux" id="aux"></section>
 
   <section class="danger-zone">
     <h3>Erase everything</h3>
-    <p>Permanently deletes all Hill Climbing data stored in this browser — every practice, every journal entry, your API key, all of it. This cannot be undone. Export a backup first if you might want it back.</p>
+    <p>Permanently deletes all Hill Climbing data stored in this browser — every practice, every journal entry, your API key, your saved sign-in, all of it. This cannot be undone. Export a backup first if you might want it back.</p>
+    <p id="erase-sync-note" style="display:none">Note: if cross-device sync is on, this only clears <b>this device</b>. To delete the encrypted copies on the server, use <b>Delete my synced data</b> on the hub’s account page.</p>
     <button class="btn danger" id="erase-all" type="button">Erase all my data…</button>
   </section>
 
@@ -329,7 +332,7 @@
 //   • Secrets (API keys) are masked on screen; you reveal them deliberately.
 // ═════════════════════════════════════════════════════════════════════════════
 
-const VERSION = 'v0.1 · data';
+const VERSION = 'v0.2 · data';
 
 // Accent + label per app (colours mirror the hub cards).
 const APPS = {
@@ -342,10 +345,11 @@ const APPS = {
   train:    { label: 'Train',    color: 'hsl(20,72%,66%)' },
   anime:    { label: 'Anime',    color: 'hsl(288,74%,72%)' },
   council:  { label: 'Council',  color: 'hsl(215,28%,72%)' },
+  sync:     { label: 'Sync & account', color: 'hsl(190,52%,62%)' },
   shared:   { label: 'Hub · shared', color: 'hsl(0,0%,62%)' },
   other:    { label: 'Unrecognised', color: 'hsl(0,0%,50%)' },
 };
-const APP_ORDER = ['meditate','breathe','reflect','nourish','levity','climb','train','anime','council','shared','other'];
+const APP_ORDER = ['meditate','breathe','reflect','nourish','levity','climb','train','anime','council','sync','shared','other'];
 
 // ── Store registry ───────────────────────────────────────────────────────────
 // Every place the suite writes user data. `summarize(v)` turns a parsed value
@@ -399,6 +403,17 @@ const REGISTRY = [
     summarize: v => `a saved API key (${maskSecret(String(v))})` },
   { key: 'hill-climbing-council', kind: 'ls', app: 'council', name: 'Board deliberations', sensitive: 'personal',
     summarize: v => `${v.length} deliberation${v.length===1?'':'s'} about your own decisions` },
+  // ── Sync & account (opt-in end-to-end-encrypted cross-device sync) ──
+  { key: 'hill-climbing-sync-meta', kind: 'ls', app: 'sync', name: 'Sync metadata',
+    summarize: v => {
+      const dev = v.deviceId ? String(v.deviceId).slice(0, 8) : 'unset';
+      const stores = Object.keys(v).filter(k => k !== 'deviceId' && v[k] && typeof v[k] === 'object').length;
+      return `device ${dev} · clocks/cursors for ${stores} synced store${stores===1?'':'s'} (no content)`;
+    } },
+  { key: 'hc-sync', store: 'keys', kind: 'idb', app: 'sync', name: 'Encryption key (this device)', sensitive: 'secret', opaqueKey: true,
+    summarize: rows => rows.length
+      ? 'a working encryption key is cached here — held non-extractable, so its raw bytes can’t be read, even by this page'
+      : 'no key cached on this device (sync locked or off)' },
   // ── Hub / shared ──
   { key: 'hill-climbing-usage', kind: 'ls', app: 'shared', name: 'Usage calendar',
     summarize: v => {
@@ -548,17 +563,39 @@ async function gather() {
     items.push(item);
   }
 
-  // Any localStorage key we don't recognise → an "other" bucket so nothing hides.
+  // Any localStorage key we don't recognise → classified if we can, else an
+  // "other" bucket so nothing hides. Supabase persists the signed-in session
+  // under a dynamic sb-<projectref>-auth-token key, so match it by pattern.
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (seenLs.has(k)) continue;
     const raw = localStorage.getItem(k);
     let value; try { value = JSON.parse(raw); } catch { value = raw; }
-    const def = { key: k, kind: 'ls', app: 'other', name: k, summarize: () => 'not written by a known Hill Climbing app' };
+    const def = classifyUnknown(k);
     items.push({ def, present: true, value, raw, bytes: byteLen(k) + byteLen(raw), error: null,
       hay: (k + ' ' + raw).toLowerCase() });
   }
   return items;
+}
+function classifyUnknown(k) {
+  if (/^sb-.+-auth-token$/.test(k)) {
+    return {
+      key: k, kind: 'ls', app: 'sync', name: 'Account sign-in (Supabase session)', sensitive: 'secret',
+      secretKeys: ['access_token','refresh_token','provider_token','provider_refresh_token'],
+      summarize: v => {
+        try {
+          const email = v && (v.user && v.user.email || v.email);
+          const exp = v && v.expires_at ? ' · expires ' + fullDate(v.expires_at * 1000) : '';
+          return email ? `signed in as ${email}${exp}` : 'a saved session token';
+        } catch { return 'a saved session token'; }
+      },
+    };
+  }
+  if (/^sb-/.test(k)) {
+    return { key: k, kind: 'ls', app: 'sync', name: k, sensitive: 'secret',
+      summarize: () => 'Supabase auth-client storage (this device only)' };
+  }
+  return { key: k, kind: 'ls', app: 'other', name: k, summarize: () => 'not written by a known Hill Climbing app' };
 }
 function safeStringify(v) { try { return JSON.stringify(v); } catch { return String(v); } }
 
@@ -977,6 +1014,54 @@ function auxItem(name, sub) {
   return { root, main, sub: s };
 }
 
+// ── Cross-device sync status (read ONLY from local storage — no network) ──────
+// Deliberately does not touch window.HCSync / Supabase, so this page keeps its
+// zero-network promise. Everything shown is inferred from device-local state.
+async function renderSync() {
+  const host = el('sync'); host.textContent = '';
+  let authKey = null;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i); if (/^sb-.+-auth-token$/.test(k)) { authKey = k; break; }
+  }
+  let session = null;
+  if (authKey) { try { session = JSON.parse(localStorage.getItem(authKey)); } catch {} }
+  let meta = null;
+  try { meta = JSON.parse(localStorage.getItem('hill-climbing-sync-meta') || 'null'); } catch {}
+  const dek = await readIdbStore('hc-sync', 'keys');
+  const hasDek = !dek.missing && dek.rows.some(r => r && r.id === 'dek' && r.key);
+  const configured = !!(authKey || meta || hasDek);
+
+  const note = el('erase-sync-note'); if (note) note.style.display = configured ? '' : 'none';
+
+  const head = document.createElement('div'); head.className = 'group-head';
+  head.appendChild(span('group-name', 'Cross-device sync'));
+  head.appendChild(span('group-sub', configured ? 'on' : 'off'));
+  host.appendChild(head);
+
+  if (!configured) {
+    host.appendChild(auxItem('Sync is off',
+      'Nothing about you leaves this device. You can turn on optional, end-to-end-encrypted sync from the hub’s account page to carry your practices across devices.').root);
+    return;
+  }
+
+  const email = session && ((session.user && session.user.email) || session.email);
+  const acct = auxItem('Account', email ? '' : 'Not signed in on this device.');
+  if (email) {
+    acct.sub.textContent = 'Signed in as ';
+    const b = document.createElement('b'); b.textContent = email; acct.sub.appendChild(b);
+    if (session && session.expires_at) acct.sub.appendChild(document.createTextNode(' · session expires ' + fullDate(session.expires_at * 1000)));
+    acct.sub.appendChild(document.createTextNode('. Your email is the one piece of plaintext the server holds about you.'));
+  }
+  host.appendChild(acct.root);
+
+  host.appendChild(auxItem('Encryption', hasDek
+    ? 'A working key is unlocked on this device, so synced data can be read here. It’s held non-extractable and never leaves in the clear.'
+    : 'No key on this device yet — sync is locked or not set up. Set a passphrase on the account page to unlock.').root);
+
+  host.appendChild(auxItem('What actually leaves this device',
+    'Only end-to-end-encrypted copies of synced stores (currently just Climb), plus per-document keys, sizes, counts and timestamps, and your account email. Content is encrypted before it leaves — the server stores ciphertext it can’t decrypt.').root);
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 async function exportAll() {
   const bundle = {
@@ -992,7 +1077,7 @@ async function exportAll() {
     const k = localStorage.key(i); const raw = localStorage.getItem(k);
     let v; try { v = JSON.parse(raw); } catch { v = raw; }
     bundle.localStorage[k] = v;
-    if (/key/i.test(k) || /council-key/.test(k)) hasSecret = true;
+    if (/key/i.test(k) || /council-key/.test(k) || /auth-token$/.test(k)) hasSecret = true;
   }
   for (const def of REGISTRY) {
     if (def.kind !== 'idb') continue;
@@ -1001,7 +1086,7 @@ async function exportAll() {
   }
   const stamp = new Date().toISOString().slice(0, 10);
   download(`hill-climbing-data-${stamp}.json`, JSON.stringify(bundle, null, 2));
-  toast(hasSecret ? 'Backup downloaded — it includes your API key, keep it private.' : 'Backup downloaded.');
+  toast(hasSecret ? 'Backup downloaded — it includes private credentials (API key / sign-in). Keep it safe.' : 'Backup downloaded.');
 }
 
 function download(name, text) {
@@ -1056,6 +1141,7 @@ async function reload() {
   MODEL = await gather();
   renderOverview();
   renderAll();
+  renderSync();
   renderAux();
 }
 function init() {
