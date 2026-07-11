@@ -29,10 +29,10 @@
       --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
       --radius-pill: 999px;
       --ease: 0.25s ease;
-      /* ── Per-practice accent — Companion (amber / a warm, attentive presence) ── */
-      --accent:      hsl(38,74%,64%);
-      --accent-soft: hsla(38,68%,62%,0.5);
-      --accent-glow: hsla(38,66%,52%,0.14);
+      /* ── Per-practice accent — Companion (teal / a calm, steady presence) ── */
+      --accent:      hsl(172,48%,60%);
+      --accent-soft: hsla(172,44%,58%,0.5);
+      --accent-glow: hsla(172,50%,42%,0.14);
       --bg: var(--bg-base);        /* legacy alias (topbar fade) */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -190,7 +190,7 @@
       padding: 11px 24px; border-radius: 999px; cursor: pointer;
       transition: background 0.2s, border-color 0.2s, opacity 0.2s; white-space: nowrap;
     }
-    button.primary:hover:not(:disabled) { background: hsla(38,66%,52%,0.26); border-color: var(--accent); }
+    button.primary:hover:not(:disabled) { background: hsla(172,50%,42%,0.28); border-color: var(--accent); }
     button.primary:disabled { opacity: 0.4; cursor: default; }
     button.ghost {
       border: 1px solid var(--line); background: transparent; color: var(--mid);

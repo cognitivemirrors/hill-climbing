@@ -118,6 +118,7 @@
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
+    .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
@@ -496,6 +497,19 @@
       <h2>Anime</h2>
       <p>Meet the camera as a drawing of yourself.</p>
     </a>
+
+    <a class="card companion" href="companion.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 13h30a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H21l-8 6v-6h-4a3 3 0 0 1-3-3V16a3 3 0 0 1 3-3Z"/>
+          <circle cx="18" cy="22.5" r="1.5" fill="currentColor" stroke="none"/>
+          <circle cx="24" cy="22.5" r="1.5" fill="currentColor" stroke="none"/>
+          <circle cx="30" cy="22.5" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
+      <h2>Companion</h2>
+      <p>Talk it through with someone who's caught up.</p>
+    </a>
   </nav>
 
   <section class="dashboard" aria-label="This week">
@@ -554,7 +568,7 @@
     </div>
   </section>
 
-  <footer>hill climbing · private · on-device</footer>
+  <footer>hill climbing · private by default</footer>
 
   <!-- ── Account & sync page (full-screen; opened by the chip or #account) ──── -->
   <div id="account-view" role="dialog" aria-modal="true" aria-label="Account and sync">
