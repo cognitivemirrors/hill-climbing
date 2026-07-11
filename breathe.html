@@ -221,7 +221,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.6 · breathe</div>
+<div class="corner" id="version-label">v0.7 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 
@@ -281,6 +281,10 @@
 
 <div id="proto-info"></div>
 <div id="safety-note">if dizzy, stop and breathe normally</div>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
 
 <script>
 'use strict';
@@ -665,6 +669,7 @@ document.querySelectorAll('.proto-btn').forEach(btn => {
 
 // ── Session length (v0.5) — breathwork only ──
 const DURATION_KEY = 'breathe-session-duration';
+const SYNC_BLOB_KEY = 'ls:breathe-session-duration';   // this app's registered E2E-sync doc (see hc-sync.js)
 let durationMinutes = 5;
 try { const v = parseInt(localStorage.getItem(DURATION_KEY), 10); if (v > 0) durationMinutes = v; } catch {}
 function syncDurationPills() {
@@ -678,6 +683,7 @@ document.querySelectorAll('.dur-btn').forEach(btn => {
     if (s.running) return;
     durationMinutes = parseInt(btn.dataset.minutes, 10);
     try { localStorage.setItem(DURATION_KEY, String(durationMinutes)); } catch {}
+    if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
     syncDurationPills();
   });
 });
@@ -696,6 +702,26 @@ document.addEventListener('keydown', e => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 protoInfo.textContent = proto().info;
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// Breathe's only persisted user choice is the session length. Sign-in / unlock
+// live at the hub; this app registers that one preference, shows status, and
+// pushes on change. Nothing transmits until sync is unlocked and armed.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(DURATION_KEY) || String(durationMinutes),
+    write: (str) => {                      // remote-apply path
+      try { localStorage.setItem(DURATION_KEY, str); } catch (e) { /* quota */ }
+      const v = parseInt(str, 10); if (v > 0) durationMinutes = v;
+      syncDurationPills();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-right' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'breathe' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

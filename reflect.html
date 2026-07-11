@@ -239,7 +239,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · reflect</div>
+<div class="corner" id="version-label">v0.6 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -302,13 +302,18 @@
   </section>
 </main>
 
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
 <script>
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.5 · reflect';
+const VERSION    = 'v0.6 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
+const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)
 const SCALE_MAX  = 7;
 const PROMPTS = [
   'What’s present right now?',
@@ -358,6 +363,15 @@ function idbPut(entry) {
     const tx = d.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(entry);
     tx.oncomplete = () => res(entry);
+    tx.onerror    = () => rej(tx.error);
+  }));
+}
+function idbPutMany(items) {                 // bulk upsert — used by the sync merge (writeMany)
+  return db().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    const os = tx.objectStore(STORE);
+    items.forEach(it => os.put(it));
+    tx.oncomplete = () => res();
     tx.onerror    = () => rej(tx.error);
   }));
 }
@@ -482,6 +496,7 @@ async function save() {
     const e = state.entries.find(x => x.id === state.editingId);
     const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction, updated: now };
     await idbPut(updated);
+    if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, updated);
     resetDraft();
     await loadEntries();
     switchView('history');
@@ -492,6 +507,7 @@ async function save() {
       embedding: null, embModel: null,            // reserved for the semantic-map phase
     };
     await idbPut(entry);
+    if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, entry);
     resetDraft();
     await loadEntries();
     renderWrite();
@@ -556,7 +572,17 @@ function renderHistory() {
 function handleDelete(id, btn) {
   if (state.pendingDelete && state.pendingDelete.id === id) {
     clearPendingDelete();
-    idbDelete(id).then(loadEntries).then(() => { if (state.view === 'history') renderHistory(); });
+    // Soft-delete: write a tombstone (kept in IndexedDB, hidden from the UI) so
+    // the deletion propagates through sync. A hard idbDelete would leave the
+    // entry alive on other devices and let it resurrect on a fresh pull.
+    const e = state.entries.find(x => x.id === id);
+    const tomb = e
+      ? { ...e, deleted: true, updated: Date.now() }
+      : { id, deleted: true, created: Date.now(), updated: Date.now(), text: '', mood: null, satisfaction: null };
+    idbPut(tomb)
+      .then(() => { if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, tomb); })
+      .then(loadEntries)
+      .then(() => { if (state.view === 'history') renderHistory(); });
     return;
   }
   clearPendingDelete();
@@ -585,7 +611,9 @@ function switchView(v) {
 // ── Data load + export/import ───────────────────────────────────────────────
 async function loadEntries() {
   const all = await idbAll();
-  state.entries = all.sort((a, b) => b.created - a.created);
+  // Tombstones (deleted:true) stay in IndexedDB so deletions propagate through
+  // sync, but they never appear in the UI or exports.
+  state.entries = all.filter(e => e && !e.deleted).sort((a, b) => b.created - a.created);
 }
 function exportData() {
   const payload = { app: 'journal', schema: 1, exported: Date.now(), entries: state.entries };
@@ -606,7 +634,7 @@ async function importData(file) {
     let n = 0;
     for (const e of incoming) {
       if (!e || typeof e.text === 'undefined') continue;
-      await idbPut({
+      const rec = {
         id: e.id || uid(),
         created: e.created || Date.now(),
         updated: e.updated || e.created || Date.now(),
@@ -615,7 +643,9 @@ async function importData(file) {
         satisfaction: e.satisfaction ?? null,
         embedding: e.embedding ?? null,
         embModel: e.embModel ?? null,
-      });
+      };
+      await idbPut(rec);
+      if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, rec);
       n++;
     }
     await loadEntries();
@@ -665,6 +695,36 @@ document.getElementById('version-label').textContent = VERSION;
   }
   switchView('write');
 })();
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// The journal is a LOG store, not a blob: each entry syncs as its own record so
+// two devices never clobber each other's writing. Because the server's log RPC
+// is insert-only (immutable), each entry version carries a version-stamped doc
+// key (id@updated) — so edits and tombstoned deletes land as new rows and the
+// merge below keeps the newest version per id (tombstones win, then hide).
+// Sign-in / unlock live at the hub.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_JOURNAL_NS, kind: 'log',
+    readAll:  () => idbAll(),                          // all local records, incl. tombstones
+    recordId: (e) => e.id + '@' + (e.updated || e.created || 0),   // version-stamped → immutable rows
+    writeMany: (recs) => idbAll().then((localAll) => {
+      // Merge incoming versions with local, keeping the newest `updated` per id.
+      const byId = {};
+      localAll.forEach((e) => { if (e && e.id) byId[e.id] = e; });
+      recs.forEach((e) => {
+        if (!e || !e.id) return;
+        const cur = byId[e.id];
+        if (!cur || (e.updated || 0) >= (cur.updated || 0)) byId[e.id] = e;
+      });
+      return idbPutMany(Object.keys(byId).map((k) => byId[k]));
+    }).then(loadEntries).then(() => { if (state.view === 'history') renderHistory(); }),
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'reflect' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
