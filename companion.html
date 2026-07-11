@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Companion · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Companion">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Companion (amber / a warm, attentive presence) ── */
+      --accent:      hsl(38,74%,64%);
+      --accent-soft: hsla(38,68%,62%,0.5);
+      --accent-glow: hsla(38,66%,52%,0.14);
+      --bg: var(--bg-base);        /* legacy alias (topbar fade) */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.55;
+      padding: 64px 20px 96px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      border: none; background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; letter-spacing: 0.03em;
+      padding: 6px 15px; border-radius: 15px; cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+    }
+    .mode-btn.active { color: var(--text); background: rgba(255,255,255,0.08); }
+    .mode-btn:hover:not(.active) { color: var(--text); }
+
+    /* Corner menu — data management dropdown (mirrors council / reflect / nourish). */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 258px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+    .menu-note a { color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--faint); }
+    .menu-note a:hover { color: var(--accent); }
+    #sync-note { color: var(--dim); }
+
+    .hidden { display: none !important; }
+
+    /* ── layout ─────────────────────────────────────────────────── */
+    main { max-width: 760px; margin: 0 auto; }
+    .lede {
+      font-family: var(--font-display); font-size: 26px; line-height: 1.28;
+      color: var(--text); margin: 8px 0 6px; letter-spacing: 0.01em;
+    }
+    .sub { color: var(--mid); font-size: 14px; margin-bottom: 20px; max-width: 620px; }
+    .sub em { color: var(--accent); font-style: normal; }
+
+    /* ── "what it can see" transparency chip ────────────────────── */
+    .sees-chip {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+      font-size: 12px; color: var(--mid);
+      background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+      border-radius: 999px; padding: 8px 15px; margin-bottom: 24px;
+    }
+    .sees-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft); flex: none; }
+    .sees-link {
+      border: none; background: transparent; color: var(--accent);
+      font-family: var(--font-ui); font-size: 12px; cursor: pointer; padding: 0;
+      border-bottom: 1px solid var(--accent-soft); margin-left: 2px;
+    }
+    .sees-link:hover { border-bottom-color: var(--accent); }
+
+    /* ── thread (conversation) ──────────────────────────────────── */
+    #thread { display: flex; flex-direction: column; gap: 16px; margin: 6px 0 4px; }
+    .turn { animation: fadeUp 0.3s ease; }
+    .turn-who {
+      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 6px;
+    }
+    .turn.you .turn-body {
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+      border-radius: 12px; padding: 13px 16px; color: var(--text);
+    }
+    .turn.you .turn-body p { font-size: 14.5px; line-height: 1.6; margin-bottom: 8px; }
+    .turn.you .turn-body p:last-child { margin-bottom: 0; }
+    .turn.them .turn-who { color: var(--accent); opacity: 0.9; }
+    .turn.them .turn-body p { font-size: 15px; color: var(--text); line-height: 1.64; margin-bottom: 11px; }
+    .turn.them .turn-body p:last-child { margin-bottom: 0; }
+    .turn.error .turn-body p { color: var(--dim); font-style: italic; }
+
+    /* ── composer ───────────────────────────────────────────────── */
+    #composer { margin-top: 20px; }
+    #composer textarea {
+      width: 100%; min-height: 92px; resize: vertical; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; color: var(--text);
+      font-family: var(--font-ui); font-size: 15.5px; line-height: 1.6; padding: 14px 16px;
+      outline: none; transition: border-color 0.2s;
+    }
+    #composer textarea:focus { border-color: var(--accent-soft); }
+    #composer textarea::placeholder { color: var(--dim); }
+    .composer-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .composer-note { font-size: 11.5px; color: var(--dim); max-width: 400px; line-height: 1.5; }
+    .composer-btns { display: flex; gap: 10px; align-items: center; }
+
+    button.primary {
+      border: 1px solid var(--accent-soft); background: var(--accent-glow);
+      color: var(--text); font-family: var(--font-ui); font-size: 14px; letter-spacing: 0.03em;
+      padding: 11px 24px; border-radius: 999px; cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, opacity 0.2s; white-space: nowrap;
+    }
+    button.primary:hover:not(:disabled) { background: hsla(38,66%,52%,0.26); border-color: var(--accent); }
+    button.primary:disabled { opacity: 0.4; cursor: default; }
+    button.ghost {
+      border: 1px solid var(--line); background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 13px; padding: 9px 18px; border-radius: 999px;
+      cursor: pointer; transition: color 0.2s, border-color 0.2s; white-space: nowrap;
+    }
+    button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--line-strong); }
+    button.ghost:disabled { opacity: 0.4; cursor: default; }
+
+    .actions { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+
+    /* deliberating shimmer */
+    .thinking { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft);
+      animation: pulse 1.1s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.18s; }
+    .dot:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes pulse { 0%,100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ── cards (setup / about / sees) ───────────────────────────── */
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+      padding: 26px 26px; margin-bottom: 18px;
+    }
+    .card h2 { font-family: var(--font-display); font-size: 21px; font-weight: normal; margin-bottom: 12px; letter-spacing: 0.01em; }
+    .card p { font-size: 14px; color: var(--mid); line-height: 1.65; margin-bottom: 12px; }
+    .card p:last-child { margin-bottom: 0; }
+    .card a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+    .card a:hover { border-bottom-color: var(--accent); }
+    .card ul { margin: 0 0 14px 2px; padding: 0; list-style: none; }
+    .card li { font-size: 13.5px; color: var(--mid); line-height: 1.6; padding-left: 18px; position: relative; margin-bottom: 7px; }
+    .card li::before { content: '·'; color: var(--accent); position: absolute; left: 4px; font-weight: bold; }
+    input.key {
+      width: 100%; background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 10px;
+      color: var(--text); font-family: 'SF Mono', 'Menlo', monospace; font-size: 13px;
+      padding: 12px 14px; outline: none; margin: 6px 0 4px; letter-spacing: 0.02em;
+    }
+    input.key:focus { border-color: var(--accent-soft); }
+    .key-err { color: hsl(6,70%,68%); font-size: 12.5px; min-height: 16px; margin: 4px 0 10px; }
+
+    /* the exact-context preview */
+    .digest-box {
+      background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 18px; margin: 6px 0 4px; max-height: 46vh; overflow: auto;
+      font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; line-height: 1.6;
+      color: var(--mid); white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* ── history ────────────────────────────────────────────────── */
+    .hist-item {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px 17px; margin-bottom: 12px; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .hist-item:hover { border-color: var(--line-strong); background: rgba(255,255,255,0.055); }
+    .hist-date { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 5px; }
+    .hist-title { font-size: 14.5px; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
+    .hist-snippet { font-size: 13px; color: var(--mid); line-height: 1.5;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .empty { text-align: center; color: var(--dim); font-size: 14px; padding: 50px 20px; line-height: 1.7; }
+
+    /* ── crisis footer (always present) ─────────────────────────── */
+    #crisis {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 9;
+      text-align: center; font-size: 11px; color: var(--faint);
+      padding: 10px 16px 12px;
+      background: linear-gradient(rgba(10,11,18,0) 0%, var(--bg-base) 55%);
+      pointer-events: none;
+    }
+    #crisis a { color: var(--dim); pointer-events: auto; text-decoration: none; border-bottom: 1px solid var(--faint); }
+    #crisis a:hover { color: var(--accent); }
+
+    .disclaimer { font-size: 11.5px; color: var(--faint); line-height: 1.6; margin-top: 28px; max-width: 620px; }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · companion</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="talk">Talk</button>
+  <button class="mode-btn"         data-view="history">History</button>
+</nav>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="sees-btn" type="button" role="menuitem">
+      <span class="menu-item-title">What the companion sees</span>
+      <span class="menu-item-sub">The exact text it's shown</span>
+    </button>
+    <button class="menu-item" id="new-btn" type="button" role="menuitem">
+      <span class="menu-item-title">New conversation</span>
+      <span class="menu-item-sub">Start a fresh thread</span>
+    </button>
+    <button class="menu-item" id="key-btn" type="button" role="menuitem">
+      <span class="menu-item-title">API key</span>
+      <span class="menu-item-sub">Change or remove your key</span>
+    </button>
+    <button class="menu-item" id="about-btn" type="button" role="menuitem">
+      <span class="menu-item-title">About the companion</span>
+      <span class="menu-item-sub">How it works, what it isn't</span>
+    </button>
+    <button class="menu-item" id="clear-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Clear all conversations</span>
+      <span class="menu-item-sub">Delete every saved thread</span>
+    </button>
+    <div class="menu-note" id="sync-note">Saved on this device.</div>
+    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation.</div>
+  </div>
+</div>
+
+<main>
+  <!-- Key gate / setup -->
+  <div id="setup" class="hidden"></div>
+
+  <!-- Talk view -->
+  <div id="talk-view">
+    <div class="lede">A companion who's caught up.</div>
+    <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — so you never start from scratch. It's here to sharpen your own judgment, not to decide for you.</div>
+
+    <div id="sees-chip" class="sees-chip hidden"></div>
+
+    <div id="thread"></div>
+
+    <div id="composer">
+      <textarea id="msg-box" placeholder="What's on your mind?  (⌘/Ctrl+Enter to send)"></textarea>
+      <div class="composer-row">
+        <div class="composer-note">Sent to Anthropic on your own key, for this reply only. Your journal is never saved into the conversation.</div>
+        <div class="composer-btns">
+          <button class="ghost" id="begin-btn" type="button" title="Let the companion open with a brief check-in on where you are">Let it open</button>
+          <button class="primary" id="send-btn" type="button">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="disclaimer">
+      The companion is a thinking tool, not an authority — and not therapy, medical, legal, or crisis care.
+      Its job is to help you see your own life clearly. The decisions stay yours.
+    </p>
+  </div>
+
+  <!-- About view -->
+  <div id="about-view" class="hidden"></div>
+
+  <!-- Sees (transparency) view -->
+  <div id="sees-view" class="hidden"></div>
+
+  <!-- History view -->
+  <div id="history-view" class="hidden">
+    <div class="lede" style="margin-bottom:18px;">Past conversations.</div>
+    <div id="hist-list"></div>
+  </div>
+</main>
+
+<div id="crisis">
+  Not for emergencies. In crisis right now? Call or text <a href="tel:988">988</a> (US) or your local emergency line.
+</div>
+
+<script src="/hc-sync.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Companion — a single conversational agent with TRANSIENT access to the rest of
+// the suite. Tier 0 (solo dev).
+//
+// "Transient access" means: each time it replies, it reads the person's CURRENT
+// goals (Climb), journal (Reflect), and recent practice (usage log) straight
+// from same-origin storage, folds them into the system prompt for that one call,
+// and then forgets them. The raw data is never serialized into the saved
+// conversation — only the chat turns are. What persists + syncs is the dialogue,
+// not a second copy of the journal.
+//
+// Privacy posture (same as Council, disclosed plainly): bring-your-own Anthropic
+// API key, stored only in this browser. Calls go browser → Anthropic directly,
+// on the user's own key — no operator server sits between the user and the model.
+// This, like Council, sends data off-device and therefore contradicts
+// REQUIREMENTS §1.3/§2.1's "nothing leaves the device" — flagged for founder
+// ratification, not silently amended. The conversation itself is stored locally
+// and, if the user has enabled sync at the hub, synced end-to-end-encrypted
+// (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VERSION   = 'v0.1 · companion';
+const MODEL     = 'claude-opus-4-8';
+const API_URL   = 'https://api.anthropic.com/v1/messages';
+const LS_KEY    = 'hill-climbing-companion-key';    // this app's Anthropic key (device-local)
+const COUNCIL_KEY = 'hill-climbing-council-key';    // reuse Council's key as a convenience default
+const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
+const SYNC_BLOB_KEY = 'ls:hill-climbing-companion';
+const CONV_CAP  = 60;
+
+// Cross-device sync (opt-in, end-to-end encrypted). Same project as the rest of
+// the suite; the anon key is a PUBLIC publishable key — Row-Level Security is the
+// real guard. Auth/passphrase live on the hub's account page.
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+
+// Context caps — keep the digest bounded so a long journal doesn't blow the call.
+const JOURNAL_MAX   = 25;     // most-recent entries shared
+const ENTRY_CHARS   = 700;    // per-entry truncation
+const GOALS_CHARS   = 4000;
+const ACTIVITY_DAYS = 28;
+
+// ── The companion's charge ───────────────────────────────────────────────────
+const COMPANION_SYSTEM =
+"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite: their current goals, their private journal, and their recent practice activity. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
+"Who you are, and how you talk:\n" +
+"- You are one warm, attentive companion — not a coach, not a therapist, not an authority. Think of a thoughtful friend who has genuinely kept up with their life and pays close attention.\n" +
+"- Speak in the first person, directly to them, warm and unhurried. Usually 80–170 words. Real conversation — no bullet lists, no headings, no clinical framing, no openers like \"As your companion…\". Just talk to them.\n" +
+"- Ground what you say in what you've actually been shown — their real goals, their own words from the journal, the shape of their recent weeks — specifically, not generically. But wear it lightly: you're a friend who remembers, not a dossier reading itself back. Don't recite their data at them or list everything you know; bring in the one or two things that actually bear on what they're saying.\n" +
+"- Notice honestly. If their journal and their stated goals pull in different directions, or a pattern across their weeks is worth naming, say it — kindly, without flattering and without diagnosing.\n\n" +
+"What you are for:\n" +
+"- Your purpose is to help them think and see clearly, and to strengthen their own agency — never to replace their judgment or to make them need you. A good companion leaves someone more themselves, not more dependent.\n" +
+"- Don't flatter or tell them what they want to hear; a companion who only validates is worse than none. Say the true thing, with care.\n" +
+"- Help them toward their own clarity or a next step they can own — then let the conversation rest. Don't manufacture reasons to keep them talking.\n\n" +
+"Hard limits, every turn:\n" +
+"- You are not therapy, medical, legal, or crisis care, and you never pretend to be.\n" +
+"- If what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set everything else aside: tell them plainly this is beyond what a companion can hold, that they deserve a real person right now, and point them to a crisis line (in the US, call or text 988), a doctor, or emergency services.\n" +
+"- Their data is theirs. You were given a transient look at it for this conversation only; you don't own it, store it, or send it anywhere. If they ask what you can see, tell them plainly and truthfully.";
+
+const OPENING_NUDGE =
+"(I've just opened the app and haven't said anything yet. Open the conversation: greet me warmly and, from what you've been shown, offer a brief, specific check-in on where I seem to be right now — something you actually noticed across my goals, journal, or recent weeks. Keep it short, and end by inviting me to say what's on my mind. Don't list everything you can see.)";
+
+// ── State ────────────────────────────────────────────────────────────────────
+let apiKey = localStorage.getItem(LS_KEY) || localStorage.getItem(COUNCIL_KEY) || '';
+let store  = loadStore();          // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
+let active = null;                 // the open conversation (a reference into store.conversations)
+let busy = false;
+
+// ── Anthropic call (browser-direct, user's key) ─────────────────────────────
+async function callClaudeRaw(system, messages, maxTokens) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: messages })
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
+    if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
+    if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and try again.');
+    throw new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
+  }
+  const data = await res.json();
+  const block = (data.content || []).find(b => b.type === 'text');
+  return block ? block.text.trim() : '';
+}
+function ApiError(kind, message) { this.kind = kind; this.message = message; }
+ApiError.prototype = Object.create(Error.prototype);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSIENT CONTEXT — read the suite's data fresh, same-origin, at reply time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Canonical local-time day key — MUST match the one the writer apps use (see the
+// hub). Never reuse an app's internal date helper for this.
+function hcDayKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function niceDay(k) {
+  const p = String(k).split('-').map(Number);
+  const dt = new Date(p[0], (p[1]||1)-1, p[2]||1);
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function niceDate(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// GOALS — from Climb's localStorage blob. Render the active goal tree as an
+// indented outline, with the focus goal marked and open steps listed.
+function readGoals() {
+  let st; try { st = JSON.parse(localStorage.getItem('hill-climbing-climb') || 'null'); } catch (_) {}
+  if (!st || !st.goals) return null;
+  const goals = st.goals, tasks = st.tasks || {};
+  const active = (id) => goals[id] && goals[id].status !== 'archived';
+  const kids = (pid) => Object.values(goals)
+    .filter(g => g.parentId === pid && g.status !== 'archived')
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  const tasksFor = (gid) => Object.values(tasks).filter(t => t.goalId === gid);
+  const lines = [];
+  function walk(id, depth) {
+    const g = goals[id]; if (!g) return;
+    const pad = '  '.repeat(depth);
+    let label = pad + '• ' + (g.title || '(untitled)');
+    if (id === st.focusId) label += '   ← focus right now';
+    if (g.restedAt) label += '   (resting)';
+    lines.push(label);
+    const ts = tasksFor(id);
+    ts.filter(t => !t.done).forEach(t => lines.push(pad + '    ○ ' + t.title));
+    const done = ts.filter(t => t.done).length;
+    if (done) lines.push(pad + '    (' + done + ' step' + (done === 1 ? '' : 's') + ' done)');
+    kids(id).forEach(c => walk(c.id, depth + 1));
+  }
+  if (st.rootId && active(st.rootId)) kids(st.rootId).forEach(g => walk(g.id, 0));
+  else kids(null).forEach(g => walk(g.id, 0));
+  let text = lines.join('\n').trim();
+  if (text.length > GOALS_CHARS) text = text.slice(0, GOALS_CHARS) + '\n… (more goals not shown)';
+  const count = Object.values(goals).filter(g => g.status !== 'archived' && g.id !== st.rootId).length;
+  return { text, count };
+}
+
+// JOURNAL — from Reflect's IndexedDB. Opened with NO version and NEVER creating a
+// store: if reflect.html has never run, our open could create a storeless
+// 'journal' DB and break reflect's own lazy store creation, so if OUR open
+// created it we delete it again. (Same guard the hub uses — see its comment.)
+function readJournal() {
+  return new Promise(function (resolve) {
+    let settled = false, created = false;
+    const done = function (v) { if (!settled) { settled = true; resolve(v); } };
+    let req;
+    try { req = indexedDB.open('journal'); }
+    catch (e) { return done(null); }
+    req.onupgradeneeded = function () { created = true; /* do NOT create any store */ };
+    req.onerror   = function () { done(null); };
+    req.onblocked = function () { done(null); };
+    req.onsuccess = function () {
+      const db = req.result;
+      try {
+        if (created || !db.objectStoreNames.contains('entries')) {
+          db.close();
+          if (created) { try { indexedDB.deleteDatabase('journal'); } catch (e) {} }
+          return done(null);
+        }
+        const getAll = db.transaction('entries', 'readonly').objectStore('entries').getAll();
+        getAll.onsuccess = function () {
+          const all = (getAll.result || [])
+            .filter(e => e && typeof e.created === 'number')
+            .sort((a, b) => b.created - a.created);
+          done({ all });
+        };
+        getAll.onerror = function () { done(null); };
+      } catch (e) { done(null); }
+    };
+  });
+}
+function formatJournal(journal) {
+  if (!journal || !journal.all.length) return null;
+  const recent = journal.all.slice(0, JOURNAL_MAX);
+  const parts = recent.map(e => {
+    const meta = [];
+    meta.push(niceDate(e.created));
+    if (e.mood) meta.push('mood ' + e.mood + '/7');
+    if (e.satisfaction) meta.push('satisfaction ' + e.satisfaction + '/7');
+    let body = (e.text || '').trim();
+    if (!body && !e.mood && !e.satisfaction) return null;
+    if (body.length > ENTRY_CHARS) body = body.slice(0, ENTRY_CHARS) + '…';
+    return '[' + meta.join(' · ') + ']' + (body ? ('\n' + body) : ' (rating only, no note)');
+  }).filter(Boolean);
+  const omitted = journal.all.length - recent.length;
+  let text = parts.join('\n\n');
+  if (omitted > 0) text += '\n\n(' + omitted + ' older entr' + (omitted === 1 ? 'y' : 'ies') + ' not shown.)';
+  return { text, shown: parts.length, total: journal.all.length };
+}
+
+// ACTIVITY — from the shared usage log, plus a couple of app-specific signals.
+function readActivity() {
+  let log = {}; try { log = JSON.parse(localStorage.getItem('hill-climbing-usage') || '{}') || {}; } catch (_) {}
+  const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', levity:'Levity', climb:'Climb', train:'Train', anime:'Anime' };
+  const today = new Date();
+  const windowKeys = new Set();
+  for (let i = 0; i < ACTIVITY_DAYS; i++) { const d = new Date(today); d.setDate(today.getDate() - i); windowKeys.add(hcDayKey(d)); }
+
+  const lines = [], appsActive = [], activeDays = new Set();
+  Object.keys(log).forEach(app => {
+    if (app === 'v' || !log[app] || typeof log[app] !== 'object') return;
+    const days = Object.keys(log[app]);
+    if (!days.length) return;
+    appsActive.push(app);
+    const inWin = days.filter(k => windowKeys.has(k));
+    inWin.forEach(k => activeDays.add(k));
+    const last = days.slice().sort().pop();
+    lines.push('  ' + (NAMES[app] || app) + ' — ' + inWin.length + ' day' + (inWin.length === 1 ? '' : 's') +
+      ' in the last 4 weeks' + (last ? (' (last: ' + niceDay(last) + ')') : ''));
+  });
+
+  // Nourish ladder — an extra signal the usage day-flags don't carry.
+  let extra = '';
+  try {
+    const n = JSON.parse(localStorage.getItem('hill-climbing-nourish') || 'null');
+    if (n && typeof n.level === 'number') {
+      extra = 'Nourish cooking ladder: level ' + n.level + ' of 10' + (n.streak ? (' · streak ' + n.streak) : '');
+      const cook = n.active;
+      const dish = cook && (cook.dish || cook.title || cook.name);
+      if (dish) extra += ' · currently cooking “' + dish + '”';
+    }
+  } catch (_) {}
+
+  let text;
+  if (lines.length) text = 'Active on ' + activeDays.size + ' of the last 28 days.\n' + lines.join('\n');
+  else text = 'No practice recorded in the last few weeks.';
+  if (extra) text += '\n' + extra;
+  return { text, appsActive };
+}
+
+async function gatherContext() {
+  const goals    = readGoals();
+  const journal  = formatJournal(await readJournal());
+  const activity = readActivity();
+
+  const digest =
+    "──\nWhat you've been shown (for this conversation only):\n\n" +
+    "## Their goals\n" + (goals ? goals.text : "They haven't set up goals in Climb yet.") + "\n\n" +
+    "## Their journal — most recent entries\n" + (journal ? journal.text : "Their journal is empty, or they haven't kept one yet.") + "\n\n" +
+    "## Their recent practice\n" + activity.text + "\n──";
+
+  const summary = {
+    goals: goals ? goals.count : 0,
+    entries: journal ? journal.total : 0,
+    apps: activity.appsActive
+  };
+  return { system: COMPANION_SYSTEM + '\n\n' + digest, digest, summary };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conversation store (localStorage blob → hc-sync as a single encrypted doc)
+// ─────────────────────────────────────────────────────────────────────────────
+function loadStore() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_STORE) || 'null');
+    if (s && Array.isArray(s.conversations)) return s;
+  } catch (_) {}
+  return { v: 1, conversations: [] };
+}
+function persist() {
+  if (store.conversations.length > CONV_CAP) store.conversations.length = CONV_CAP;
+  try { localStorage.setItem(LS_STORE, JSON.stringify(store)); } catch (_) {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
+function uid() {
+  return (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + Math.random().toString(36).slice(2));
+}
+function newConversation() {
+  const c = { id: uid(), ts: Date.now(), title: '', thread: [] };
+  store.conversations.unshift(c);
+  return c;
+}
+function apiMessages(conv) {
+  return conv.thread.map(t => ({ role: t.role, content: t.text }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Talk
+// ─────────────────────────────────────────────────────────────────────────────
+const threadEl  = document.getElementById('thread');
+const msgBox    = document.getElementById('msg-box');
+const sendBtn   = document.getElementById('send-btn');
+const beginBtn  = document.getElementById('begin-btn');
+
+function renderThread() {
+  const turns = active ? active.thread.filter(t => !t.hidden) : [];
+  threadEl.innerHTML = turns.map(t => turnHTML(t.role, t.text)).join('');
+}
+function turnHTML(role, text, isErr) {
+  const who = role === 'user' ? 'You' : 'Companion';
+  return '<div class="turn ' + (role === 'user' ? 'you' : 'them') + (isErr ? ' error' : '') + '">' +
+    '<div class="turn-who">' + who + '</div>' +
+    '<div class="turn-body">' + toParas(text) + '</div>' +
+  '</div>';
+}
+function deliberating() {
+  return '<div class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+}
+function toParas(text) {
+  return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    .map(p => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function scrollEnd() { msgBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+function snippet(s) { s = s.replace(/\s+/g, ' ').trim(); return s.length > 80 ? s.slice(0, 80) + '…' : s; }
+
+function setBusy(on) {
+  busy = on;
+  sendBtn.disabled = on; beginBtn.disabled = on;
+  sendBtn.textContent = on ? 'Thinking…' : 'Send';
+}
+
+async function send(text, opts) {
+  opts = opts || {};
+  if (busy) return;
+  if (!apiKey) { showSetup(true); return; }
+  text = (text || '').trim();
+  if (!text) { msgBox.focus(); return; }
+
+  if (!active) active = newConversation();
+  const userTurn = { role: 'user', text: text, hidden: !!opts.seed };
+  active.thread.push(userTurn);
+  if (!active.title) active.title = opts.seed ? ('A check-in · ' + niceDate(active.ts)) : snippet(text);
+  persist();
+
+  if (!opts.seed) { threadEl.insertAdjacentHTML('beforeend', turnHTML('user', text)); msgBox.value = ''; }
+  threadEl.insertAdjacentHTML('beforeend',
+    '<div class="turn them" id="pending"><div class="turn-who">Companion</div><div class="turn-body">' + deliberating() + '</div></div>');
+  setBusy(true); scrollEnd();
+
+  try {
+    const ctx = await gatherContext();
+    const reply = await callClaudeRaw(ctx.system, apiMessages(active), 1200);
+    active.thread.push({ role: 'assistant', text: reply });
+    persist();
+    const pend = document.getElementById('pending');
+    if (pend) pend.outerHTML = turnHTML('assistant', reply);
+  } catch (err) {
+    const pend = document.getElementById('pending');
+    if (pend) pend.outerHTML = turnHTML('assistant', err.message || 'I couldn’t respond just now.', true);
+    if (err.kind === 'key') showSetup(true);
+  } finally {
+    setBusy(false); refreshSees(); scrollEnd();
+  }
+}
+
+sendBtn.addEventListener('click', () => send(msgBox.value));
+beginBtn.addEventListener('click', () => { if (!active || !active.thread.length) send(OPENING_NUDGE, { seed: true }); else msgBox.focus(); });
+msgBox.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(msgBox.value); }
+});
+
+// ── "What it can see" transparency chip + full preview ───────────────────────
+function refreshSees() {
+  gatherContext().then(ctx => {
+    const s = ctx.summary;
+    const parts = [
+      s.goals + ' goal' + (s.goals === 1 ? '' : 's'),
+      s.entries + ' journal ' + (s.entries === 1 ? 'entry' : 'entries'),
+      'practice across ' + s.apps.length + ' app' + (s.apps.length === 1 ? '' : 's')
+    ];
+    const chip = document.getElementById('sees-chip');
+    chip.classList.remove('hidden');
+    chip.innerHTML = '<span class="sees-dot"></span><span>Right now it can see ' + parts.join(' · ') +
+      '.</span> <button class="sees-link" id="sees-open" type="button">See exactly what’s shared →</button>';
+    const open = document.getElementById('sees-open');
+    if (open) open.addEventListener('click', showSees);
+  }).catch(() => {});
+}
+
+function showSees() {
+  setMenu(false);
+  switchView(null);
+  const v = document.getElementById('sees-view');
+  v.classList.remove('hidden');
+  v.innerHTML =
+    '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
+    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time, and never stored in the saved conversation. Nothing else about you is sent.</p>' +
+    '<div class="digest-box" id="digest-box">Reading your goals, journal, and activity…</div></div>' +
+    '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
+  document.getElementById('sees-back').addEventListener('click', () => switchView('talk'));
+  gatherContext().then(ctx => {
+    const box = document.getElementById('digest-box');
+    if (box) box.textContent = ctx.digest;
+  }).catch(() => {
+    const box = document.getElementById('digest-box');
+    if (box) box.textContent = 'Could not read your data.';
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// History
+// ─────────────────────────────────────────────────────────────────────────────
+function renderHistory() {
+  const list = document.getElementById('hist-list');
+  const all = store.conversations;
+  if (!all.length) {
+    list.innerHTML = '<div class="empty">No conversations yet.<br>Say something in Talk and it’ll be kept here — on this device, and synced if you’ve signed in at the hub.</div>';
+    return;
+  }
+  list.innerHTML = all.map((c, i) => {
+    const last = c.thread.filter(t => !t.hidden).slice(-1)[0];
+    return '<div class="hist-item" data-i="' + i + '">' +
+      '<div class="hist-date">' + fmtDateTime(c.ts) + '</div>' +
+      '<div class="hist-title">' + esc(c.title || 'Untitled') + '</div>' +
+      (last ? '<div class="hist-snippet">' + esc(last.text) + '</div>' : '') +
+    '</div>';
+  }).join('');
+  list.querySelectorAll('.hist-item').forEach(el =>
+    el.addEventListener('click', () => openConversation(all[+el.dataset.i])));
+}
+function openConversation(c) {
+  active = c;
+  switchView('talk');
+  renderThread();
+  refreshSees();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => msgBox.focus(), 60);
+}
+function fmtDateTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup / key gate
+// ─────────────────────────────────────────────────────────────────────────────
+function showSetup(force) {
+  setMenu(false);
+  const s = document.getElementById('setup');
+  s.classList.remove('hidden');
+  ['talk-view','history-view','about-view','sees-view'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  s.innerHTML =
+    '<div class="card">' +
+      '<h2>' + (apiKey ? 'Your API key' : 'One thing before we begin') + '</h2>' +
+      '<p>The companion runs on Claude, using <strong>your own Anthropic API key</strong>. Your key stays in this browser. When you send a message, it — together with your current goals, journal, and recent activity — is sent from this device straight to Anthropic’s API on your key. No server of ours sits in between.</p>' +
+      '<p>This, like the Council, is one of the practices in Hill Climbing that sends anything off your device. It happens only when you send a message, and only your own data.</p>' +
+      '<ul>' +
+        '<li>Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (opens Anthropic).</li>' +
+        '<li>Billed to your Anthropic account — a reply is a few cents.</li>' +
+        '<li>Stored only here, in this browser. Remove it any time from the menu.</li>' +
+      '</ul>' +
+      '<input class="key" id="key-input" type="password" spellcheck="false" autocomplete="off" placeholder="sk-ant-…" value="' + esc(apiKey) + '">' +
+      '<div class="key-err" id="key-err"></div>' +
+      '<div class="actions">' +
+        '<button class="primary" id="key-save" type="button">Save key</button>' +
+        (apiKey ? '<button class="ghost" id="key-remove" type="button">Remove key</button>' : '') +
+      '</div>' +
+    '</div>';
+  const input = document.getElementById('key-input');
+  const err = document.getElementById('key-err');
+  input.focus();
+  document.getElementById('key-save').addEventListener('click', () => {
+    const v = input.value.trim();
+    if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
+    apiKey = v;
+    try { localStorage.setItem(LS_KEY, v); } catch (_) {}
+    s.classList.add('hidden');
+    switchView('talk');
+    msgBox.focus();
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('key-save').click(); });
+  const rm = document.getElementById('key-remove');
+  if (rm) rm.addEventListener('click', () => {
+    apiKey = '';
+    try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    showSetup(true);
+  });
+}
+
+// ── About ────────────────────────────────────────────────────────────────────
+function showAbout() {
+  setMenu(false);
+  switchView(null);
+  const v = document.getElementById('about-view');
+  v.classList.remove('hidden');
+  v.innerHTML =
+    '<div class="lede" style="margin-bottom:16px;">About the companion.</div>' +
+    '<div class="card">' +
+      '<p>The companion is one steady presence you can talk with about your own life. Unlike the Council — a board you bring a single decision to — this is a continuing conversation, and it arrives already knowing what you keep in the suite: your goals from <strong>Climb</strong>, your entries from <strong>Reflect</strong>, and the shape of your recent <strong>practice</strong>.</p>' +
+      '<p>It reads that data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten. The raw text is never written into the saved conversation — only your dialogue is kept. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
+      '<p>It’s built on one belief: <strong>a good companion makes your own judgment sharper, not your dependence deeper.</strong> So it’s instructed never to decide for you, never to flatter, and to tell you the true thing with care — including when your journal and your goals disagree.</p>' +
+      '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
+    '</div>' +
+    '<div class="actions"><button class="ghost" id="about-back" type="button">Back</button></div>';
+  document.getElementById('about-back').addEventListener('click', () => switchView('talk'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Views
+// ─────────────────────────────────────────────────────────────────────────────
+function switchView(view) {
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('about-view').classList.add('hidden');
+  document.getElementById('sees-view').classList.add('hidden');
+  document.getElementById('talk-view').classList.toggle('hidden', view !== 'talk');
+  document.getElementById('history-view').classList.toggle('hidden', view !== 'history');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  if (view === 'talk') { renderThread(); refreshSees(); }
+  if (view === 'history') renderHistory();
+}
+document.querySelectorAll('.mode-btn').forEach(b =>
+  b.addEventListener('click', () => { if (!apiKey && b.dataset.view === 'talk') { showSetup(true); return; } switchView(b.dataset.view); }));
+
+// ── Menu wiring ──────────────────────────────────────────────────────────────
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+document.getElementById('sees-btn').addEventListener('click', showSees);
+document.getElementById('key-btn').addEventListener('click', () => { setMenu(false); showSetup(true); });
+document.getElementById('about-btn').addEventListener('click', showAbout);
+document.getElementById('new-btn').addEventListener('click', () => {
+  setMenu(false);
+  active = null; msgBox.value = '';
+  switchView('talk'); msgBox.focus();
+});
+document.getElementById('clear-btn').addEventListener('click', () => {
+  setMenu(false);
+  if (confirm('Delete every saved conversation? This can’t be undone. (Your API key is kept.)')) {
+    store.conversations = [];
+    active = null;
+    persist();
+    switchView('talk');
+  }
+});
+
+// ── Sync (opt-in, end-to-end encrypted). Auth lives on the hub account page. ──
+function updateSyncNote(status) {
+  const el = document.getElementById('sync-note');
+  if (!el) return;
+  if (!status || status.error === 'not_configured') { el.textContent = 'Saved on this device.'; return; }
+  if (status.state === 'unlocked') el.innerHTML = 'Synced to your account, end-to-end encrypted.';
+  else if (status.state === 'locked') el.innerHTML = 'Locked — enter your passphrase at the <a href="index.html">hub</a> to sync.';
+  else el.innerHTML = 'Saved on this device. <a href="index.html">Sign in at the hub</a> to sync across devices.';
+}
+if (window.HCSync) {
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(LS_STORE) || JSON.stringify(store),
+    write: (str) => {                      // remote-apply path — replace local, re-render
+      try { localStorage.setItem(LS_STORE, str); } catch (e) { /* quota */ }
+      store = loadStore();
+      if (active) active = store.conversations.find(c => c.id === active.id) || null;
+      if (!document.getElementById('talk-view').classList.contains('hidden')) { renderThread(); refreshSees(); }
+      if (!document.getElementById('history-view').classList.contains('hidden')) renderHistory();
+    },
+  });
+  HCSync.subscribe(updateSyncNote);
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'companion' });
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+if (!apiKey) showSetup(true); else switchView('talk');
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
