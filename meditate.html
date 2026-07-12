@@ -1039,7 +1039,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.75</p>
+    <p id="version-label">v1.76</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1054,6 +1054,10 @@
   </div>
 
 </div>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
 
 <script>
 // ─────────────────────────────────────────────
@@ -1360,7 +1364,11 @@ const game = (() => {
 // Capacity is derived: timeLimit × requiredRate. Helper instead of cached field
 // so the two knobs are the source of truth — no risk of drift.
 function currentCapacity() { return game.timeLimit * game.requiredRate; }
-function saveGame() { localStorage.setItem('stillness-game', JSON.stringify(game)); }
+const SYNC_BLOB_KEY = 'ls:stillness-game';   // this app's registered E2E-sync doc (see hc-sync.js)
+function saveGame() {
+  localStorage.setItem('stillness-game', JSON.stringify(game));
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+}
 let saveAccumulator = 0; // periodic save throttle (seconds since last save)
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────
@@ -3129,7 +3137,42 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.75 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.76 · t${TIER}`;
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob: the staircase (timeLimit, requiredRate, wins, round,
+// totals). Adverse-event reports and trajectory recordings are deliberately
+// NOT registered — they stay on-device. Sign-in / unlock live at the hub.
+// Remote apply mutates the live `game` object in place (it's a const) and never
+// runs during an active session — the local clock stays ahead while you play.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem('stillness-game') || JSON.stringify(game),
+    write: (str) => {                      // remote-apply path — deliberately NOT through saveGame()
+      try { localStorage.setItem('stillness-game', str); } catch (e) { /* quota */ }
+      try {
+        const s = JSON.parse(str) || {};
+        const today = todayKey();
+        const sameDay = s.todayKey === today;
+        if (typeof s.timeLimit    === 'number') game.timeLimit    = s.timeLimit;
+        if (typeof s.requiredRate === 'number') game.requiredRate = s.requiredRate;
+        if (typeof s.wins         === 'number') game.wins         = s.wins;
+        if (typeof s.best         === 'number') game.best         = s.best;
+        if (typeof s.round        === 'number') game.round        = s.round;
+        if (typeof s.totalWins    === 'number') game.totalWins    = s.totalWins;
+        game.todayKey  = today;
+        game.todaySecs = sameDay ? (s.todaySecs || 0) : 0;
+        game.todayWins = sameDay ? (s.todayWins || 0) : 0;
+      } catch (e) { /* leave the live game as-is on a malformed remote doc */ }
+      if (typeof updateRoundInfo === 'function') updateRoundInfo();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'meditate' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
