@@ -286,7 +286,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · companion</div>
+<div class="corner" id="version-label">v0.2 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="talk">Talk</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -320,7 +320,7 @@
       <span class="menu-item-sub">Delete every saved thread</span>
     </button>
     <div class="menu-note" id="sync-note">Saved on this device.</div>
-    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation.</div>
+    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details.</div>
   </div>
 </div>
 
@@ -331,7 +331,7 @@
   <!-- Talk view -->
   <div id="talk-view">
     <div class="lede">A companion who's caught up.</div>
-    <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — so you never start from scratch. It's here to sharpen your own judgment, not to decide for you.</div>
+    <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — so you never start from scratch. When a question needs something current or outside itself, it can <em>look it up on the web</em>. It's here to sharpen your own judgment, not to decide for you.</div>
 
     <div id="sees-chip" class="sees-chip hidden"></div>
 
@@ -340,7 +340,7 @@
     <div id="composer">
       <textarea id="msg-box" placeholder="What's on your mind?  (⌘/Ctrl+Enter to send)"></textarea>
       <div class="composer-row">
-        <div class="composer-note">Sent to Anthropic on your own key, for this reply only. Your journal is never saved into the conversation.</div>
+        <div class="composer-note">Sent to Anthropic on your own key, for this reply only. It can search the web when a question needs it; your journal never goes into a search, or into the saved conversation.</div>
         <div class="composer-btns">
           <button class="ghost" id="begin-btn" type="button" title="Let the companion open with a brief check-in on where you are">Let it open</button>
           <button class="primary" id="send-btn" type="button">Send</button>
@@ -396,7 +396,7 @@
 // (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.1 · companion';
+const VERSION   = 'v0.2 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
@@ -450,10 +450,14 @@ const COMPANION_SYSTEM =
 "- Your purpose is to help them think and see clearly, and to strengthen their own agency — never to replace their judgment or to make them need you. A good companion leaves someone more themselves, not more dependent.\n" +
 "- Don't flatter or tell them what they want to hear; a companion who only validates is worse than none. Say the true thing, with care.\n" +
 "- Help them toward their own clarity or a next step they can own — then let the conversation rest. Don't manufacture reasons to keep them talking.\n\n" +
+"You can look things up:\n" +
+"- You have live web search, and you can pull up a specific page when it helps. Reach for it when a good answer needs something outside you — current events, facts, prices, references, how-tos, or checking a claim — and skip it for ordinary reflection or things you already know. Use it because it helps, not by reflex.\n" +
+"- Search with plain, general queries. Never put their private details into a search — not their name, not lines from their journal, not the specifics of their situation. Abstract the question, look up the general version, then bring what you find back to their particular case yourself.\n" +
+"- What you find online isn't automatically true. Weigh the source, name uncertainty when it's there, and don't turn a shaky result into false confidence.\n\n" +
 "Hard limits, every turn:\n" +
 "- You are not therapy, medical, legal, or crisis care, and you never pretend to be.\n" +
 "- If what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set everything else aside: tell them plainly this is beyond what a companion can hold, that they deserve a real person right now, and point them to a crisis line (in the US, call or text 988), a doctor, or emergency services.\n" +
-"- Their data is theirs. You were given a transient look at it for this conversation only; you don't own it, store it, or send it anywhere. If they ask what you can see, tell them plainly and truthfully.";
+"- Their data is theirs. You were given a transient look at it for this conversation only; you don't own it, store it, or send it anywhere — and you never put their private information into a web search. If they ask what you can see or do, tell them plainly and truthfully.";
 
 const OPENING_NUDGE =
 "(I've just opened the app and haven't said anything yet. Open the conversation: greet me warmly and, from what you've been shown, offer a brief, specific check-in on where I seem to be right now — something you actually noticed across my goals, journal, or recent weeks. Keep it short, and end by inviting me to say what's on my mind. Don't list everything you can see.)";
@@ -464,28 +468,59 @@ let store  = loadStore();          // { v, conversations: [ {id, ts, title, thre
 let active = null;                 // the open conversation (a reference into store.conversations)
 let busy = false;
 
+// ── Internet access (server-side, on the user's key) ─────────────────────────
+// Live web search + the ability to read a specific page. These are Anthropic
+// server tools: the query is executed on Anthropic's side and the model gets the
+// results back inside the same call — no separate endpoint, and the browser only
+// ever talks to /v1/messages. Opus 4.8 supports the dynamic-filtering variants
+// (the model filters results before they hit context). max_uses caps cost and
+// latency per reply. This adds a NEW off-device pathway beyond the digest — the
+// system prompt forbids putting the person's private data into a search, and the
+// UI discloses it plainly. Flagged for founder ratification against REQUIREMENTS
+// §1.3/§2.1, not silently amended (see KNOWN_RISKS).
+const WEB_TOOLS = [
+  { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+  { type: 'web_fetch_20260209',  name: 'web_fetch',  max_uses: 5 }
+];
+const MAX_TOOL_HOPS = 4;   // server-tool loops before we stop resuming a paused turn
+
 // ── Anthropic call (browser-direct, user's key) ─────────────────────────────
 async function callClaudeRaw(system, messages, maxTokens) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: messages })
-  });
-  if (!res.ok) {
-    let detail = '';
-    try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
-    if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
-    if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and try again.');
-    throw new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
+  // Server tools run inside Anthropic's own agent loop. A long search turn can
+  // come back with stop_reason "pause_turn" — resume by re-sending with the
+  // partial assistant turn appended (and NO extra user turn). Accumulate every
+  // text block across the whole turn: with web search the model often writes
+  // text before AND after searching, so grabbing only the first block would drop
+  // the actual answer.
+  let convo = messages.slice();
+  let text = '';
+  for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo, tools: WEB_TOOLS })
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
+      if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
+      if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and try again.');
+      throw new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
+    }
+    const data = await res.json();
+    (data.content || []).forEach(b => { if (b.type === 'text' && b.text) text += b.text; });
+    if (data.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
+      convo = convo.concat([{ role: 'assistant', content: data.content }]);
+      continue;
+    }
+    break;
   }
-  const data = await res.json();
-  const block = (data.content || []).find(b => b.type === 'text');
-  return block ? block.text.trim() : '';
+  return text.trim();
 }
 function ApiError(kind, message) { this.kind = kind; this.message = message; }
 ApiError.prototype = Object.create(Error.prototype);
@@ -784,7 +819,7 @@ function showSees() {
   v.classList.remove('hidden');
   v.innerHTML =
     '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
-    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time, and never stored in the saved conversation. Nothing else about you is sent.</p>' +
+    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time, and never stored in the saved conversation. Nothing else about you is sent. When a question needs it, the companion can also search the web on your key — but only with general queries it writes itself, never your private details.</p>' +
     '<div class="digest-box" id="digest-box">Reading your goals, journal, and activity…</div></div>' +
     '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
   document.getElementById('sees-back').addEventListener('click', () => switchView('talk'));
@@ -844,7 +879,7 @@ function showSetup(force) {
     '<div class="card">' +
       '<h2>' + (apiKey ? 'Your API key' : 'One thing before we begin') + '</h2>' +
       '<p>The companion runs on Claude, using <strong>your own Anthropic API key</strong>. Your key stays in this browser. When you send a message, it — together with your current goals, journal, and recent activity — is sent from this device straight to Anthropic’s API on your key. No server of ours sits in between.</p>' +
-      '<p>This, like the Council, is one of the practices in Hill Climbing that sends anything off your device. It happens only when you send a message, and only your own data.</p>' +
+      '<p>This, like the Council, is one of the practices in Hill Climbing that sends anything off your device. It happens only when you send a message. On your key it may also run a web search when a question needs one — written as a general query, never your private details.</p>' +
       '<ul>' +
         '<li>Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (opens Anthropic).</li>' +
         '<li>Billed to your Anthropic account — a reply is a few cents.</li>' +
@@ -889,6 +924,7 @@ function showAbout() {
     '<div class="card">' +
       '<p>The companion is one steady presence you can talk with about your own life. Unlike the Council — a board you bring a single decision to — this is a continuing conversation, and it arrives already knowing what you keep in the suite: your goals from <strong>Climb</strong>, your entries from <strong>Reflect</strong>, and the shape of your recent <strong>practice</strong>.</p>' +
       '<p>It reads that data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten. The raw text is never written into the saved conversation — only your dialogue is kept. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
+      '<p>It can also <strong>look things up on the web</strong> — a live search, or reading a specific page — when a question needs something current or beyond what it knows. Searches run on your key; it’s instructed to use plain, general queries and to keep your private details out of them, and to treat what it finds as worth weighing rather than automatically true.</p>' +
       '<p>It’s built on one belief: <strong>a good companion makes your own judgment sharper, not your dependence deeper.</strong> So it’s instructed never to decide for you, never to flatter, and to tell you the true thing with care — including when your journal and your goals disagree.</p>' +
       '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
     '</div>' +
