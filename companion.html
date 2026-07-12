@@ -14,6 +14,19 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Companion">
+  <!-- Set the mode (and therefore the accent) BEFORE first paint, so a
+       ?mode=council deep-link or a returning Council user never flashes teal. -->
+  <script>
+    (function () {
+      try {
+        var p = new URLSearchParams(location.search).get('mode');
+        var m = (p === 'council' || p === 'companion')
+          ? p
+          : (localStorage.getItem('hill-climbing-cc-mode') || 'companion');
+        document.documentElement.dataset.mode = (m === 'council') ? 'council' : 'companion';
+      } catch (e) { document.documentElement.dataset.mode = 'companion'; }
+    })();
+  </script>
   <style>
     :root {
       /* ── Hill Climbing — shared design tokens ─────────────────── */
@@ -29,11 +42,25 @@
       --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
       --radius-pill: 999px;
       --ease: 0.25s ease;
-      /* ── Per-practice accent — Companion (teal / a calm, steady presence) ── */
-      --accent:      hsl(172,48%,60%);
-      --accent-soft: hsla(172,44%,58%,0.5);
-      --accent-glow: hsla(172,50%,42%,0.14);
       --bg: var(--bg-base);        /* legacy alias (topbar fade) */
+
+      /* ── Per-mode accent — default is Companion (teal / a calm, steady presence).
+           Council overrides these below via html[data-mode="council"]. Every
+           accent use flows through these variables so switching mode re-themes
+           the whole app (including the body glow) in one place. ── */
+      --accent:       hsl(172,48%,60%);
+      --accent-soft:  hsla(172,44%,58%,0.5);
+      --accent-glow:  hsla(172,50%,42%,0.14);
+      --accent-hover: hsla(172,50%,42%,0.28);
+      --accent-weak:  hsla(172,50%,42%,0.10);
+    }
+    html[data-mode="council"] {
+      /* ── Council (indigo / counsel) ─────────────────────────────── */
+      --accent:       hsl(248,62%,72%);
+      --accent-soft:  hsla(248,58%,70%,0.5);
+      --accent-glow:  hsla(248,55%,54%,0.14);
+      --accent-hover: hsla(248,55%,54%,0.24);
+      --accent-weak:  hsla(248,55%,54%,0.10);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--bg-base); color: var(--text); }
@@ -46,6 +73,7 @@
       background:
         radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
         var(--bg-base);
+      transition: background 0.4s ease;
     }
 
     /* ── top bar ────────────────────────────────────────────────── */
@@ -73,6 +101,7 @@
     #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
     #home-link svg { width: 16px; height: 16px; display: block; }
 
+    /* ── primary mode switch (Companion | Council) ──────────────── */
     #mode-nav {
       position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
       display: flex; background: rgba(255,255,255,0.06);
@@ -84,10 +113,23 @@
       padding: 6px 15px; border-radius: 15px; cursor: pointer;
       transition: color 0.2s, background 0.2s;
     }
-    .mode-btn.active { color: var(--text); background: rgba(255,255,255,0.08); }
+    .mode-btn.active { color: var(--text); background: rgba(255,255,255,0.09); }
     .mode-btn:hover:not(.active) { color: var(--text); }
 
-    /* Corner menu — data management dropdown (mirrors council / reflect / nourish). */
+    /* ── secondary view switch (Talk/Convene · History) ─────────── */
+    #sub-nav {
+      display: flex; justify-content: center; gap: 6px; margin: 0 0 22px;
+    }
+    .sub-btn {
+      border: none; background: transparent; color: var(--dim);
+      font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.05em;
+      padding: 5px 12px; border-radius: 999px; cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+    }
+    .sub-btn.active { color: var(--accent); background: var(--accent-weak); }
+    .sub-btn:hover:not(.active) { color: var(--text); }
+
+    /* Corner menu — data management dropdown (mirrors reflect / nourish). */
     #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
     #menu-btn {
       width: 34px; height: 34px; padding: 0;
@@ -127,14 +169,15 @@
 
     /* ── layout ─────────────────────────────────────────────────── */
     main { max-width: 760px; margin: 0 auto; }
+    html[data-mode="council"] main { max-width: 860px; }
     .lede {
       font-family: var(--font-display); font-size: 26px; line-height: 1.28;
       color: var(--text); margin: 8px 0 6px; letter-spacing: 0.01em;
     }
-    .sub { color: var(--mid); font-size: 14px; margin-bottom: 20px; max-width: 620px; }
+    .sub { color: var(--mid); font-size: 14px; margin-bottom: 20px; max-width: 640px; }
     .sub em { color: var(--accent); font-style: normal; }
 
-    /* ── "what it can see" transparency chip ────────────────────── */
+    /* ── "what it can see" transparency chip (Companion) ────────── */
     .sees-chip {
       display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
       font-size: 12px; color: var(--mid);
@@ -151,7 +194,7 @@
     }
     .sees-link:hover { border-bottom-color: var(--accent); }
 
-    /* ── thread (conversation) ──────────────────────────────────── */
+    /* ── thread (Companion conversation) ────────────────────────── */
     #thread { display: flex; flex-direction: column; gap: 16px; margin: 6px 0 4px; }
     .turn { animation: fadeUp 0.3s ease; }
     .turn-who {
@@ -167,6 +210,9 @@
     .turn.them .turn-who { color: var(--accent); opacity: 0.9; }
     .turn.them .turn-body p { font-size: 15px; color: var(--text); line-height: 1.64; margin-bottom: 11px; }
     .turn.them .turn-body p:last-child { margin-bottom: 0; }
+    .turn.chair-turn .turn-who { color: var(--accent); opacity: 0.85; }
+    .turn.chair-turn .turn-body p { font-size: 14.5px; color: var(--text); line-height: 1.62; margin-bottom: 10px; }
+    .turn.chair-turn .turn-body p:last-child { margin-bottom: 0; }
     .turn.error .turn-body p { color: var(--dim); font-style: italic; }
     .err-actions { margin-top: 11px; }
     .retry-btn { font-size: 12.5px; padding: 7px 16px; border-color: var(--accent-soft); color: var(--mid); }
@@ -180,7 +226,7 @@
     }
     .regen-btn:hover { color: var(--accent); }
 
-    /* ── composer ───────────────────────────────────────────────── */
+    /* ── composer (Companion) ───────────────────────────────────── */
     #composer { margin-top: 20px; }
     #composer textarea {
       width: 100%; min-height: 92px; resize: vertical; background: var(--panel);
@@ -203,7 +249,7 @@
       padding: 11px 24px; border-radius: 999px; cursor: pointer;
       transition: background 0.2s, border-color 0.2s, opacity 0.2s; white-space: nowrap;
     }
-    button.primary:hover:not(:disabled) { background: hsla(172,50%,42%,0.28); border-color: var(--accent); }
+    button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent); }
     button.primary:disabled { opacity: 0.4; cursor: default; }
     button.ghost {
       border: 1px solid var(--line); background: transparent; color: var(--mid);
@@ -215,7 +261,7 @@
 
     .actions { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 
-    /* deliberating shimmer */
+    /* deliberating shimmer (shared) */
     .thinking { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
     .dot {
       width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft);
@@ -247,7 +293,7 @@
     input.key:focus { border-color: var(--accent-soft); }
     .key-err { color: hsl(6,70%,68%); font-size: 12.5px; min-height: 16px; margin: 4px 0 10px; }
 
-    /* the exact-context preview */
+    /* the exact-context preview (Companion) */
     .digest-box {
       background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 12px;
       padding: 16px 18px; margin: 6px 0 4px; max-height: 46vh; overflow: auto;
@@ -255,7 +301,111 @@
       color: var(--mid); white-space: pre-wrap; word-break: break-word;
     }
 
-    /* ── history ────────────────────────────────────────────────── */
+    /* ── compose (Council) ──────────────────────────────────────── */
+    #compose textarea {
+      width: 100%; min-height: 150px; resize: vertical;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      color: var(--text); font-family: var(--font-ui); font-size: 15.5px; line-height: 1.6;
+      padding: 16px 18px; outline: none; transition: border-color 0.2s;
+    }
+    #compose textarea:focus { border-color: var(--accent-soft); }
+    #compose textarea::placeholder { color: var(--dim); }
+    .compose-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .compose-note { font-size: 11.5px; color: var(--dim); max-width: 500px; line-height: 1.5; }
+
+    /* ── the board / results (Council) ──────────────────────────── */
+    .brought {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--line);
+      border-left: 2px solid var(--accent-soft); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 26px;
+      font-size: 14px; color: var(--mid); font-style: italic; line-height: 1.6;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .directors {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;
+    }
+    @media (max-width: 640px) { .directors { grid-template-columns: 1fr; } }
+
+    .seat {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 18px 20px; animation: fadeUp 0.35s ease;
+    }
+    .seat-name {
+      font-family: var(--font-display); font-size: 18px; color: var(--accent);
+      letter-spacing: 0.01em; margin-bottom: 2px;
+    }
+    .seat-charge { font-size: 11px; color: var(--dim); letter-spacing: 0.02em; margin-bottom: 12px; }
+    .seat-body p { font-size: 14.5px; color: var(--text); line-height: 1.62; margin-bottom: 10px; }
+    .seat-body p:last-child { margin-bottom: 0; }
+    .seat.error .seat-body p { color: var(--dim); font-style: italic; }
+
+    .chair {
+      background: linear-gradient(180deg, var(--accent-weak), rgba(255,255,255,0.03));
+      border: 1px solid var(--accent-soft); border-radius: 16px;
+      padding: 22px 24px; margin-bottom: 8px; animation: fadeUp 0.4s ease;
+    }
+    .chair .seat-name { font-size: 20px; }
+    .chair .seat-body p { font-size: 15px; }
+
+    .board-actions { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+
+    /* ── tester note (Council — POC evaluation + "didn't feel right" capture) ── */
+    .feedback {
+      margin-top: 20px; background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px;
+    }
+    .feedback h3 {
+      font-family: var(--font-display); font-size: 15px; font-weight: normal;
+      color: var(--mid); margin-bottom: 13px; letter-spacing: 0.01em;
+    }
+    .fb-label { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 8px; }
+    .fb-scale { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .fb-opt {
+      border: 1px solid var(--line); background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; padding: 7px 14px;
+      border-radius: 999px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .fb-opt:hover { color: var(--text); border-color: var(--line-strong); }
+    .fb-opt.sel { color: var(--text); border-color: var(--accent-soft); background: var(--accent-glow); }
+    .feedback textarea {
+      width: 100%; min-height: 64px; resize: vertical; background: rgba(0,0,0,0.22);
+      border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+      font-family: var(--font-ui); font-size: 14px; line-height: 1.55; padding: 11px 13px;
+      outline: none; margin-bottom: 14px;
+    }
+    .feedback textarea:focus { border-color: var(--accent-soft); }
+    .feedback textarea::placeholder { color: var(--dim); }
+    .fb-flag {
+      display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+      border: 1px solid var(--line); background: transparent; color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; padding: 8px 14px; border-radius: 999px;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .fb-flag:hover { color: var(--text); border-color: var(--line-strong); }
+    .fb-flag.on { color: hsl(28,85%,68%); border-color: hsla(28,80%,60%,0.55); background: hsla(28,80%,55%,0.12); }
+    .fb-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .fb-status { font-size: 12px; color: var(--accent); }
+    .hist-flag  { color: hsl(28,85%,68%); font-size: 11px; margin-left: 8px; }
+    .hist-noted { color: var(--accent); font-size: 11px; margin-left: 8px; opacity: 0.75; }
+
+    /* ── continuing meeting (Council thread + reply) ────────────── */
+    #mtg-thread { display: flex; flex-direction: column; gap: 16px; margin: 24px 0 4px; }
+    .reply { margin-top: 18px; }
+    .reply textarea {
+      width: 100%; min-height: 84px; resize: vertical; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 12px; color: var(--text);
+      font-family: var(--font-ui); font-size: 15px; line-height: 1.6; padding: 14px 16px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .reply textarea:focus { border-color: var(--accent-soft); }
+    .reply textarea::placeholder { color: var(--dim); }
+    .reply-row { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+    .reply-note { font-size: 11.5px; color: var(--dim); }
+
+    /* ── history (shared) ───────────────────────────────────────── */
     .hist-item {
       background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
       padding: 14px 17px; margin-bottom: 12px; cursor: pointer;
@@ -279,7 +429,7 @@
     #crisis a { color: var(--dim); pointer-events: auto; text-decoration: none; border-bottom: 1px solid var(--faint); }
     #crisis a:hover { color: var(--accent); }
 
-    .disclaimer { font-size: 11.5px; color: var(--faint); line-height: 1.6; margin-top: 28px; max-width: 620px; }
+    .disclaimer { font-size: 11.5px; color: var(--faint); line-height: 1.6; margin-top: 28px; max-width: 640px; }
 
     /* On a narrow phone the corner version label collides with the centred
        mode-nav — hide it, matching the rest of the suite (reflect/nourish/…). */
@@ -297,10 +447,10 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.4 · companion</div>
+<div class="corner" id="version-label">v0.5 · companion</div>
 <nav id="mode-nav">
-  <button class="mode-btn active" data-view="talk">Talk</button>
-  <button class="mode-btn"         data-view="history">History</button>
+  <button class="mode-btn active" data-mode="companion">Companion</button>
+  <button class="mode-btn"         data-mode="council">Council</button>
 </nav>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
@@ -308,39 +458,19 @@
       <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
     </svg>
   </button>
-  <div id="menu-panel" class="hidden" role="menu">
-    <div class="menu-head">Your data</div>
-    <button class="menu-item" id="sees-btn" type="button" role="menuitem">
-      <span class="menu-item-title">What the companion sees</span>
-      <span class="menu-item-sub">The exact text it's shown</span>
-    </button>
-    <button class="menu-item" id="new-btn" type="button" role="menuitem">
-      <span class="menu-item-title">New conversation</span>
-      <span class="menu-item-sub">Start a fresh thread</span>
-    </button>
-    <button class="menu-item" id="key-btn" type="button" role="menuitem">
-      <span class="menu-item-title">API key</span>
-      <span class="menu-item-sub">Change or remove your key</span>
-    </button>
-    <button class="menu-item" id="about-btn" type="button" role="menuitem">
-      <span class="menu-item-title">About the companion</span>
-      <span class="menu-item-sub">How it works, what it isn't</span>
-    </button>
-    <button class="menu-item" id="clear-btn" type="button" role="menuitem">
-      <span class="menu-item-title">Clear all conversations</span>
-      <span class="menu-item-sub">Delete every saved thread</span>
-    </button>
-    <div class="menu-note" id="sync-note">Saved on this device.</div>
-    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details.</div>
-  </div>
+  <!-- Contents are rendered per-mode by renderMenu(). -->
+  <div id="menu-panel" class="hidden" role="menu"></div>
 </div>
 
 <main>
-  <!-- Key gate / setup -->
+  <!-- Secondary view switch (per-mode); populated by renderSubNav(). -->
+  <nav id="sub-nav" class="hidden"></nav>
+
+  <!-- Shared key gate / setup -->
   <div id="setup" class="hidden"></div>
 
-  <!-- Talk view -->
-  <div id="talk-view">
+  <!-- ── Companion home ─────────────────────────────────────────── -->
+  <div id="companion-home">
     <div class="lede">A companion who's caught up.</div>
     <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — so you never start from scratch. When a question needs something current or outside itself, it can <em>look it up on the web</em>. It's here to sharpen your own judgment, not to decide for you.</div>
 
@@ -365,17 +495,38 @@
     </p>
   </div>
 
-  <!-- About view -->
-  <div id="about-view" class="hidden"></div>
+  <!-- ── Council home ───────────────────────────────────────────── -->
+  <div id="council-home" class="hidden">
+    <div class="lede">Convene your board.</div>
+    <div class="sub">Bring a real decision or situation to a small council of advisors. They won't decide for you — they'll help you <em>see it clearly</em>. Then reply, push back, and keep the meeting going until you reach your own decision.</div>
 
-  <!-- Sees (transparency) view -->
-  <div id="sees-view" class="hidden"></div>
+    <div id="compose">
+      <textarea id="situation" placeholder="What's on your mind? Describe the decision or situation as you'd tell a trusted friend — the facts, what you're weighing, what you're afraid of. The more honest, the more useful."></textarea>
+      <div class="compose-row">
+        <div class="compose-note">Four directors respond, then the Chair closes the meeting. Five short calls on your key — a few cents a session.</div>
+        <button class="primary" id="convene-btn" type="button">Convene the board</button>
+      </div>
+    </div>
 
-  <!-- History view -->
+    <div id="board" class="hidden"></div>
+
+    <p class="disclaimer">
+      The council is a thinking tool, not an authority — and not therapy, medical, legal, or crisis care.
+      Its job is to sharpen your judgment, never to replace it. The decision is always yours.
+    </p>
+  </div>
+
+  <!-- Shared history view -->
   <div id="history-view" class="hidden">
-    <div class="lede" style="margin-bottom:18px;">Past conversations.</div>
+    <div class="lede" id="hist-lede" style="margin-bottom:18px;">History</div>
     <div id="hist-list"></div>
   </div>
+
+  <!-- Shared about view (filled per-mode) -->
+  <div id="about-view" class="hidden"></div>
+
+  <!-- Companion "what it sees" view -->
+  <div id="sees-view" class="hidden"></div>
 </main>
 
 <div id="crisis">
@@ -387,36 +538,42 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Companion — a single conversational agent with TRANSIENT access to the rest of
-// the suite. Tier 0 (solo dev).
+// Companion + Council — two modes of one app. Tier 0 (solo dev).
 //
-// "Transient access" means: each time it replies, it reads the person's CURRENT
-// goals (Climb), journal (Reflect), and recent practice (usage log) straight
-// from same-origin storage, folds them into the system prompt for that one call,
-// and then forgets them. The raw data is never serialized into the saved
-// conversation — only the chat turns are. What persists + syncs is the dialogue,
-// not a second copy of the journal.
+// Formerly two standalone files. Merged into a single app whose top-of-page
+// switch chooses the mode:
+//   • Companion — one steady, continuing presence you talk with, that reads your
+//     CURRENT goals (Climb), journal (Reflect), and recent practice (usage log)
+//     transiently at each reply and can search the web on your key.
+//   • Council   — a board of four directors you convene on a single decision;
+//     they deliberate, the Chair closes the meeting, and you can keep replying.
 //
-// Privacy posture (same as Council, disclosed plainly): bring-your-own Anthropic
-// API key, stored only in this browser. Calls go browser → Anthropic directly,
-// on the user's own key — no operator server sits between the user and the model.
-// This, like Council, sends data off-device and therefore contradicts
-// REQUIREMENTS §1.3/§2.1's "nothing leaves the device" — flagged for founder
-// ratification, not silently amended. The conversation itself is stored locally
-// and, if the user has enabled sync at the hub, synced end-to-end-encrypted
-// (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
+// Shared: one Anthropic API key (device-local), the browser→Anthropic call layer
+// (retry + tool-loop), the corner menu, the key gate, and the crisis footer.
+// Separate: each mode keeps its own storage, history, system prompts, and DOM
+// subtree; only one mode's surface is visible at a time. The accent (teal vs
+// indigo) re-themes the whole page via the --accent* CSS variables, keyed off
+// html[data-mode].
+//
+// Privacy posture (unchanged, disclosed plainly): bring-your-own Anthropic key,
+// stored only in this browser; calls go browser → Anthropic directly on the
+// user's key — no operator server in between. This sends data off-device and so
+// contradicts REQUIREMENTS §1.3/§2.1's "nothing leaves the device" — flagged for
+// founder ratification, not silently amended. Companion conversations are stored
+// locally and, if the user enabled sync at the hub, synced end-to-end-encrypted
+// (hc-sync.js: ciphertext only). Council deliberations remain device-local.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.4 · companion';
-const MODEL     = 'claude-opus-4-8';
-const API_URL   = 'https://api.anthropic.com/v1/messages';
-const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
+const VERSION_NUM = 'v0.5';
+const MODEL       = 'claude-opus-4-8';
+const API_URL     = 'https://api.anthropic.com/v1/messages';
+const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
 
 // ── Suite-wide Anthropic API key (a single key for the whole hub) ────────────
 // One canonical store shared across Council, Companion, and Nourish's chef so a
 // key entered in any of them works everywhere. Legacy per-app keys are migrated
 // once (copied into the canonical store, then deleted) so nobody re-enters.
-// Device-local only — never synced (hc-sync registers no store for it).
+// Device-local only — never synced.
 const API_KEY_LS    = 'hill-climbing-api-key';
 const LEGACY_KEY_LS = ['hill-climbing-council-key', 'hill-climbing-companion-key'];
 function readApiKey() {
@@ -434,20 +591,25 @@ function writeApiKey(v) { try { localStorage.setItem(API_KEY_LS, v); } catch (_)
 function clearApiKey() {
   try { localStorage.removeItem(API_KEY_LS); LEGACY_KEY_LS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
 }
-const SYNC_BLOB_KEY = 'ls:hill-climbing-companion';
-const CONV_CAP  = 60;
 
 // Cross-device sync (opt-in, end-to-end encrypted). Same project as the rest of
 // the suite; the anon key is a PUBLIC publishable key — Row-Level Security is the
-// real guard. Auth/passphrase live on the hub's account page.
+// real guard. Auth/passphrase live on the hub's account page. Companion only.
 const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
 
-// Context caps — keep the digest bounded so a long journal doesn't blow the call.
+// ── Companion storage + context caps ─────────────────────────────────────────
+const LS_STORE      = 'hill-climbing-companion';    // saved conversations (synced)
+const SYNC_BLOB_KEY = 'ls:hill-climbing-companion';
+const CONV_CAP      = 60;
 const JOURNAL_MAX   = 25;     // most-recent entries shared
 const ENTRY_CHARS   = 700;    // per-entry truncation
 const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
+
+// ── Council storage ──────────────────────────────────────────────────────────
+const LS_HIST  = 'hill-climbing-council';           // saved deliberations (device-local)
+const HIST_CAP = 30;
 
 // ── The companion's charge ───────────────────────────────────────────────────
 const COMPANION_SYSTEM =
@@ -473,22 +635,81 @@ const COMPANION_SYSTEM =
 const OPENING_NUDGE =
 "(I've just opened the app and haven't said anything yet. Open the conversation: greet me warmly and, from what you've been shown, offer a brief, specific check-in on where I seem to be right now — something you actually noticed across my goals, journal, or recent weeks. Keep it short, and end by inviting me to say what's on my mind. Don't list everything you can see.)";
 
-// ── State ────────────────────────────────────────────────────────────────────
-let apiKey = readApiKey();
-let store  = loadStore();          // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
-let active = null;                 // the open conversation (a reference into store.conversations)
-let busy = false;
+// ── The board ────────────────────────────────────────────────────────────────
+// Each seat is a distinct, productively-adversarial lens. Coverage is the goal:
+// future-self, effectiveness, loyal opposition, the human center — then a Chair
+// who closes the meeting without deciding.
+const PREAMBLE = `You are one director on someone's personal board of directors — a small council they convene to think through a real decision or situation in their own life.
 
-// ── Internet access (server-side, on the user's key) ─────────────────────────
+Your seat on the board is {SEAT}. {CHARGE}
+
+How this board works, and what is required of you:
+- Your purpose is to improve the quality of THEIR judgment, not to replace it. Never issue a verdict or tell them what to do. Leave the decision where it belongs — with them.
+- Do not flatter, cushion, or tell them what they want to hear. A board that only validates is worse than no board. Say the true thing plainly, with care.
+- Disagree when you should — with them, and with the other directors. Productive dissent is the entire point of a board.
+- Speak in the first person, as your seat, directly to them. Roughly 120–180 words. Warm, specific, unhurried. No jargon, no bullet lists, no headings, and no preamble like "As the Steward…". Just talk to them.
+- Stay in your lane. Offer your lens, not the whole answer — the other directors and the Chair cover the rest. Don't try to be the entire board.
+- Hard limit: if what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, do not advise. Say plainly that this is beyond a board's competence and that they deserve a real person right now — a crisis line, a doctor, a lawyer — and point them there.`;
+
+const SEATS = [
+  {
+    id: 'steward',
+    name: 'The Steward',
+    charge_short: 'your future self',
+    charge: `You guard their long-term wellbeing and the interests of their future self. You ask what the person they will be in five years needs from this choice — their health, energy, attention, relationships, and the quiet things that compound over time. You are suspicious of decisions that borrow from the future to relieve the present, and of self-neglect wearing the costume of duty or ambition.`
+  },
+  {
+    id: 'strategist',
+    name: 'The Strategist',
+    charge_short: 'what you actually want',
+    charge: `You bring clarity about what they actually want and the most effective way to get there. You name the real objective — which is often not the stated one — the genuine tradeoffs, the second- and third-order effects, and where the leverage actually is. You are allergic to motion mistaken for progress and to effort poured into the wrong problem.`
+  },
+  {
+    id: 'skeptic',
+    name: 'The Skeptic',
+    charge_short: 'the loyal opposition',
+    charge: `You are the loyal opposition. You surface what they are avoiding, the failure modes they are glossing over, and the flattering story they may be telling themselves. You steel-man the option they have already dismissed. You name self-deception without contempt. Your gift to them is friction, not doom — pressure that makes a good decision stronger, never fear that freezes them.`
+  },
+  {
+    id: 'humanist',
+    name: 'The Humanist',
+    charge_short: 'the people, and you',
+    charge: `You hold the human center — the people caught up in this, and them as a person rather than a project. Relationships, integrity, the felt truth underneath the logistics, and whose autonomy or consent is actually involved. You guard against the temptation to solve a human situation as though it were only an optimization problem.`
+  }
+];
+
+const CHAIR_SYSTEM = `You are the Chair of someone's personal board of directors. Four directors have just weighed in on the situation they brought, each from their own lens; their responses are given to you below.
+
+Your job is NOT to vote, break a tie, or decide. It is to close the meeting well:
+- Name the genuine tension the board surfaced — the real thing at stake underneath the situation as they stated it.
+- Say clearly where the directors agree, and where they truly split. Do not paper over a real disagreement.
+- Separate what actually matters here from the noise.
+- Then hand the decision back to them, with the one question that is really theirs to answer. If the board has made plain that they already know their answer, say that instead.
+
+Speak in the first person, directly to them, roughly 150–220 words. Warm, clear, unhurried. Do not recap each director in turn like meeting minutes — synthesise. Do not add fresh advice of your own; your work is to reflect their own deliberation back so they can decide with clear eyes. Same hard limit as the rest of the board: if this involves imminent danger, a medical or legal emergency, or an acute mental-health crisis, set the synthesis aside and tell them plainly to reach a real person now.`;
+
+// The Chair, now facilitating the continuing meeting (multi-turn). Distinct from
+// CHAIR_SYSTEM (the one-shot opening synthesis): this one takes the user's
+// pushback, can bring a director's voice back in, drives toward a decision the
+// user can own — then ends the meeting rather than prolonging it (anti-dependence).
+const FACILITATOR_SYSTEM =
+  "You are the Chair of someone's personal board of directors. The board has already given its opening deliberation on the situation they brought — it appears as the previous assistant turn (the four directors, then your opening synthesis). The meeting is now continuing: they will respond — push back, add what the board missed, correct a wrong assumption, or ask to go deeper — and you facilitate from here.\n\n" +
+  "The board you chair, and can bring back in when a lens is needed:\n" +
+  SEATS.map(s => "- " + s.name + " — " + s.charge).join("\n") +
+  "\n\nHow to conduct the continuing meeting:\n" +
+  "- This is a real, unfolding deliberation, not a one-shot verdict. Help them think it through across turns and move toward a decision they can own and act on.\n" +
+  "- When a particular director's lens would sharpen things, bring that director back in and voice them briefly in their own register — e.g. \"Here the Skeptic would push:…\" or \"The Steward wants me to say…\". Do this when it genuinely adds something; don't ventriloquise all four every turn, and don't just restate the opening.\n" +
+  "- Take their pushback seriously. If they tell you the board misread something, update — don't defend the opening. If they're avoiding something, name it, kindly. If they've talked themselves somewhere unwise, say so.\n" +
+  "- Keep the board's standing rules every turn: never issue a verdict or tell them what to do, never flatter, disagree when warranted, and name the real tension honestly. The decision stays theirs.\n" +
+  "- Converge, don't prolong. Your aim is to help them reach their own clarity and then let them go — a good chair makes the meeting end, not continue forever. When they've reached a decision, or the useful work is done, say so plainly and hand it back; do not manufacture more deliberation to keep them here.\n" +
+  "- Speak in the first person as the Chair, directly to them, warm and unhurried. Usually 120–200 words; a little more only when you're voicing a director.\n" +
+  "- Hard limit, every turn: if what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set the facilitation aside and tell them plainly to reach a real person right now — a crisis line, a doctor, a lawyer.";
+
+// ── Internet access (Companion only; server-side, on the user's key) ─────────
 // Live web search + the ability to read a specific page. These are Anthropic
-// server tools: the query is executed on Anthropic's side and the model gets the
-// results back inside the same call — no separate endpoint, and the browser only
-// ever talks to /v1/messages. Opus 4.8 supports the dynamic-filtering variants
-// (the model filters results before they hit context). max_uses caps cost and
-// latency per reply. This adds a NEW off-device pathway beyond the digest — the
-// system prompt forbids putting the person's private data into a search, and the
-// UI discloses it plainly. Flagged for founder ratification against REQUIREMENTS
-// §1.3/§2.1, not silently amended (see KNOWN_RISKS).
+// server tools: the query runs on Anthropic's side and the model gets the
+// results back inside the same call. Only Companion sends these; Council calls
+// carry no tools. max_uses caps cost and latency per reply.
 const WEB_TOOLS = [
   { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
   { type: 'web_fetch_20260209',  name: 'web_fetch',  max_uses: 5 }
@@ -498,8 +719,11 @@ const MAX_RETRIES   = 3;   // extra attempts on a transient failure (network / r
 const RETRY_BASE_MS = 900; // exponential backoff base → 0.9s, 1.8s, 3.6s
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── Anthropic call (browser-direct, user's key) ─────────────────────────────
-async function callClaudeRaw(system, messages, maxTokens) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Anthropic call layer (browser-direct, user's key). Both modes route
+// through here; Companion passes WEB_TOOLS, Council passes none.
+// ─────────────────────────────────────────────────────────────────────────────
+async function callClaudeRaw(system, messages, maxTokens, tools) {
   // Server tools run inside Anthropic's own agent loop. A long search turn can
   // come back with stop_reason "pause_turn" — resume by re-sending with the
   // partial assistant turn appended (and NO extra user turn). Accumulate every
@@ -509,7 +733,7 @@ async function callClaudeRaw(system, messages, maxTokens) {
   let convo = messages.slice();
   let text = '';
   for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
-    const data = await postWithRetry(system, convo, maxTokens);
+    const data = await postWithRetry(system, convo, maxTokens, tools);
     (data.content || []).forEach(b => { if (b.type === 'text' && b.text) text += b.text; });
     if (data.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
       convo = convo.concat([{ role: 'assistant', content: data.content }]);
@@ -519,17 +743,18 @@ async function callClaudeRaw(system, messages, maxTokens) {
   }
   return text.trim();
 }
+// Single-user-turn convenience (Council opening round; no tools).
+function callClaude(system, userText) {
+  return callClaudeRaw(system, [{ role: 'user', content: userText }], 1024);
+}
 
 // One request, retried with exponential backoff on TRANSIENT failures — a
-// dropped/reset connection ("Load failed"), a 429, or a 5xx. Web-search turns
-// are slower and drop more often, so this quietly rides out the common blip
-// before the user ever sees it. Non-transient errors (bad key, malformed
-// request) fail fast; if every retry is spent, the error surfaces to send()
-// with a manual "Try again". Returns parsed JSON.
-async function postWithRetry(system, convo, maxTokens) {
+// dropped/reset connection ("Load failed"), a 429, or a 5xx. Non-transient
+// errors (bad key, malformed request) fail fast. Returns parsed JSON.
+async function postWithRetry(system, convo, maxTokens, tools) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await postOnce(system, convo, maxTokens);
+      return await postOnce(system, convo, maxTokens, tools);
     } catch (err) {
       if (err && err.retryable && attempt < MAX_RETRIES) {
         await sleep(RETRY_BASE_MS * Math.pow(2, attempt));   // 0.9s, 1.8s, 3.6s
@@ -541,7 +766,9 @@ async function postWithRetry(system, convo, maxTokens) {
 }
 
 // A single POST. Throws an ApiError; `.retryable` marks the transient ones.
-async function postOnce(system, convo, maxTokens) {
+async function postOnce(system, convo, maxTokens, tools) {
+  const body = { model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo };
+  if (tools && tools.length) body.tools = tools;
   let res;
   try {
     res = await fetch(API_URL, {
@@ -552,7 +779,7 @@ async function postOnce(system, convo, maxTokens) {
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo, tools: WEB_TOOLS })
+      body: JSON.stringify(body)
     });
   } catch (_) {
     // Network-level failure — offline, or a dropped/reset connection (WebKit's "Load failed").
@@ -572,9 +799,26 @@ function ApiError(kind, message) { this.kind = kind; this.message = message; }
 ApiError.prototype = Object.create(Error.prototype);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRANSIENT CONTEXT — read the suite's data fresh, same-origin, at reply time.
+// Shared small utilities
 // ─────────────────────────────────────────────────────────────────────────────
-
+function el(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function toParas(text) {
+  return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    .map(p => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
+}
+function deliberating() {
+  return '<div class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+}
+function snippet(s) { s = s.replace(/\s+/g, ' ').trim(); return s.length > 80 ? s.slice(0, 80) + '…' : s; }
+function fmtDateTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
 // Canonical local-time day key — MUST match the one the writer apps use (see the
 // hub). Never reuse an app's internal date helper for this.
 function hcDayKey(d) {
@@ -589,8 +833,41 @@ function niceDate(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// GOALS — from Climb's localStorage blob. Render the active goal tree as an
-// indented outline, with the focus goal marked and open steps listed.
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+let apiKey = readApiKey();
+let mode   = (document.documentElement.dataset.mode === 'council') ? 'council' : 'companion';
+let currentView = 'home';
+
+// Companion state
+let store  = loadStore();   // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
+let active = null;          // the open conversation (a reference into store.conversations)
+let busy   = false;
+
+// Council state
+let running   = false;
+let replying  = false;      // a follow-up turn is in flight
+let current   = null;       // the live/open meeting: {id, situation, directors, chairOpening, thread, feedback}
+let keyRejected = false;
+
+// DOM refs (present at load — script runs at end of body)
+const threadEl = el('thread');
+const msgBox   = el('msg-box');
+const sendBtn  = el('send-btn');
+const beginBtn = el('begin-btn');
+const sitBox   = el('situation');
+const convBtn  = el('convene-btn');
+const board    = el('board');
+const menuEl   = el('menu');
+const menuBtn  = el('menu-btn');
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COMPANION
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── TRANSIENT CONTEXT — read the suite's data fresh, same-origin, at reply time.
+// GOALS — from Climb's localStorage blob.
 function readGoals() {
   let st; try { st = JSON.parse(localStorage.getItem('hill-climbing-climb') || 'null'); } catch (_) {}
   if (!st || !st.goals) return null;
@@ -625,7 +902,7 @@ function readGoals() {
 // JOURNAL — from Reflect's IndexedDB. Opened with NO version and NEVER creating a
 // store: if reflect.html has never run, our open could create a storeless
 // 'journal' DB and break reflect's own lazy store creation, so if OUR open
-// created it we delete it again. (Same guard the hub uses — see its comment.)
+// created it we delete it again. (Same guard the hub uses.)
 function readJournal() {
   return new Promise(function (resolve) {
     let settled = false, created = false;
@@ -734,9 +1011,7 @@ async function gatherContext() {
   return { system: COMPANION_SYSTEM + '\n\n' + digest, digest, summary };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Conversation store (localStorage blob → hc-sync as a single encrypted doc)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Conversation store (localStorage blob → hc-sync as a single encrypted doc) ─
 function loadStore() {
   try {
     const s = JSON.parse(localStorage.getItem(LS_STORE) || 'null');
@@ -761,39 +1036,20 @@ function apiMessages(conv) {
   return conv.thread.map(t => ({ role: t.role, content: t.text }));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Talk
-// ─────────────────────────────────────────────────────────────────────────────
-const threadEl  = document.getElementById('thread');
-const msgBox    = document.getElementById('msg-box');
-const sendBtn   = document.getElementById('send-btn');
-const beginBtn  = document.getElementById('begin-btn');
-
+// ── Talk (Companion) ─────────────────────────────────────────────────────────
 function renderThread() {
   const turns = active ? active.thread.filter(t => !t.hidden) : [];
-  threadEl.innerHTML = turns.map(t => turnHTML(t.role, t.text)).join('');
+  threadEl.innerHTML = turns.map(t => cTurnHTML(t.role, t.text)).join('');
   refreshRegenerate();
 }
-function turnHTML(role, text, isErr) {
+function cTurnHTML(role, text, isErr) {
   const who = role === 'user' ? 'You' : 'Companion';
   return '<div class="turn ' + (role === 'user' ? 'you' : 'them') + (isErr ? ' error' : '') + '">' +
     '<div class="turn-who">' + who + '</div>' +
     '<div class="turn-body">' + toParas(text) + '</div>' +
   '</div>';
 }
-function deliberating() {
-  return '<div class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
-}
-function toParas(text) {
-  return text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
-    .map(p => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('');
-}
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 function scrollEnd() { msgBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-function snippet(s) { s = s.replace(/\s+/g, ' ').trim(); return s.length > 80 ? s.slice(0, 80) + '…' : s; }
 
 function setBusy(on) {
   busy = on;
@@ -804,7 +1060,7 @@ function setBusy(on) {
 async function send(text, opts) {
   opts = opts || {};
   if (busy) return;
-  if (!apiKey) { showSetup(true); return; }
+  if (!apiKey) { setView('setup'); return; }
   text = (text || '').trim();
   if (!text) { msgBox.focus(); return; }
 
@@ -814,18 +1070,16 @@ async function send(text, opts) {
   if (!active.title) active.title = opts.seed ? ('A check-in · ' + niceDate(active.ts)) : snippet(text);
   persist();
 
-  if (!opts.seed) { threadEl.insertAdjacentHTML('beforeend', turnHTML('user', text)); msgBox.value = ''; }
+  if (!opts.seed) { threadEl.insertAdjacentHTML('beforeend', cTurnHTML('user', text)); msgBox.value = ''; }
   respond();
 }
 
 // Answer whatever user turn currently sits at the end of the open thread. Split
 // out of send() so a failed reply can be retried in place: the trailing user
-// turn is already in active.thread (and persisted), so retry never re-appends
-// it — it just re-runs the call. postWithRetry() has already ridden out the
-// transient blips; anything that reaches the catch is worth showing the user.
+// turn is already in active.thread (and persisted), so retry never re-appends it.
 async function respond() {
   if (busy || !active || !active.thread.length) return;
-  const stale = document.getElementById('err-turn');
+  const stale = el('err-turn');
   if (stale) stale.remove();
   threadEl.insertAdjacentHTML('beforeend',
     '<div class="turn them" id="pending"><div class="turn-who">Companion</div><div class="turn-body">' + deliberating() + '</div></div>');
@@ -833,25 +1087,23 @@ async function respond() {
 
   try {
     const ctx = await gatherContext();
-    const reply = await callClaudeRaw(ctx.system, apiMessages(active), 1200);
+    const reply = await callClaudeRaw(ctx.system, apiMessages(active), 1200, WEB_TOOLS);
     if (!reply) throw new ApiError('empty', 'That reply came back empty.');
     active.thread.push({ role: 'assistant', text: reply });
     persist();
-    const pend = document.getElementById('pending');
-    if (pend) pend.outerHTML = turnHTML('assistant', reply);
+    const pend = el('pending');
+    if (pend) pend.outerHTML = cTurnHTML('assistant', reply);
   } catch (err) {
-    const pend = document.getElementById('pending');
+    const pend = el('pending');
     if (pend) pend.remove();
     showErrorTurn((err && err.message) || 'I couldn’t respond just now.');
-    if (err && err.kind === 'key') showSetup(true);
+    if (err && err.kind === 'key') setView('setup');
   } finally {
     setBusy(false); refreshRegenerate(); refreshSees(); scrollEnd();
   }
 }
 
 // A failed reply, shown with a "Try again" that re-answers the same user turn.
-// Deliberately NOT written into active.thread — so retry (and any re-render)
-// just re-runs respond() against the still-unanswered trailing user turn.
 function showErrorTurn(message) {
   threadEl.insertAdjacentHTML('beforeend',
     '<div class="turn them error" id="err-turn">' +
@@ -860,14 +1112,12 @@ function showErrorTurn(message) {
         '<div class="err-actions"><button class="ghost retry-btn" id="retry-btn" type="button">Try again</button></div>' +
       '</div>' +
     '</div>');
-  const rb = document.getElementById('retry-btn');
+  const rb = el('retry-btn');
   if (rb) rb.addEventListener('click', respond);
 }
 
 // Regenerate — discard the last companion reply and ask again from the same
-// preceding turn. Offered only on the LAST reply (regenerating a mid-thread one
-// would orphan everything after it). Reuses respond()'s call + retry machinery:
-// once the reply is popped, the trailing turn is again the one to answer.
+// preceding turn. Offered only on the LAST reply.
 function regenerate() {
   if (busy || !active) return;
   const visible = active.thread.filter(t => !t.hidden);
@@ -881,10 +1131,7 @@ function regenerate() {
   respond();        // re-answer it
 }
 
-// Attach a quiet "Regenerate" control to the last companion reply, and nowhere
-// else. Called after each render and when the busy state settles; a no-op (and
-// self-clearing) while busy, mid-generation, on an error turn, or when the last
-// visible turn is the user's (use "Try again" there instead).
+// Attach a quiet "Regenerate" control to the last companion reply, and nowhere else.
 function refreshRegenerate() {
   document.querySelectorAll('.regen-wrap').forEach(el => el.remove());
   if (busy || !active) return;
@@ -900,13 +1147,7 @@ function refreshRegenerate() {
   if (b) b.addEventListener('click', regenerate);
 }
 
-sendBtn.addEventListener('click', () => send(msgBox.value));
-beginBtn.addEventListener('click', () => { if (!active || !active.thread.length) send(OPENING_NUDGE, { seed: true }); else msgBox.focus(); });
-msgBox.addEventListener('keydown', e => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(msgBox.value); }
-});
-
-// ── "What it can see" transparency chip + full preview ───────────────────────
+// ── "What it can see" transparency chip + full preview (Companion) ───────────
 function refreshSees() {
   gatherContext().then(ctx => {
     const s = ctx.summary;
@@ -915,40 +1156,36 @@ function refreshSees() {
       s.entries + ' journal ' + (s.entries === 1 ? 'entry' : 'entries'),
       'practice across ' + s.apps.length + ' app' + (s.apps.length === 1 ? '' : 's')
     ];
-    const chip = document.getElementById('sees-chip');
+    const chip = el('sees-chip');
+    if (!chip || mode !== 'companion') return;
     chip.classList.remove('hidden');
     chip.innerHTML = '<span class="sees-dot"></span><span>Right now it can see ' + parts.join(' · ') +
       '.</span> <button class="sees-link" id="sees-open" type="button">See exactly what’s shared →</button>';
-    const open = document.getElementById('sees-open');
-    if (open) open.addEventListener('click', showSees);
+    const open = el('sees-open');
+    if (open) open.addEventListener('click', () => setView('sees'));
   }).catch(() => {});
 }
 
-function showSees() {
-  setMenu(false);
-  switchView(null);
-  const v = document.getElementById('sees-view');
-  v.classList.remove('hidden');
+function renderSees() {
+  const v = el('sees-view');
   v.innerHTML =
     '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
     '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time, and never stored in the saved conversation. Nothing else about you is sent. When a question needs it, the companion can also search the web on your key — but only with general queries it writes itself, never your private details.</p>' +
     '<div class="digest-box" id="digest-box">Reading your goals, journal, and activity…</div></div>' +
     '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
-  document.getElementById('sees-back').addEventListener('click', () => switchView('talk'));
+  el('sees-back').addEventListener('click', () => setView('home'));
   gatherContext().then(ctx => {
-    const box = document.getElementById('digest-box');
+    const box = el('digest-box');
     if (box) box.textContent = ctx.digest;
   }).catch(() => {
-    const box = document.getElementById('digest-box');
+    const box = el('digest-box');
     if (box) box.textContent = 'Could not read your data.';
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// History
-// ─────────────────────────────────────────────────────────────────────────────
-function renderHistory() {
-  const list = document.getElementById('hist-list');
+// ── History (Companion) ──────────────────────────────────────────────────────
+function renderCompanionHistory() {
+  const list = el('hist-list');
   const all = store.conversations;
   if (!all.length) {
     list.innerHTML = '<div class="empty">No conversations yet.<br>Say something in Talk and it’ll be kept here — on this device, and synced if you’ve signed in at the hub.</div>';
@@ -967,72 +1204,14 @@ function renderHistory() {
 }
 function openConversation(c) {
   active = c;
-  switchView('talk');
-  renderThread();
-  refreshSees();
+  setView('home');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => msgBox.focus(), 60);
 }
-function fmtDateTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
-    ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Setup / key gate
-// ─────────────────────────────────────────────────────────────────────────────
-function showSetup(force) {
-  setMenu(false);
-  const s = document.getElementById('setup');
-  s.classList.remove('hidden');
-  ['talk-view','history-view','about-view','sees-view'].forEach(id => document.getElementById(id).classList.add('hidden'));
-  s.innerHTML =
-    '<div class="card">' +
-      '<h2>' + (apiKey ? 'Your API key' : 'One thing before we begin') + '</h2>' +
-      '<p>The companion runs on Claude, using <strong>your own Anthropic API key</strong>. Your key stays in this browser. When you send a message, it — together with your current goals, journal, and recent activity — is sent from this device straight to Anthropic’s API on your key. No server of ours sits in between.</p>' +
-      '<p>This, like the Council, is one of the practices in Hill Climbing that sends anything off your device. It happens only when you send a message. On your key it may also run a web search when a question needs one — written as a general query, never your private details.</p>' +
-      '<ul>' +
-        '<li>Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (opens Anthropic).</li>' +
-        '<li>Billed to your Anthropic account — a reply is a few cents.</li>' +
-        '<li>Stored only here, in this browser — one key shared across the hub’s AI apps (set it in Council or Nourish and it works here too). Remove it any time from the menu.</li>' +
-      '</ul>' +
-      '<input class="key" id="key-input" type="password" spellcheck="false" autocomplete="off" placeholder="sk-ant-…" value="' + esc(apiKey) + '">' +
-      '<div class="key-err" id="key-err"></div>' +
-      '<div class="actions">' +
-        '<button class="primary" id="key-save" type="button">Save key</button>' +
-        (apiKey ? '<button class="ghost" id="key-remove" type="button">Remove key</button>' : '') +
-      '</div>' +
-    '</div>';
-  const input = document.getElementById('key-input');
-  const err = document.getElementById('key-err');
-  input.focus();
-  document.getElementById('key-save').addEventListener('click', () => {
-    const v = input.value.trim();
-    if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
-    apiKey = v;
-    writeApiKey(v);
-    s.classList.add('hidden');
-    switchView('talk');
-    msgBox.focus();
-  });
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('key-save').click(); });
-  const rm = document.getElementById('key-remove');
-  if (rm) rm.addEventListener('click', () => {
-    apiKey = '';
-    clearApiKey();
-    showSetup(true);
-  });
-}
-
-// ── About ────────────────────────────────────────────────────────────────────
-function showAbout() {
-  setMenu(false);
-  switchView(null);
-  const v = document.getElementById('about-view');
-  v.classList.remove('hidden');
-  v.innerHTML =
-    '<div class="lede" style="margin-bottom:16px;">About the companion.</div>' +
+// ── About (Companion) ────────────────────────────────────────────────────────
+function companionAboutHTML() {
+  return '<div class="lede" style="margin-bottom:16px;">About the companion.</div>' +
     '<div class="card">' +
       '<p>The companion is one steady presence you can talk with about your own life. Unlike the Council — a board you bring a single decision to — this is a continuing conversation, and it arrives already knowing what you keep in the suite: your goals from <strong>Climb</strong>, your entries from <strong>Reflect</strong>, and the shape of your recent <strong>practice</strong>.</p>' +
       '<p>It reads that data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten. The raw text is never written into the saved conversation — only your dialogue is kept. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
@@ -1041,63 +1220,543 @@ function showAbout() {
       '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
     '</div>' +
     '<div class="actions"><button class="ghost" id="about-back" type="button">Back</button></div>';
-  document.getElementById('about-back').addEventListener('click', () => switchView('talk'));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Views
-// ─────────────────────────────────────────────────────────────────────────────
-function switchView(view) {
-  document.getElementById('setup').classList.add('hidden');
-  document.getElementById('about-view').classList.add('hidden');
-  document.getElementById('sees-view').classList.add('hidden');
-  document.getElementById('talk-view').classList.toggle('hidden', view !== 'talk');
-  document.getElementById('history-view').classList.toggle('hidden', view !== 'history');
-  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  if (view === 'talk') { renderThread(); refreshSees(); }
-  if (view === 'history') renderHistory();
-}
-document.querySelectorAll('.mode-btn').forEach(b =>
-  b.addEventListener('click', () => { if (!apiKey && b.dataset.view === 'talk') { showSetup(true); return; } switchView(b.dataset.view); }));
+// ═════════════════════════════════════════════════════════════════════════════
+// COUNCIL
+// ═════════════════════════════════════════════════════════════════════════════
 
-// ── Menu wiring ──────────────────────────────────────────────────────────────
-const menuEl = document.getElementById('menu');
-const menuBtn = document.getElementById('menu-btn');
-const menuPanel = document.getElementById('menu-panel');
+// ── Convene the board ────────────────────────────────────────────────────────
+async function convene(situation) {
+  running = true;
+  convBtn.disabled = true;
+  convBtn.textContent = 'The board is meeting…';
+
+  board.classList.remove('hidden');
+  board.innerHTML = renderBrought(situation) +
+    '<div class="directors">' +
+    SEATS.map(s => seatShell(s)).join('') +
+    '</div>' +
+    '<div id="chair-slot"></div>';
+
+  const userText = broughtBlock(situation);
+
+  // Four directors deliberate in parallel — no anchoring on one another, so the
+  // dissent is genuine rather than a chain of agreement.
+  const results = await Promise.all(SEATS.map(async seat => {
+    const system = PREAMBLE.replace('{SEAT}', seat.name).replace('{CHARGE}', seat.charge);
+    const sb = document.querySelector('#seat-' + seat.id + ' .seat-body');
+    try {
+      const text = await callClaude(system, userText);
+      sb.innerHTML = toParas(text);
+      return { seat, text, ok: true };
+    } catch (err) {
+      document.getElementById('seat-' + seat.id).classList.add('error');
+      sb.innerHTML = '<p>' + esc(err.message || 'This director couldn’t be reached.') + '</p>';
+      if (err.kind === 'key') keyRejected = true;
+      return { seat, text: '', ok: false };
+    }
+  }));
+
+  const spoke = results.filter(r => r.ok);
+  const chairSlot = el('chair-slot');
+
+  if (spoke.length === 0) {
+    // Total failure — surface it, save nothing.
+    chairSlot.innerHTML = '';
+    finishConvene(situation, results, '', false);
+    return;
+  }
+
+  // Chair closes the meeting, seeing the directors who spoke.
+  chairSlot.innerHTML = chairShell();
+  const chairBody = document.querySelector('#seat-chair .seat-body');
+  const chairInput = broughtBlock(situation) + '\n\nThe directors said:\n\n' +
+    spoke.map(r => '## ' + r.seat.name + '\n' + r.text).join('\n\n');
+  let chairText = '';
+  try {
+    chairText = await callClaude(CHAIR_SYSTEM, chairInput);
+    chairBody.innerHTML = toParas(chairText);
+  } catch (err) {
+    document.getElementById('seat-chair').classList.add('error');
+    chairBody.innerHTML = '<p>' + esc(err.message || 'The Chair couldn’t close the meeting.') + '</p>';
+  }
+
+  finishConvene(situation, results, chairText, spoke.length > 0);
+}
+
+function finishConvene(situation, results, chairText, save) {
+  running = false;
+  convBtn.disabled = false;
+  convBtn.textContent = 'Convene the board';
+
+  const slot = el('chair-slot');
+  let savedId = null;
+  if (save) {
+    const sess = {
+      id: Date.now(),
+      ts: Date.now(),
+      situation: situation,
+      directors: results.filter(r => r.ok).map(r => ({ id: r.seat.id, name: r.seat.name, text: r.text })),
+      chair: chairText,
+      feedback: null
+    };
+    saveSession(sess);
+    savedId = sess.id;
+  }
+
+  // Build the live meeting, then render the continuation UI.
+  if (savedId) {
+    const cur = {
+      id: savedId,
+      situation: situation,
+      directors: results.filter(r => r.ok).map(r => ({ name: r.seat.name, text: r.text })),
+      chairOpening: chairText,
+      thread: [],
+      feedback: null
+    };
+    slot.insertAdjacentHTML('beforeend',
+      '<div id="mtg-thread"></div>' +
+      replyComposer() +
+      feedbackBlock(cur.id, null) +
+      '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring a new situation</button></div>');
+    wireMeeting(cur);
+  } else {
+    // Total failure — just an actions row, nothing saved.
+    slot.insertAdjacentHTML('beforeend',
+      '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring another situation</button></div>');
+    el('again-btn').addEventListener('click', resetConvene);
+  }
+
+  if (keyRejected) { keyRejected = false; setView('setup'); }
+}
+
+// ── Tester note ──────────────────────────────────────────────────────────────
+// A per-session capture: how the board did (POC evidence) plus a prominent flag
+// for "something felt off" — the adverse-event signal.
+const CLARITY = ['Off', 'Meh', 'Somewhat', 'Clarifying'];
+function feedbackBlock(id, fb) {
+  fb = fb || {};
+  const scale = CLARITY.map((label, i) =>
+    '<button class="fb-opt' + (fb.clarity === i ? ' sel' : '') + '" data-fb-clarity="' + i + '" type="button">' + label + '</button>'
+  ).join('');
+  return '<div class="feedback" data-fb-id="' + id + '">' +
+    '<h3>Before you go — how did the board do?</h3>' +
+    '<div class="fb-label">Did it help you see the decision more clearly?</div>' +
+    '<div class="fb-scale">' + scale + '</div>' +
+    '<div class="fb-label">Anything that felt off, wrong, or that a tester should know?</div>' +
+    '<textarea class="fb-note" placeholder="Optional — what worked, what didn’t, anything that surprised you.">' + esc(fb.note || '') + '</textarea>' +
+    '<div class="fb-row">' +
+      '<button class="fb-flag' + (fb.flagged ? ' on' : '') + '" data-fb-flag type="button">⚑ Something here felt off or concerning</button>' +
+      '<button class="ghost fb-save" data-fb-save type="button">Save note</button>' +
+      '<span class="fb-status" data-fb-status>' + (fb.ts ? 'Saved' : '') + '</span>' +
+    '</div>' +
+  '</div>';
+}
+function wireFeedback(id) {
+  const elx = document.querySelector('.feedback[data-fb-id="' + id + '"]');
+  if (!elx) return;
+  const existing = ((loadHist().find(s => s.id === id || s.ts === id) || {}).feedback) || {};
+  const state = { clarity: (existing.clarity != null ? existing.clarity : null), note: existing.note || '', flagged: !!existing.flagged };
+  elx.querySelectorAll('[data-fb-clarity]').forEach(b => b.addEventListener('click', () => {
+    state.clarity = +b.dataset.fbClarity;
+    elx.querySelectorAll('[data-fb-clarity]').forEach(x => x.classList.toggle('sel', x === b));
+  }));
+  const flag = elx.querySelector('[data-fb-flag]');
+  flag.addEventListener('click', () => { state.flagged = !state.flagged; flag.classList.toggle('on', state.flagged); });
+  elx.querySelector('[data-fb-save]').addEventListener('click', () => {
+    state.note = elx.querySelector('.fb-note').value.trim();
+    updateFeedback(id, { clarity: state.clarity, note: state.note, flagged: state.flagged, ts: Date.now() });
+    elx.querySelector('[data-fb-status]').textContent = state.flagged ? 'Saved & flagged ✓' : 'Saved ✓';
+  });
+}
+function updateFeedback(id, fb) {
+  const all = loadHist();
+  const s = all.find(x => x.id === id || x.ts === id);
+  if (!s) return;
+  s.feedback = fb;
+  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+}
+
+function resetConvene() {
+  board.classList.add('hidden');
+  board.innerHTML = '';
+  current = null;
+  sitBox.value = '';
+  sitBox.focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Continuing meeting (Chair facilitates) ───────────────────────────────────
+function replyComposer() {
+  return '<div class="reply">' +
+    '<textarea id="reply-box" placeholder="Respond to the board — push back, add what they’re missing, tell them what they got wrong, or ask them to go deeper.  (⌘/Ctrl+Enter to send)"></textarea>' +
+    '<div class="reply-row">' +
+      '<button class="primary" id="reply-btn" type="button">Reply to the board</button>' +
+      '<span class="reply-note">The meeting continues until you’ve reached your own clarity.</span>' +
+    '</div>' +
+  '</div>';
+}
+function mtgTurnHTML(role, text, isErr) {
+  const who = role === 'user' ? 'You' : 'The Chair';
+  return '<div class="turn ' + (role === 'user' ? 'you' : 'chair-turn') + (isErr ? ' error' : '') + '">' +
+    '<div class="turn-who">' + who + '</div>' +
+    '<div class="turn-body">' + toParas(text) + '</div>' +
+  '</div>';
+}
+// Rebuild the API message list: situation, the opening deliberation as one prior
+// assistant turn, then the real back-and-forth. Ends with the newest user reply.
+function threadMessages(cur) {
+  const msgs = [{ role: 'user', content: broughtBlock(cur.situation) }];
+  const opening = cur.directors.map(d => '## ' + d.name + '\n' + d.text).join('\n\n') +
+    '\n\n## The Chair\n' + cur.chairOpening;
+  msgs.push({ role: 'assistant', content: opening });
+  (cur.thread || []).forEach(t => msgs.push({ role: t.role === 'user' ? 'user' : 'assistant', content: t.text }));
+  return msgs;
+}
+function persistThread() {
+  if (!current) return;
+  const all = loadHist();
+  const s = all.find(x => x.id === current.id || x.ts === current.id);
+  if (s) { s.thread = current.thread; try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {} }
+}
+function scrollToEnd() {
+  const box = el('reply-box');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+async function sendReply() {
+  if (replying || !current) return;
+  if (!apiKey) { setView('setup'); return; }
+  const box = el('reply-box');
+  const text = box.value.trim();
+  if (!text) { box.focus(); return; }
+
+  replying = true;
+  const btn = el('reply-btn');
+  btn.disabled = true; btn.textContent = 'The Chair is considering…';
+
+  current.thread = current.thread || [];
+  current.thread.push({ role: 'user', text: text });
+  persistThread();
+
+  const mt = el('mtg-thread');
+  mt.insertAdjacentHTML('beforeend', mtgTurnHTML('user', text));
+  box.value = '';
+  mt.insertAdjacentHTML('beforeend',
+    '<div class="turn chair-turn" id="mtg-pending"><div class="turn-who">The Chair</div><div class="turn-body">' + deliberating() + '</div></div>');
+  scrollToEnd();
+
+  try {
+    const reply = await callClaudeRaw(FACILITATOR_SYSTEM, threadMessages(current), 1536);
+    current.thread.push({ role: 'chair', text: reply });
+    persistThread();
+    const pend = el('mtg-pending');
+    if (pend) pend.outerHTML = mtgTurnHTML('chair', reply);
+  } catch (err) {
+    const pend = el('mtg-pending');
+    if (pend) pend.outerHTML = mtgTurnHTML('chair', err.message || 'The Chair couldn’t respond just now.', true);
+    if (err.kind === 'key') setView('setup');
+  } finally {
+    replying = false;
+    btn.disabled = false; btn.textContent = 'Reply to the board';
+    scrollToEnd();
+  }
+}
+// Wire a rendered meeting (live or reopened) to its controls.
+function wireMeeting(cur) {
+  current = cur;
+  const again = el('again-btn');
+  if (again) again.addEventListener('click', resetConvene);
+  const rbtn = el('reply-btn');
+  if (rbtn) rbtn.addEventListener('click', sendReply);
+  const rbox = el('reply-box');
+  if (rbox) rbox.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendReply(); }
+  });
+  if (cur.id != null) wireFeedback(cur.id);
+}
+
+// ── Rendering (Council) ──────────────────────────────────────────────────────
+function broughtBlock(situation) {
+  return 'The situation they brought to the board:\n\n"""\n' + situation + '\n"""';
+}
+function renderBrought(situation) {
+  return '<div class="brought">' + esc(situation) + '</div>';
+}
+function seatShell(seat) {
+  return '<div class="seat" id="seat-' + seat.id + '">' +
+    '<div class="seat-name">' + esc(seat.name) + '</div>' +
+    '<div class="seat-charge">' + esc(seat.charge_short) + '</div>' +
+    '<div class="seat-body">' + deliberating() + '</div>' +
+    '</div>';
+}
+function chairShell() {
+  return '<div class="chair seat" id="seat-chair">' +
+    '<div class="seat-name">The Chair</div>' +
+    '<div class="seat-charge">the opening synthesis · reply below to keep going</div>' +
+    '<div class="seat-body">' + deliberating() + '</div>' +
+    '</div>';
+}
+
+// ── History (Council, localStorage) ──────────────────────────────────────────
+function loadHist() {
+  try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]'); } catch (_) { return []; }
+}
+function saveSession(sess) {
+  const all = loadHist();
+  all.unshift(sess);
+  if (all.length > HIST_CAP) all.length = HIST_CAP;
+  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+}
+function renderCouncilHistory() {
+  const all = loadHist();
+  const list = el('hist-list');
+  if (!all.length) {
+    list.innerHTML = '<div class="empty">No deliberations yet.<br>Convene the board on a real decision and it’ll be kept here — only on this device.</div>';
+    return;
+  }
+  list.innerHTML = all.map((s, i) => {
+    const mark = s.feedback
+      ? (s.feedback.flagged ? '<span class="hist-flag">⚑ flagged</span>' : '<span class="hist-noted">noted</span>')
+      : '';
+    return '<div class="hist-item" data-i="' + i + '">' +
+      '<div class="hist-date">' + fmtDateTime(s.ts) + mark + '</div>' +
+      '<div class="hist-snippet">' + esc(s.situation) + '</div>' +
+    '</div>';
+  }).join('');
+  list.querySelectorAll('.hist-item').forEach(el =>
+    el.addEventListener('click', () => openSession(all[+el.dataset.i])));
+}
+function openSession(s) {
+  setView('home');
+  board.classList.remove('hidden');
+  const dirs = (s.directors || []).map(d =>
+    '<div class="seat">' +
+      '<div class="seat-name">' + esc(d.name) + '</div>' +
+      '<div class="seat-body">' + toParas(d.text) + '</div>' +
+    '</div>').join('');
+  const chair = s.chair ?
+    '<div class="chair seat"><div class="seat-name">The Chair</div>' +
+    '<div class="seat-charge">the opening synthesis · reply below to keep going</div>' +
+    '<div class="seat-body">' + toParas(s.chair) + '</div></div>' : '';
+  const sid = s.id || s.ts;
+  const cur = {
+    id: sid,
+    situation: s.situation,
+    directors: (s.directors || []).map(d => ({ name: d.name, text: d.text })),
+    chairOpening: s.chair || '',
+    thread: (s.thread || []).slice(),
+    feedback: s.feedback || null
+  };
+  const canContinue = !!s.chair && cur.directors.length > 0;
+  const threadHTML = cur.thread.map(t => mtgTurnHTML(t.role, t.text)).join('');
+  board.innerHTML = renderBrought(s.situation) +
+    '<div class="directors">' + dirs + '</div>' + chair +
+    '<div id="mtg-thread">' + threadHTML + '</div>' +
+    (canContinue ? replyComposer() : '') +
+    feedbackBlock(sid, s.feedback) +
+    '<div class="board-actions"><button class="ghost" id="again-btn" type="button">Bring a new situation</button></div>';
+  wireMeeting(cur);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── About (Council) ──────────────────────────────────────────────────────────
+function councilAboutHTML() {
+  return '<div class="lede" style="margin-bottom:16px;">About the council.</div>' +
+    '<div class="card">' +
+      '<p>The council is a board of directors for your own life. You bring it a real decision or situation; four directors respond, each from a different vantage; then the Chair closes the meeting.</p>' +
+      '<p>It is built on one belief: <strong>a good advisor makes your own judgment sharper, not your dependence deeper.</strong> So the board is instructed never to decide for you, never to flatter you, and to disagree — with you and with each other — when that’s the honest thing. The Chair synthesises the tension but casts no vote. The decision stays yours, always.</p>' +
+      '<p style="color:var(--dim);">The four seats:</p>' +
+      '<ul>' +
+        SEATS.map(s => '<li><strong style="color:var(--accent);">' + esc(s.name) + '</strong> — ' + esc(s.charge_short) + '.</li>').join('') +
+        '<li><strong style="color:var(--accent);">The Chair</strong> — names the real tension and hands the choice back to you.</li>' +
+      '</ul>' +
+      '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a decision, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
+    '</div>' +
+    '<div class="actions"><button class="ghost" id="about-back" type="button">Back</button></div>';
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SHARED CHROME — setup, about, views, sub-nav, menu
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Setup / key gate (shared; the key is one credential for both modes) ──────
+function renderSetup() {
+  const s = el('setup');
+  s.innerHTML =
+    '<div class="card">' +
+      '<h2>' + (apiKey ? 'Your API key' : 'One thing before we begin') + '</h2>' +
+      '<p>Companion and Council both run on Claude, using <strong>your own Anthropic API key</strong>. Your key stays in this browser. When you talk with the companion or convene the council, what you send goes from this device straight to Anthropic’s API on your key — no server of ours sits in between.</p>' +
+      '<p>These are the practices in Hill Climbing that send anything off your device, and only when you choose to — a message to the companion, or convening the board. The companion can also run a web search on your key when a question needs one, written as a general query, never your private details.</p>' +
+      '<ul>' +
+        '<li>Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (opens Anthropic).</li>' +
+        '<li>Billed to your Anthropic account — a reply is a few cents.</li>' +
+        '<li>Stored only here, in this browser — one key shared across the hub’s AI apps. Remove it any time from the menu.</li>' +
+      '</ul>' +
+      '<input class="key" id="key-input" type="password" spellcheck="false" autocomplete="off" placeholder="sk-ant-…" value="' + esc(apiKey) + '">' +
+      '<div class="key-err" id="key-err"></div>' +
+      '<div class="actions">' +
+        '<button class="primary" id="key-save" type="button">Save key</button>' +
+        (apiKey ? '<button class="ghost" id="key-remove" type="button">Remove key</button>' : '') +
+      '</div>' +
+    '</div>';
+  const input = el('key-input');
+  const err = el('key-err');
+  input.focus();
+  el('key-save').addEventListener('click', () => {
+    const v = input.value.trim();
+    if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
+    apiKey = v;
+    writeApiKey(v);
+    setView('home');
+    if (mode === 'companion') msgBox.focus();
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') el('key-save').click(); });
+  const rm = el('key-remove');
+  if (rm) rm.addEventListener('click', () => {
+    apiKey = '';
+    clearApiKey();
+    renderSetup();   // re-render the gate in its keyless form
+  });
+}
+
+// ── About (dispatch by mode) ─────────────────────────────────────────────────
+function renderAbout() {
+  const v = el('about-view');
+  v.innerHTML = (mode === 'companion') ? companionAboutHTML() : councilAboutHTML();
+  const back = el('about-back');
+  if (back) back.addEventListener('click', () => setView('home'));
+}
+
+// ── Views ────────────────────────────────────────────────────────────────────
+const PANELS = ['setup', 'companion-home', 'council-home', 'history-view', 'about-view', 'sees-view'];
+function hideAllPanels() { PANELS.forEach(id => el(id).classList.add('hidden')); }
+
+function setView(view) {
+  currentView = view;
+  hideAllPanels();
+  const isCompanion = mode === 'companion';
+
+  if (view === 'setup') {
+    renderSetup();
+    el('setup').classList.remove('hidden');
+  } else if (view === 'home') {
+    el(isCompanion ? 'companion-home' : 'council-home').classList.remove('hidden');
+    if (isCompanion) { renderThread(); refreshSees(); }
+  } else if (view === 'history') {
+    renderHistory();
+    el('history-view').classList.remove('hidden');
+  } else if (view === 'about') {
+    renderAbout();
+    el('about-view').classList.remove('hidden');
+  } else if (view === 'sees') {
+    renderSees();
+    el('sees-view').classList.remove('hidden');
+  }
+
+  // Sub-nav only rides along on the two everyday views.
+  el('sub-nav').classList.toggle('hidden', !(view === 'home' || view === 'history'));
+  document.querySelectorAll('#sub-nav .sub-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+}
+
+function renderHistory() {
+  el('hist-lede').textContent = (mode === 'companion') ? 'Past conversations.' : 'Past deliberations.';
+  if (mode === 'companion') renderCompanionHistory();
+  else renderCouncilHistory();
+}
+
+// ── Mode switch ──────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = (m === 'council') ? 'council' : 'companion';
+  document.documentElement.dataset.mode = mode;
+  try { localStorage.setItem(MODE_LS, mode); } catch (_) {}
+  document.querySelectorAll('#mode-nav .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  el('version-label').textContent = VERSION_NUM + ' · ' + mode;
+  document.title = (mode === 'companion' ? 'Companion' : 'Council') + ' · Hill Climbing';
+  renderSubNav();
+  renderMenu();
+  setMenu(false);
+  if (!apiKey) setView('setup'); else setView('home');
+}
+
+function renderSubNav() {
+  const homeLabel = (mode === 'companion') ? 'Talk' : 'Convene';
+  el('sub-nav').innerHTML =
+    '<button class="sub-btn" type="button" data-view="home">' + homeLabel + '</button>' +
+    '<button class="sub-btn" type="button" data-view="history">History</button>';
+  el('sub-nav').querySelectorAll('.sub-btn').forEach(b =>
+    b.addEventListener('click', () => setView(b.dataset.view)));
+}
+
+// ── Menu (rebuilt per mode) ──────────────────────────────────────────────────
+function menuItem(id, title, sub) {
+  return '<button class="menu-item" id="' + id + '" type="button" role="menuitem">' +
+    '<span class="menu-item-title">' + esc(title) + '</span>' +
+    '<span class="menu-item-sub">' + esc(sub) + '</span></button>';
+}
+function renderMenu() {
+  const panel = el('menu-panel');
+  if (mode === 'companion') {
+    panel.innerHTML =
+      '<div class="menu-head">Your data</div>' +
+      menuItem('sees-btn', 'What the companion sees', "The exact text it's shown") +
+      menuItem('new-btn', 'New conversation', 'Start a fresh thread') +
+      menuItem('key-btn', 'API key', 'Change or remove your key') +
+      menuItem('about-btn', 'About the companion', "How it works, what it isn't") +
+      menuItem('clear-btn', 'Clear all conversations', 'Delete every saved thread') +
+      '<div class="menu-note" id="sync-note">Saved on this device.</div>' +
+      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details.</div>';
+    el('sees-btn').addEventListener('click', () => { setMenu(false); setView('sees'); });
+    el('new-btn').addEventListener('click', () => {
+      setMenu(false);
+      active = null; msgBox.value = '';
+      setView('home'); msgBox.focus();
+    });
+    el('key-btn').addEventListener('click', () => { setMenu(false); setView('setup'); });
+    el('about-btn').addEventListener('click', () => { setMenu(false); setView('about'); });
+    el('clear-btn').addEventListener('click', () => {
+      setMenu(false);
+      if (confirm('Delete every saved conversation? This can’t be undone. (Your API key is kept.)')) {
+        store.conversations = [];
+        active = null;
+        persist();
+        setView('home');
+      }
+    });
+    updateSyncNote(window.HCSync ? HCSync.getStatus() : null);
+  } else {
+    panel.innerHTML =
+      '<div class="menu-head">Your data</div>' +
+      menuItem('key-btn', 'API key', 'Change or remove your key') +
+      menuItem('about-btn', 'About the council', "How it works, what it isn't") +
+      menuItem('clear-btn', 'Clear all sessions', 'Delete every saved deliberation') +
+      '<div class="menu-note">Your sessions live only on this device. Your situation text is sent to Anthropic’s API — on your own key — only when you convene the board.</div>';
+    el('key-btn').addEventListener('click', () => { setMenu(false); setView('setup'); });
+    el('about-btn').addEventListener('click', () => { setMenu(false); setView('about'); });
+    el('clear-btn').addEventListener('click', () => {
+      setMenu(false);
+      if (confirm('Delete every saved deliberation on this device? This can’t be undone. (Your API key is kept.)')) {
+        localStorage.removeItem(LS_HIST);
+        current = null;
+        if (currentView === 'history') renderHistory();
+      }
+    });
+  }
+}
 function setMenu(open) {
-  menuPanel.classList.toggle('hidden', !open);
+  el('menu-panel').classList.toggle('hidden', !open);
   menuEl.classList.toggle('open', open);
   menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
-menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
-document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
-document.getElementById('sees-btn').addEventListener('click', showSees);
-document.getElementById('key-btn').addEventListener('click', () => { setMenu(false); showSetup(true); });
-document.getElementById('about-btn').addEventListener('click', showAbout);
-document.getElementById('new-btn').addEventListener('click', () => {
-  setMenu(false);
-  active = null; msgBox.value = '';
-  switchView('talk'); msgBox.focus();
-});
-document.getElementById('clear-btn').addEventListener('click', () => {
-  setMenu(false);
-  if (confirm('Delete every saved conversation? This can’t be undone. (Your API key is kept.)')) {
-    store.conversations = [];
-    active = null;
-    persist();
-    switchView('talk');
-  }
-});
 
-// ── Sync (opt-in, end-to-end encrypted). Auth lives on the hub account page. ──
+// ── Sync (opt-in, end-to-end encrypted). Companion only. ─────────────────────
 function updateSyncNote(status) {
-  const el = document.getElementById('sync-note');
-  if (!el) return;
-  if (!status || status.error === 'not_configured') { el.textContent = 'Saved on this device.'; return; }
-  if (status.state === 'unlocked') el.innerHTML = 'Synced to your account, end-to-end encrypted.';
-  else if (status.state === 'locked') el.innerHTML = 'Locked — enter your passphrase at the <a href="index.html">hub</a> to sync.';
-  else el.innerHTML = 'Saved on this device. <a href="index.html">Sign in at the hub</a> to sync across devices.';
+  const eln = el('sync-note');
+  if (!eln) return;   // council menu has no sync note
+  if (!status || status.error === 'not_configured') { eln.textContent = 'Saved on this device.'; return; }
+  if (status.state === 'unlocked') eln.innerHTML = 'Synced to your account, end-to-end encrypted.';
+  else if (status.state === 'locked') eln.innerHTML = 'Locked — enter your passphrase at the <a href="index.html">hub</a> to sync.';
+  else eln.innerHTML = 'Saved on this device. <a href="index.html">Sign in at the hub</a> to sync across devices.';
 }
 if (window.HCSync) {
   HCSync.registerStore({
@@ -1107,17 +1766,49 @@ if (window.HCSync) {
       try { localStorage.setItem(LS_STORE, str); } catch (e) { /* quota */ }
       store = loadStore();
       if (active) active = store.conversations.find(c => c.id === active.id) || null;
-      if (!document.getElementById('talk-view').classList.contains('hidden')) { renderThread(); refreshSees(); }
-      if (!document.getElementById('history-view').classList.contains('hidden')) renderHistory();
+      if (mode === 'companion') {
+        if (currentView === 'home') { renderThread(); refreshSees(); }
+        else if (currentView === 'history') renderHistory();
+      }
     },
   });
   HCSync.subscribe(updateSyncNote);
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'companion' });
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-document.getElementById('version-label').textContent = VERSION;
-if (!apiKey) showSetup(true); else switchView('talk');
+// ═════════════════════════════════════════════════════════════════════════════
+// Wiring + init
+// ═════════════════════════════════════════════════════════════════════════════
+// Companion composer
+sendBtn.addEventListener('click', () => send(msgBox.value));
+beginBtn.addEventListener('click', () => { if (!active || !active.thread.length) send(OPENING_NUDGE, { seed: true }); else msgBox.focus(); });
+msgBox.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(msgBox.value); }
+});
+
+// Council compose
+convBtn.addEventListener('click', () => {
+  if (running) return;
+  if (!apiKey) { setView('setup'); return; }
+  const situation = sitBox.value.trim();
+  if (situation.length < 12) { sitBox.focus(); sitBox.style.borderColor = 'var(--accent)'; setTimeout(() => sitBox.style.borderColor = '', 900); return; }
+  convene(situation).catch(err => {
+    running = false; convBtn.disabled = false; convBtn.textContent = 'Convene the board';
+    alert(err && err.message ? err.message : 'Something went wrong convening the board.');
+  });
+});
+
+// Primary mode switch
+document.querySelectorAll('#mode-nav .mode-btn').forEach(b =>
+  b.addEventListener('click', () => { if (b.dataset.mode !== mode) setMode(b.dataset.mode); }));
+
+// Menu open/close (shared)
+menuBtn.addEventListener('click', () => setMenu(el('menu-panel').classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+// Go.
+setMode(mode);
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
