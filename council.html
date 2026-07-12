@@ -321,6 +321,13 @@
     #crisis a:hover { color: var(--accent); }
 
     .disclaimer { font-size: 11.5px; color: var(--faint); line-height: 1.6; margin-top: 26px; max-width: 640px; }
+
+    /* On a narrow phone the corner version label collides with the centred
+       mode-nav — hide it, matching the rest of the suite (reflect/nourish/…). */
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 80px; }
+      #version-label { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -428,9 +435,30 @@
 
 const VERSION   = 'v0.4 · council';
 const MODEL     = 'claude-opus-4-8';
-const LS_KEY    = 'hill-climbing-council-key';   // user's Anthropic API key — device-local, NEVER synced
+// ── Suite-wide Anthropic API key (a single key for the whole hub) ────────────
+// One canonical store shared across Council, Companion, and Nourish's chef so a
+// key entered in any of them works everywhere. Legacy per-app keys are migrated
+// once (copied into the canonical store, then deleted) so nobody re-enters.
+// Device-local only — never synced.
+const API_KEY_LS    = 'hill-climbing-api-key';
+const LEGACY_KEY_LS = ['hill-climbing-council-key', 'hill-climbing-companion-key'];
+function readApiKey() {
+  try {
+    const k = localStorage.getItem(API_KEY_LS);
+    if (k) return k;
+    for (const lk of LEGACY_KEY_LS) {
+      const v = localStorage.getItem(lk);
+      if (v) { localStorage.setItem(API_KEY_LS, v); localStorage.removeItem(lk); return v; }
+    }
+  } catch (_) {}
+  return '';
+}
+function writeApiKey(v) { try { localStorage.setItem(API_KEY_LS, v); } catch (_) {} }
+function clearApiKey() {
+  try { localStorage.removeItem(API_KEY_LS); LEGACY_KEY_LS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
+}
 const LS_HIST   = 'hill-climbing-council';        // saved deliberations
-const SYNC_BLOB_KEY = 'ls:hill-climbing-council'; // this app's registered E2E-sync doc (see hc-sync.js)
+const SYNC_BLOB_KEY = 'ls:hill-climbing-council'; // this app's registered E2E-sync doc (see hc-sync.js). The API key (hill-climbing-api-key) is separate + device-local — never registered.
 const HIST_CAP  = 30;
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 
@@ -505,7 +533,7 @@ const FACILITATOR_SYSTEM =
   "- Hard limit, every turn: if what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set the facilitation aside and tell them plainly to reach a real person right now — a crisis line, a doctor, a lawyer.";
 
 // ── State ────────────────────────────────────────────────────────────────────
-let apiKey = localStorage.getItem(LS_KEY) || '';
+let apiKey = readApiKey();
 let running = false;
 let replying = false;   // a follow-up turn is in flight
 let current = null;     // the live/open meeting: {id, situation, directors, chairOpening, thread, feedback}
@@ -938,7 +966,7 @@ function showSetup(force) {
     const v = input.value.trim();
     if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
     apiKey = v;
-    localStorage.setItem(LS_KEY, v);
+    writeApiKey(v);
     document.getElementById('setup').classList.add('hidden');
     switchView('convene');
   });
@@ -946,7 +974,7 @@ function showSetup(force) {
   const rm = document.getElementById('key-remove');
   if (rm) rm.addEventListener('click', () => {
     apiKey = '';
-    localStorage.removeItem(LS_KEY);
+    clearApiKey();
     showSetup(true);
   });
 }

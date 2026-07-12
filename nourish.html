@@ -617,11 +617,11 @@
     <!-- key + consent gate (until a key is saved and consent is given) -->
     <div id="chef-gate" class="chef-gate hidden">
       <div class="consent-note">
-        This is the only part of Hill Climbing that leaves your device. When you generate a recipe, your <b>pantry list and preferences are sent to Anthropic</b> (Claude) to write it. Nothing else is sent — your progress, your key, and your history stay in this browser. You can remove your key any time.
+        This is one of the few parts of Hill Climbing that leaves your device (alongside Council and Companion). When you generate a recipe, your <b>pantry list and preferences are sent to Anthropic</b> (Claude) to write it. Nothing else is sent — your progress, your key, and your history stay in this browser. You can remove your key any time.
       </div>
       <div class="block-label">Anthropic API key</div>
       <input type="password" id="chef-key" class="chef-field" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" aria-label="Anthropic API key">
-      <div class="chef-help">Stored only in this browser, and never included in your data export. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Requests bill to your own account — a recipe is a few cents.</div>
+      <div class="chef-help">Stored only in this browser, and never included in your data export — one key shared across the hub’s AI apps (set it in Council or Companion and it works here too). Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Requests bill to your own account — a recipe is a few cents.</div>
       <div class="block-label">Model</div>
       <select id="chef-model" class="chef-field" aria-label="Model"></select>
       <label class="consent-check" for="chef-consent">
@@ -732,7 +732,7 @@
 // ── Config ────────────────────────────────────────────────────────────────────
 const VERSION  = 'v0.14 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
-const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef API key (hill-climbing-nourish-chef) is deliberately NOT registered — it stays on-device.
+const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef settings blob (hill-climbing-nourish-chef) and the shared Anthropic key (hill-climbing-api-key) are deliberately NOT registered — they stay on-device.
 const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
 
@@ -2377,6 +2377,30 @@ document.getElementById('extra-add').addEventListener('submit', e => {
 // pattern; adds structured output so the recipe comes back in a fixed shape.
 // (Egress flagged in KNOWN_RISKS L27 against REQUIREMENTS §1.3/§2.1, not amended.)
 const CHEF_LS = 'hill-climbing-nourish-chef';
+
+// ── Suite-wide Anthropic API key (a single key for the whole hub) ────────────
+// One canonical store shared across Council, Companion, and Nourish's chef so a
+// key entered in any of them works everywhere. Legacy per-app keys are migrated
+// once (copied into the canonical store, then deleted) so nobody re-enters; the
+// chef's key was previously stored inside the CHEF_LS blob and is migrated in
+// loadChef(). Device-local only — never synced.
+const API_KEY_LS    = 'hill-climbing-api-key';
+const LEGACY_KEY_LS = ['hill-climbing-council-key', 'hill-climbing-companion-key'];
+function readApiKey() {
+  try {
+    const k = localStorage.getItem(API_KEY_LS);
+    if (k) return k;
+    for (const lk of LEGACY_KEY_LS) {
+      const v = localStorage.getItem(lk);
+      if (v) { localStorage.setItem(API_KEY_LS, v); localStorage.removeItem(lk); return v; }
+    }
+  } catch (_) {}
+  return '';
+}
+function writeApiKey(v) { try { localStorage.setItem(API_KEY_LS, v); } catch (_) {} }
+function clearApiKey() {
+  try { localStorage.removeItem(API_KEY_LS); LEGACY_KEY_LS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
+}
 const CHEF_URL = 'https://api.anthropic.com/v1/messages';
 const CHEF_MODELS = {
   'claude-opus-4-8': 'Opus 4.8 — best teaching',
@@ -2386,20 +2410,25 @@ const chef = { key: '', model: 'claude-opus-4-8', consented: false, history: [],
 let chefStage = 'gen';   // 'gen' | 'result' — what to show when the tab is ready
 
 function loadChef() {
+  let migrated = false;
   try {
     const raw = JSON.parse(localStorage.getItem(CHEF_LS) || '{}');
     if (raw && typeof raw === 'object') {
-      if (typeof raw.key === 'string') chef.key = raw.key;
       if (CHEF_MODELS[raw.model]) chef.model = raw.model;
       chef.consented = !!raw.consented;
       if (Array.isArray(raw.history)) chef.history = raw.history;
+      // Migrate a key previously stored inside the chef blob into the shared
+      // hub store, then scrub the duplicate copy out of the blob.
+      if (typeof raw.key === 'string' && raw.key && !localStorage.getItem(API_KEY_LS)) { writeApiKey(raw.key); migrated = true; }
     }
   } catch (e) { /* ignore a corrupt blob */ }
+  chef.key = readApiKey();   // the single hub key
+  if (migrated) saveChef();  // rewrite the blob without the key field
 }
 function saveChef() {
   try {
     localStorage.setItem(CHEF_LS, JSON.stringify({
-      key: chef.key, model: chef.model, consented: chef.consented,
+      model: chef.model, consented: chef.consented,
       history: chef.history.slice(-20),
     }));
   } catch (e) { /* private mode / quota — never break the flow */ }
@@ -2542,6 +2571,7 @@ function saveChefSettings() {
   if (!key) { msg.textContent = 'Paste your Anthropic API key to continue.'; return; }
   if (!consent) { msg.textContent = 'Tick the box to confirm your pantry list is sent to Anthropic.'; return; }
   chef.key = key; chef.model = model; chef.consented = true;
+  writeApiKey(key);         // shared hub key
   saveChef();
   chefStage = 'gen';
   renderChef();
@@ -2549,6 +2579,7 @@ function saveChefSettings() {
 
 function removeChefKey() {
   chef.key = ''; chef.consented = false;
+  clearApiKey();            // removing the key removes it hub-wide
   saveChef();
   showChefGate();
 }
@@ -2776,7 +2807,8 @@ switchView('cook');   // lands on home, or resumes a mid-cook challenge
 // ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
 // One localStorage blob (the cooking ladder, cleared dishes, pantry). Sign-in /
 // unlock live at the hub; this app only registers its store, shows status, and
-// pushes on save. The chef API key is a separate, unregistered on-device key.
+// pushes on save. The shared Anthropic key (hill-climbing-api-key) and the chef
+// settings blob are separate, unregistered, on-device only.
 if (window.HCSync) {
   const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
