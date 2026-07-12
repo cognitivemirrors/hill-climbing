@@ -297,7 +297,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.4 · companion</div>
+<div class="corner" id="version-label">v0.5 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="talk">Talk</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -328,10 +328,10 @@
     </button>
     <button class="menu-item" id="clear-btn" type="button" role="menuitem">
       <span class="menu-item-title">Clear all conversations</span>
-      <span class="menu-item-sub">Delete every saved thread</span>
+      <span class="menu-item-sub">Delete every thread, and what it remembers</span>
     </button>
     <div class="menu-note" id="sync-note">Saved on this device.</div>
-    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details.</div>
+    <div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn't lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you've signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details.</div>
   </div>
 </div>
 
@@ -342,7 +342,7 @@
   <!-- Talk view -->
   <div id="talk-view">
     <div class="lede">A companion who's caught up.</div>
-    <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — so you never start from scratch. When a question needs something current or outside itself, it can <em>look it up on the web</em>. It's here to sharpen your own judgment, not to decide for you.</div>
+    <div class="sub">Someone to think out loud with who has already read your <em>goals</em>, your <em>journal</em>, and your recent practice — and who <em>remembers your past conversations</em>, so you never start from scratch. When a question needs something current or outside itself, it can <em>look it up on the web</em>. It's here to sharpen your own judgment, not to decide for you.</div>
 
     <div id="sees-chip" class="sees-chip hidden"></div>
 
@@ -351,7 +351,7 @@
     <div id="composer">
       <textarea id="msg-box" placeholder="What's on your mind?  (⌘/Ctrl+Enter to send)"></textarea>
       <div class="composer-row">
-        <div class="composer-note">Sent to Anthropic on your own key, for this reply only. It can search the web when a question needs it; your journal never goes into a search, or into the saved conversation.</div>
+        <div class="composer-note">Sent to Anthropic on your own key. It remembers your past conversations so context isn't lost between them, and can search the web when a question needs it — your journal never goes into a search.</div>
         <div class="composer-btns">
           <button class="ghost" id="begin-btn" type="button" title="Let the companion open with a brief check-in on where you are">Let it open</button>
           <button class="primary" id="send-btn" type="button">Send</button>
@@ -393,9 +393,18 @@
 // "Transient access" means: each time it replies, it reads the person's CURRENT
 // goals (Climb), journal (Reflect), and recent practice (usage log) straight
 // from same-origin storage, folds them into the system prompt for that one call,
-// and then forgets them. The raw data is never serialized into the saved
-// conversation — only the chat turns are. What persists + syncs is the dialogue,
-// not a second copy of the journal.
+// and then forgets them. That suite data is never serialized into the saved
+// conversation.
+//
+// Cross-conversation memory (v0.5): so context about the person isn't lost
+// between conversations, the companion carries its own dialogue forward. The last
+// few conversations ride along in full; everything older is distilled into a
+// rolling summary it re-reads before each reply and updates in the background.
+// Unlike the suite data, this memory IS persisted — it lives in the same store
+// blob as the dialogue, so it syncs the same way, and "Clear all conversations"
+// erases it too. Nothing new leaves the device: the summary is written on the
+// user's own key and only ever goes back to Anthropic, exactly as the dialogue
+// already does.
 //
 // Privacy posture (same as Council, disclosed plainly): bring-your-own Anthropic
 // API key, stored only in this browser. Calls go browser → Anthropic directly,
@@ -407,7 +416,7 @@
 // (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.4 · companion';
+const VERSION   = 'v0.5 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
@@ -449,11 +458,23 @@ const ENTRY_CHARS   = 700;    // per-entry truncation
 const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
 
+// Cross-conversation memory caps. The last RECENT_VERBATIM past conversations are
+// sent in full (bounded by VERBATIM_CHARS total); everything older is folded into
+// a rolling summary the model is asked to hold under MEMORY_CHARS. FOLD_BATCH caps
+// how many older conversations one background pass distills, so a big backlog
+// catches up over a few passes rather than one enormous call.
+const RECENT_VERBATIM = 3;      // most-recent past conversations sent verbatim
+const VERBATIM_CHARS  = 5000;   // total budget for the verbatim block
+const CONV_TURN_CHARS = 800;    // per-turn truncation inside a transcript
+const MEMORY_CHARS    = 2600;   // rolling-summary size the model is asked to hold to
+const FOLD_BATCH      = 8;      // older conversations distilled per background pass
+
 // ── The companion's charge ───────────────────────────────────────────────────
 const COMPANION_SYSTEM =
-"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite: their current goals, their private journal, and their recent practice activity. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
+"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite — their current goals, their private journal, and their recent practice activity — and, so nothing about them is lost between conversations, what you've come to know of them from your earlier conversations: a running summary of the older ones and the last few in full. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
 "Who you are, and how you talk:\n" +
 "- You are one warm, attentive companion — not a coach, not a therapist, not an authority. Think of a thoughtful friend who has genuinely kept up with their life and pays close attention.\n" +
+"- You have a memory of them across conversations. Talk like someone who's spoken with them before — pick up threads you've left open, notice what's changed since last time, and don't reintroduce yourself or greet them as a stranger when the history shows you've already met. Let the memory sit lightly, the way a friend recalls things without reciting them; if the memory is empty, this really is your first conversation, so don't imply a past you don't have.\n" +
 "- Speak in the first person, directly to them, warm and unhurried. Usually 80–170 words. Real conversation — no bullet lists, no headings, no clinical framing, no openers like \"As your companion…\". Just talk to them.\n" +
 "- Ground what you say in what you've actually been shown — their real goals, their own words from the journal, the shape of their recent weeks — specifically, not generically. But wear it lightly: you're a friend who remembers, not a dossier reading itself back. Don't recite their data at them or list everything you know; bring in the one or two things that actually bear on what they're saying.\n" +
 "- Notice honestly. If their journal and their stated goals pull in different directions, or a pattern across their weeks is worth naming, say it — kindly, without flattering and without diagnosing.\n\n" +
@@ -468,16 +489,25 @@ const COMPANION_SYSTEM =
 "Hard limits, every turn:\n" +
 "- You are not therapy, medical, legal, or crisis care, and you never pretend to be.\n" +
 "- If what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set everything else aside: tell them plainly this is beyond what a companion can hold, that they deserve a real person right now, and point them to a crisis line (in the US, call or text 988), a doctor, or emergency services.\n" +
-"- Their data is theirs. You were given a transient look at it for this conversation only; you don't own it, store it, or send it anywhere — and you never put their private information into a web search. If they ask what you can see or do, tell them plainly and truthfully.";
+"- Their data is theirs. Their goals, journal, and activity you see only in the moment, read fresh from their device for this one reply and then gone; your memory of your conversations lives on their device too, under their control, and is never sent anywhere but back to them through you. You never put their private information into a web search. If they ask what you can see, what you remember, or how to make you forget, tell them plainly and truthfully — they can clear it all from the menu.";
 
 const OPENING_NUDGE =
-"(I've just opened the app and haven't said anything yet. Open the conversation: greet me warmly and, from what you've been shown, offer a brief, specific check-in on where I seem to be right now — something you actually noticed across my goals, journal, or recent weeks. Keep it short, and end by inviting me to say what's on my mind. Don't list everything you can see.)";
+"(I've just opened the app and haven't said anything yet. Open the conversation: if we've talked before, pick up warmly where we left off — reconnect around a thread from our recent conversations or something that's clearly moved since. If this is our first time, greet me warmly and offer a brief, specific check-in drawn from my goals, journal, or recent weeks. Either way keep it short, don't list everything you can see, and end by inviting me to say what's on my mind.)";
+
+// The background memory-keeper. A separate, tool-free call that distils older
+// conversations into one evolving note the companion re-reads each reply. Kept
+// deliberately plain and factual — durable continuity, not a transcript.
+const SUM_SYSTEM =
+"You keep a private, evolving memory note for a companion app — a few short paragraphs the companion re-reads before each conversation so it doesn't lose track of who the person is. You'll be given the current note (possibly empty) and the transcripts of one or more further conversations to fold in. Return the UPDATED note and nothing else.\n\n" +
+"The note is for durable continuity: who this person is and what's alive for them. Keep what would still matter weeks later — their ongoing situations and decisions, recurring themes and worries, what they value, the people and commitments that come up, and how things are moving over time. Fold new developments into what's already there; when something has changed or resolved, revise it rather than stacking a contradiction beside it. Leave out small talk and play-by-play.\n\n" +
+"Write plain, warm, third-person notes about them (\"They're weighing…\", \"They keep circling…\"). No headings needed; a short paragraph or a few is plenty. Hold the whole note under about " + MEMORY_CHARS + " characters — if it runs long, compress the older settled material and keep the live threads sharp. Never invent anything the transcripts or existing note don't support. Output only the note.";
 
 // ── State ────────────────────────────────────────────────────────────────────
 let apiKey = readApiKey();
 let store  = loadStore();          // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
 let active = null;                 // the open conversation (a reference into store.conversations)
 let busy = false;
+let memoryBusy = false;            // a background memory-distillation pass is in flight
 
 // ── Internet access (server-side, on the user's key) ─────────────────────────
 // Live web search + the ability to read a specific page. These are Anthropic
@@ -499,17 +529,19 @@ const RETRY_BASE_MS = 900; // exponential backoff base → 0.9s, 1.8s, 3.6s
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Anthropic call (browser-direct, user's key) ─────────────────────────────
-async function callClaudeRaw(system, messages, maxTokens) {
+async function callClaudeRaw(system, messages, maxTokens, tools) {
   // Server tools run inside Anthropic's own agent loop. A long search turn can
   // come back with stop_reason "pause_turn" — resume by re-sending with the
   // partial assistant turn appended (and NO extra user turn). Accumulate every
   // text block across the whole turn: with web search the model often writes
   // text before AND after searching, so grabbing only the first block would drop
-  // the actual answer.
+  // the actual answer. `tools` defaults to the web tools; the memory-keeper
+  // passes [] so its background distillation never triggers a search.
+  const useTools = tools === undefined ? WEB_TOOLS : tools;
   let convo = messages.slice();
   let text = '';
   for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
-    const data = await postWithRetry(system, convo, maxTokens);
+    const data = await postWithRetry(system, convo, maxTokens, useTools);
     (data.content || []).forEach(b => { if (b.type === 'text' && b.text) text += b.text; });
     if (data.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
       convo = convo.concat([{ role: 'assistant', content: data.content }]);
@@ -526,10 +558,10 @@ async function callClaudeRaw(system, messages, maxTokens) {
 // before the user ever sees it. Non-transient errors (bad key, malformed
 // request) fail fast; if every retry is spent, the error surfaces to send()
 // with a manual "Try again". Returns parsed JSON.
-async function postWithRetry(system, convo, maxTokens) {
+async function postWithRetry(system, convo, maxTokens, tools) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await postOnce(system, convo, maxTokens);
+      return await postOnce(system, convo, maxTokens, tools);
     } catch (err) {
       if (err && err.retryable && attempt < MAX_RETRIES) {
         await sleep(RETRY_BASE_MS * Math.pow(2, attempt));   // 0.9s, 1.8s, 3.6s
@@ -541,7 +573,10 @@ async function postWithRetry(system, convo, maxTokens) {
 }
 
 // A single POST. Throws an ApiError; `.retryable` marks the transient ones.
-async function postOnce(system, convo, maxTokens) {
+async function postOnce(system, convo, maxTokens, tools) {
+  const body = { model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo };
+  const useTools = tools === undefined ? WEB_TOOLS : tools;
+  if (useTools && useTools.length) body.tools = useTools;
   let res;
   try {
     res = await fetch(API_URL, {
@@ -552,7 +587,7 @@ async function postOnce(system, convo, maxTokens) {
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo, tools: WEB_TOOLS })
+      body: JSON.stringify(body)
     });
   } catch (_) {
     // Network-level failure — offline, or a dropped/reset connection (WebKit's "Load failed").
@@ -719,9 +754,22 @@ async function gatherContext() {
   const goals    = readGoals();
   const journal  = formatJournal(await readJournal());
   const activity = readActivity();
+  const memory   = (store.memory && store.memory.summary || '').trim();
+  const recent   = recentVerbatimText();
+
+  // Memory first: who they are and what you've discussed frames the fresh
+  // snapshot of their goals/journal/activity that follows.
+  let memoryBlock = '';
+  if (memory || recent) {
+    memoryBlock =
+      "## What you've come to know about them (across your earlier conversations)\n" +
+      (memory || "Nothing distilled yet — your recent conversations are below in full.") + "\n\n" +
+      (recent ? "## Your most recent conversations, in full\n" + recent + "\n\n" : "");
+  }
 
   const digest =
-    "──\nWhat you've been shown (for this conversation only):\n\n" +
+    "──\nWhat you've been shown (assembled fresh from their device for this reply):\n\n" +
+    memoryBlock +
     "## Their goals\n" + (goals ? goals.text : "They haven't set up goals in Climb yet.") + "\n\n" +
     "## Their journal — most recent entries\n" + (journal ? journal.text : "Their journal is empty, or they haven't kept one yet.") + "\n\n" +
     "## Their recent practice\n" + activity.text + "\n──";
@@ -729,7 +777,8 @@ async function gatherContext() {
   const summary = {
     goals: goals ? goals.count : 0,
     entries: journal ? journal.total : 0,
-    apps: activity.appsActive
+    apps: activity.appsActive,
+    remembers: !!(memory || recent)
   };
   return { system: COMPANION_SYSTEM + '\n\n' + digest, digest, summary };
 }
@@ -740,9 +789,22 @@ async function gatherContext() {
 function loadStore() {
   try {
     const s = JSON.parse(localStorage.getItem(LS_STORE) || 'null');
-    if (s && Array.isArray(s.conversations)) return s;
+    if (s && Array.isArray(s.conversations)) return normalizeStore(s);
   } catch (_) {}
-  return { v: 1, conversations: [] };
+  return { v: 1, conversations: [], memory: emptyMemory() };
+}
+// The rolling cross-conversation memory. `summary` is the distilled note;
+// `folded` maps a conversation id → how many of its (visible) turns are already
+// in the summary. Tracking the count, not just the id, means a conversation
+// revived from History and continued gets re-folded when it grows, instead of
+// its new turns being lost to memory. Added in v0.5 — older stores that predate
+// it (companion ≤ v0.4 kept no memory) are backfilled here, empty.
+function emptyMemory() { return { summary: '', folded: {}, ts: 0 }; }
+function normalizeStore(s) {
+  if (!s.memory || typeof s.memory !== 'object') s.memory = emptyMemory();
+  if (typeof s.memory.summary !== 'string') s.memory.summary = '';
+  if (!s.memory.folded || typeof s.memory.folded !== 'object') s.memory.folded = {};
+  return s;
 }
 function persist() {
   if (store.conversations.length > CONV_CAP) store.conversations.length = CONV_CAP;
@@ -759,6 +821,108 @@ function newConversation() {
 }
 function apiMessages(conv) {
   return conv.thread.map(t => ({ role: t.role, content: t.text }));
+}
+
+// ── Cross-conversation memory ────────────────────────────────────────────────
+// A conversation is worth remembering once it's a real exchange — at least one
+// thing the person said and one reply. Bare openings (the hidden seed + a lone
+// check-in the person never answered) are skipped: nothing to carry forward.
+function hasSubstance(c) {
+  const v = c.thread.filter(t => !t.hidden);
+  return v.some(t => t.role === 'user') && v.some(t => t.role === 'assistant');
+}
+function visibleCount(c) { return c.thread.filter(t => !t.hidden).length; }
+function isActive(c) { return active && c.id === active.id; }
+
+// Past conversations with substance, newest first, excluding the open one (its
+// turns are already the live message array).
+function pastConversations() {
+  return store.conversations.filter(c => !isActive(c) && hasSubstance(c))
+    .slice().sort((a, b) => b.ts - a.ts);
+}
+// Render a conversation as a plain You/Companion transcript, keeping the most
+// recent turns when it's too long (the tail carries where things were left).
+function transcript(c, budget) {
+  const turns = c.thread.filter(t => !t.hidden).map(t => {
+    let body = t.text || '';
+    if (body.length > CONV_TURN_CHARS) body = body.slice(0, CONV_TURN_CHARS) + '…';
+    return (t.role === 'user' ? 'You: ' : 'Companion: ') + body;
+  });
+  let out = [], used = 0, trimmed = false;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const cost = turns[i].length + 1;
+    if (budget && used + cost > budget && out.length) { trimmed = true; break; }
+    out.unshift(turns[i]); used += cost;
+  }
+  return (trimmed ? '…(earlier turns trimmed)…\n' : '') + out.join('\n');
+}
+
+// The verbatim block: the RECENT_VERBATIM most-recent past conversations, in
+// full, oldest of that set first so it reads forward into the live thread.
+function recentVerbatimText() {
+  const recent = pastConversations().slice(0, RECENT_VERBATIM);
+  if (!recent.length) return '';
+  let out = [], used = 0;
+  for (const c of recent) {                       // newest first while budgeting…
+    const t = transcript(c, CONV_TURN_CHARS * 12);
+    const block = '── ' + (c.title || 'A conversation') + ' · ' + niceDate(c.ts) + ' ──\n' + t;
+    if (used + block.length > VERBATIM_CHARS && out.length) break;
+    out.push(block); used += block.length;
+  }
+  return out.reverse().join('\n\n');              // …then present oldest→newest
+}
+
+// Everything older than the verbatim window whose current turn-count exceeds
+// what's already in the summary — new conversations, and revived ones that have
+// grown since they were last folded.
+function pendingToFold() {
+  const folded = store.memory.folded;
+  return pastConversations().slice(RECENT_VERBATIM)
+    .filter(c => (folded[c.id] || 0) < visibleCount(c));
+}
+
+// Background: fold aged-out conversations into the rolling summary, one bounded
+// batch at a time. Fire-and-forget from init and after each reply; guarded so
+// only one runs, and silent — a failed pass just leaves the backlog for next
+// time. Never touches the open conversation or the verbatim window.
+async function maybeUpdateMemory() {
+  if (memoryBusy || !apiKey) return;
+  // Drop folded entries whose conversations have aged out of the cap — their
+  // substance already lives in the summary — so the map stays bounded.
+  const live = new Set(store.conversations.map(c => c.id));
+  let pruned = false;
+  Object.keys(store.memory.folded).forEach(id => {
+    if (!live.has(id)) { delete store.memory.folded[id]; pruned = true; }
+  });
+  if (pruned) persist();
+
+  const pending = pendingToFold();
+  if (!pending.length) return;
+  const batch = pending.slice(0, FOLD_BATCH).sort((a, b) => a.ts - b.ts);  // oldest first
+  memoryBusy = true;
+  try {
+    const parts = batch.map(c =>
+      '── ' + (c.title || 'A conversation') + ' · ' + niceDate(c.ts) + ' ──\n' + transcript(c, CONV_TURN_CHARS * 16));
+    const user =
+      'CURRENT MEMORY NOTE:\n' + (store.memory.summary || '(empty — nothing recorded yet)') +
+      '\n\nNEW CONVERSATIONS TO FOLD IN (oldest first):\n\n' + parts.join('\n\n') +
+      '\n\nReturn the updated memory note.';
+    // Snapshot each conversation's turn-count BEFORE the call, so turns the
+    // person adds while it's in flight aren't marked folded prematurely.
+    const counts = batch.map(c => [c.id, visibleCount(c)]);
+    const note = await callClaudeRaw(SUM_SYSTEM, [{ role: 'user', content: user }], 900, []);
+    if (note) {
+      store.memory.summary = note.trim();
+      counts.forEach(([id, n]) => { store.memory.folded[id] = n; });
+      store.memory.ts = Date.now();
+      persist();
+      refreshSees();
+    }
+  } catch (_) {
+    // Background best-effort — leave the backlog for the next pass.
+  } finally {
+    memoryBusy = false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -839,6 +1003,7 @@ async function respond() {
     persist();
     const pend = document.getElementById('pending');
     if (pend) pend.outerHTML = turnHTML('assistant', reply);
+    maybeUpdateMemory();   // fold any newly aged-out conversations, in the background
   } catch (err) {
     const pend = document.getElementById('pending');
     if (pend) pend.remove();
@@ -915,6 +1080,7 @@ function refreshSees() {
       s.entries + ' journal ' + (s.entries === 1 ? 'entry' : 'entries'),
       'practice across ' + s.apps.length + ' app' + (s.apps.length === 1 ? '' : 's')
     ];
+    if (s.remembers) parts.push('your past conversations');
     const chip = document.getElementById('sees-chip');
     chip.classList.remove('hidden');
     chip.innerHTML = '<span class="sees-dot"></span><span>Right now it can see ' + parts.join(' · ') +
@@ -931,8 +1097,8 @@ function showSees() {
   v.classList.remove('hidden');
   v.innerHTML =
     '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
-    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time, and never stored in the saved conversation. Nothing else about you is sent. When a question needs it, the companion can also search the web on your key — but only with general queries it writes itself, never your private details.</p>' +
-    '<div class="digest-box" id="digest-box">Reading your goals, journal, and activity…</div></div>' +
+    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time. Your goals, journal, and activity are read live and never stored. To keep context across conversations it also includes your recent conversations and a running summary of the older ones — that memory is kept on your device (and synced if you’ve signed in), and you can erase it with <em>Clear all conversations</em>. When a question needs it, the companion can also search the web on your key — only with general queries it writes itself, never your private details.</p>' +
+    '<div class="digest-box" id="digest-box">Reading your goals, journal, activity, and past conversations…</div></div>' +
     '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
   document.getElementById('sees-back').addEventListener('click', () => switchView('talk'));
   gatherContext().then(ctx => {
@@ -1035,7 +1201,7 @@ function showAbout() {
     '<div class="lede" style="margin-bottom:16px;">About the companion.</div>' +
     '<div class="card">' +
       '<p>The companion is one steady presence you can talk with about your own life. Unlike the Council — a board you bring a single decision to — this is a continuing conversation, and it arrives already knowing what you keep in the suite: your goals from <strong>Climb</strong>, your entries from <strong>Reflect</strong>, and the shape of your recent <strong>practice</strong>.</p>' +
-      '<p>It reads that data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten. The raw text is never written into the saved conversation — only your dialogue is kept. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
+      '<p>It reads that suite data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten — never written into a saved conversation. Your <strong>conversations</strong>, though, it does keep, so context about you isn’t lost between them: the last few ride along in full, and the older ones are distilled into a running summary it re-reads and quietly updates. That memory lives on your device (and syncs if you’ve signed in), goes nowhere but back to the model on your key, and clears completely when you choose <em>Clear all conversations</em>. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
       '<p>It can also <strong>look things up on the web</strong> — a live search, or reading a specific page — when a question needs something current or beyond what it knows. Searches run on your key; it’s instructed to use plain, general queries and to keep your private details out of them, and to treat what it finds as worth weighing rather than automatically true.</p>' +
       '<p>It’s built on one belief: <strong>a good companion makes your own judgment sharper, not your dependence deeper.</strong> So it’s instructed never to decide for you, never to flatter, and to tell you the true thing with care — including when your journal and your goals disagree.</p>' +
       '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
@@ -1082,8 +1248,9 @@ document.getElementById('new-btn').addEventListener('click', () => {
 });
 document.getElementById('clear-btn').addEventListener('click', () => {
   setMenu(false);
-  if (confirm('Delete every saved conversation? This can’t be undone. (Your API key is kept.)')) {
+  if (confirm('Delete every saved conversation, and everything the companion remembers about you? This can’t be undone. (Your API key is kept.)')) {
     store.conversations = [];
+    store.memory = emptyMemory();
     active = null;
     persist();
     switchView('talk');
@@ -1118,6 +1285,7 @@ if (window.HCSync) {
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById('version-label').textContent = VERSION;
 if (!apiKey) showSetup(true); else switchView('talk');
+maybeUpdateMemory();   // catch up any older conversations left un-distilled last visit
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
