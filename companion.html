@@ -171,6 +171,14 @@
     .err-actions { margin-top: 11px; }
     .retry-btn { font-size: 12.5px; padding: 7px 16px; border-color: var(--accent-soft); color: var(--mid); }
     .retry-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+    /* Regenerate — a quiet control on the last reply, not a shout. */
+    .regen-wrap { margin-top: 11px; }
+    .regen-btn {
+      border: none; background: transparent; color: var(--dim);
+      font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.02em;
+      padding: 2px 0; cursor: pointer; transition: color 0.2s;
+    }
+    .regen-btn:hover { color: var(--accent); }
 
     /* ── composer ───────────────────────────────────────────────── */
     #composer { margin-top: 20px; }
@@ -289,7 +297,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · companion</div>
+<div class="corner" id="version-label">v0.4 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="talk">Talk</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -399,7 +407,7 @@
 // (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.3 · companion';
+const VERSION   = 'v0.4 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
@@ -764,6 +772,7 @@ const beginBtn  = document.getElementById('begin-btn');
 function renderThread() {
   const turns = active ? active.thread.filter(t => !t.hidden) : [];
   threadEl.innerHTML = turns.map(t => turnHTML(t.role, t.text)).join('');
+  refreshRegenerate();
 }
 function turnHTML(role, text, isErr) {
   const who = role === 'user' ? 'You' : 'Companion';
@@ -820,7 +829,7 @@ async function respond() {
   if (stale) stale.remove();
   threadEl.insertAdjacentHTML('beforeend',
     '<div class="turn them" id="pending"><div class="turn-who">Companion</div><div class="turn-body">' + deliberating() + '</div></div>');
-  setBusy(true); scrollEnd();
+  setBusy(true); refreshRegenerate(); scrollEnd();   // drop the regenerate control while a reply is in flight
 
   try {
     const ctx = await gatherContext();
@@ -836,7 +845,7 @@ async function respond() {
     showErrorTurn((err && err.message) || 'I couldn’t respond just now.');
     if (err && err.kind === 'key') showSetup(true);
   } finally {
-    setBusy(false); refreshSees(); scrollEnd();
+    setBusy(false); refreshRegenerate(); refreshSees(); scrollEnd();
   }
 }
 
@@ -853,6 +862,42 @@ function showErrorTurn(message) {
     '</div>');
   const rb = document.getElementById('retry-btn');
   if (rb) rb.addEventListener('click', respond);
+}
+
+// Regenerate — discard the last companion reply and ask again from the same
+// preceding turn. Offered only on the LAST reply (regenerating a mid-thread one
+// would orphan everything after it). Reuses respond()'s call + retry machinery:
+// once the reply is popped, the trailing turn is again the one to answer.
+function regenerate() {
+  if (busy || !active) return;
+  const visible = active.thread.filter(t => !t.hidden);
+  const last = visible[visible.length - 1];
+  if (!last || last.role !== 'assistant') return;
+  for (let i = active.thread.length - 1; i >= 0; i--) {
+    if (active.thread[i].role === 'assistant') { active.thread.splice(i, 1); break; }
+  }
+  persist();
+  renderThread();   // shows the thread up to the (now-trailing) user turn
+  respond();        // re-answer it
+}
+
+// Attach a quiet "Regenerate" control to the last companion reply, and nowhere
+// else. Called after each render and when the busy state settles; a no-op (and
+// self-clearing) while busy, mid-generation, on an error turn, or when the last
+// visible turn is the user's (use "Try again" there instead).
+function refreshRegenerate() {
+  document.querySelectorAll('.regen-wrap').forEach(el => el.remove());
+  if (busy || !active) return;
+  const visible = active.thread.filter(t => !t.hidden);
+  const last = visible[visible.length - 1];
+  if (!last || last.role !== 'assistant') return;
+  const els = threadEl.querySelectorAll('.turn.them:not(#pending):not(.error)');
+  const body = els.length && els[els.length - 1].querySelector('.turn-body');
+  if (!body) return;
+  body.insertAdjacentHTML('beforeend',
+    '<div class="regen-wrap"><button class="regen-btn" type="button" title="Ask the companion for a different reply">↻ Regenerate</button></div>');
+  const b = body.querySelector('.regen-btn');
+  if (b) b.addEventListener('click', regenerate);
 }
 
 sendBtn.addEventListener('click', () => send(msgBox.value));
