@@ -489,7 +489,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.13 · nourish</div>
+<div class="corner" id="version-label">v0.14 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="chef">Chef</button>
@@ -722,12 +722,17 @@
   </section>
 </main>
 
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.13 · nourish';
+const VERSION  = 'v0.14 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef settings blob (hill-climbing-nourish-chef) and the shared Anthropic key (hill-climbing-api-key) are deliberately NOT registered — they stay on-device.
 const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
 
@@ -1800,6 +1805,7 @@ function save() {
   };
   try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
   catch (e) { /* quota / private mode — never break the flow */ }
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
 }
 function switchTrack(id) {
   if (!TRACKS[id] || id === state.track) return;
@@ -2797,6 +2803,28 @@ document.getElementById('version-label').textContent = VERSION;
 load();
 loadChef();
 switchView('cook');   // lands on home, or resumes a mid-cook challenge
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (the cooking ladder, cleared dishes, pantry). Sign-in /
+// unlock live at the hub; this app only registers its store, shows status, and
+// pushes on save. The shared Anthropic key (hill-climbing-api-key) and the chef
+// settings blob are separate, unregistered, on-device only.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                      // remote-apply path — deliberately NOT through save()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'cook');
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'nourish' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

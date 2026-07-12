@@ -3,7 +3,7 @@
    Strategy: network-first for page navigations (so version bumps reach
    users immediately when online), cache-first for static assets, and a
    full offline fallback to the cached app shell when the network is gone. */
-const CACHE_VERSION = 'hc-v2.05';
+const CACHE_VERSION = 'hc-v2.07';
 const CACHE_NAME = `hill-climbing-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -16,8 +16,10 @@ const APP_SHELL = [
   '/levity.html',
   '/climb.html',
   '/train.html',
+  '/council.html',
   '/companion.html',
   '/hc-sync.js',
+  '/hc-sync-chip.js',
   '/manifest.webmanifest',
   '/icon.svg',
   '/icon-192.png',

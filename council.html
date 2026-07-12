@@ -338,7 +338,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · council</div>
+<div class="corner" id="version-label">v0.4 · council</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="convene">Convene</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -406,6 +406,10 @@
   Not for emergencies. In crisis right now? Call or text <a href="tel:988">988</a> (US) or your local emergency line.
 </div>
 
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
 <script>
 'use strict';
 
@@ -429,7 +433,7 @@
 // amended.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.3 · council';
+const VERSION   = 'v0.4 · council';
 const MODEL     = 'claude-opus-4-8';
 // ── Suite-wide Anthropic API key (a single key for the whole hub) ────────────
 // One canonical store shared across Council, Companion, and Nourish's chef so a
@@ -454,6 +458,7 @@ function clearApiKey() {
   try { localStorage.removeItem(API_KEY_LS); LEGACY_KEY_LS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
 }
 const LS_HIST   = 'hill-climbing-council';        // saved deliberations
+const SYNC_BLOB_KEY = 'ls:hill-climbing-council'; // this app's registered E2E-sync doc (see hc-sync.js). The API key (hill-climbing-api-key) is separate + device-local — never registered.
 const HIST_CAP  = 30;
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 
@@ -723,7 +728,7 @@ function updateFeedback(id, fb) {
   const s = all.find(x => x.id === id || x.ts === id);
   if (!s) return;
   s.feedback = fb;
-  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  persistHist(all);
 }
 
 function resetConvene() {
@@ -768,7 +773,7 @@ function persistThread() {
   if (!current) return;
   const all = loadHist();
   const s = all.find(x => x.id === current.id || x.ts === current.id);
-  if (s) { s.thread = current.thread; try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {} }
+  if (s) { s.thread = current.thread; persistHist(all); }
 }
 function scrollToEnd() {
   const box = document.getElementById('reply-box');
@@ -863,11 +868,15 @@ function esc(s) {
 function loadHist() {
   try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]'); } catch (_) { return []; }
 }
+function persistHist(all) {           // save locally + push to sync (no-op until sync is unlocked + armed)
+  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
 function saveSession(sess) {
   const all = loadHist();
   all.unshift(sess);
   if (all.length > HIST_CAP) all.length = HIST_CAP;
-  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  persistHist(all);
 }
 function renderHistory() {
   const all = loadHist();
@@ -1045,6 +1054,27 @@ convBtn.addEventListener('click', () => {
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById('version-label').textContent = VERSION;
 if (!apiKey) showSetup(true); else switchView('convene');
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (saved deliberations + their threads). The Anthropic
+// API key (LS_KEY) is a separate, unregistered on-device secret — never synced.
+// Sign-in / unlock live at the hub; this app registers its store, shows status,
+// and pushes on save. Nothing transmits until sync is unlocked and armed.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(LS_HIST) || '[]',
+    write: (str) => {                      // remote-apply path — deliberately NOT through persistHist()
+      try { localStorage.setItem(LS_HIST, str); } catch (e) { /* quota */ }
+      const hv = document.getElementById('history-view');
+      if (hv && !hv.classList.contains('hidden')) renderHistory();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'council' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
