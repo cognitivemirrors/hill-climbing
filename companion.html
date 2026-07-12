@@ -168,6 +168,9 @@
     .turn.them .turn-body p { font-size: 15px; color: var(--text); line-height: 1.64; margin-bottom: 11px; }
     .turn.them .turn-body p:last-child { margin-bottom: 0; }
     .turn.error .turn-body p { color: var(--dim); font-style: italic; }
+    .err-actions { margin-top: 11px; }
+    .retry-btn { font-size: 12.5px; padding: 7px 16px; border-color: var(--accent-soft); color: var(--mid); }
+    .retry-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 
     /* ── composer ───────────────────────────────────────────────── */
     #composer { margin-top: 20px; }
@@ -286,7 +289,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · companion</div>
+<div class="corner" id="version-label">v0.3 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="talk">Talk</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -396,7 +399,7 @@
 // (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.2 · companion';
+const VERSION   = 'v0.3 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
@@ -483,6 +486,9 @@ const WEB_TOOLS = [
   { type: 'web_fetch_20260209',  name: 'web_fetch',  max_uses: 5 }
 ];
 const MAX_TOOL_HOPS = 4;   // server-tool loops before we stop resuming a paused turn
+const MAX_RETRIES   = 3;   // extra attempts on a transient failure (network / rate-limit / 5xx)
+const RETRY_BASE_MS = 900; // exponential backoff base → 0.9s, 1.8s, 3.6s
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Anthropic call (browser-direct, user's key) ─────────────────────────────
 async function callClaudeRaw(system, messages, maxTokens) {
@@ -495,24 +501,7 @@ async function callClaudeRaw(system, messages, maxTokens) {
   let convo = messages.slice();
   let text = '';
   for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo, tools: WEB_TOOLS })
-    });
-    if (!res.ok) {
-      let detail = '';
-      try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
-      if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
-      if (res.status === 429) throw new ApiError('rate', 'Anthropic is rate-limiting the key right now. Give it a moment and try again.');
-      throw new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
-    }
-    const data = await res.json();
+    const data = await postWithRetry(system, convo, maxTokens);
     (data.content || []).forEach(b => { if (b.type === 'text' && b.text) text += b.text; });
     if (data.stop_reason === 'pause_turn' && Array.isArray(data.content)) {
       convo = convo.concat([{ role: 'assistant', content: data.content }]);
@@ -522,6 +511,55 @@ async function callClaudeRaw(system, messages, maxTokens) {
   }
   return text.trim();
 }
+
+// One request, retried with exponential backoff on TRANSIENT failures — a
+// dropped/reset connection ("Load failed"), a 429, or a 5xx. Web-search turns
+// are slower and drop more often, so this quietly rides out the common blip
+// before the user ever sees it. Non-transient errors (bad key, malformed
+// request) fail fast; if every retry is spent, the error surfaces to send()
+// with a manual "Try again". Returns parsed JSON.
+async function postWithRetry(system, convo, maxTokens) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await postOnce(system, convo, maxTokens);
+    } catch (err) {
+      if (err && err.retryable && attempt < MAX_RETRIES) {
+        await sleep(RETRY_BASE_MS * Math.pow(2, attempt));   // 0.9s, 1.8s, 3.6s
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+// A single POST. Throws an ApiError; `.retryable` marks the transient ones.
+async function postOnce(system, convo, maxTokens) {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 1024, system: system, messages: convo, tools: WEB_TOOLS })
+    });
+  } catch (_) {
+    // Network-level failure — offline, or a dropped/reset connection (WebKit's "Load failed").
+    throw retryable(new ApiError('network', 'The connection kept dropping before Anthropic could answer.'));
+  }
+  if (res.ok) return res.json();
+  let detail = '';
+  try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
+  if (res.status === 401) throw new ApiError('key', 'That API key was rejected. Check it under the menu → API key.');
+  if (res.status === 429) throw retryable(new ApiError('rate', 'Anthropic is still rate-limiting the key — give it a moment.'));
+  const httpErr = new ApiError('http', detail || ('The API returned an error (' + res.status + ').'));
+  if (res.status >= 500) throw retryable(httpErr);   // 5xx / 529 overloaded — transient
+  throw httpErr;                                       // other 4xx — a retry won't help
+}
+function retryable(err) { err.retryable = true; return err; }
 function ApiError(kind, message) { this.kind = kind; this.message = message; }
 ApiError.prototype = Object.create(Error.prototype);
 
@@ -768,6 +806,18 @@ async function send(text, opts) {
   persist();
 
   if (!opts.seed) { threadEl.insertAdjacentHTML('beforeend', turnHTML('user', text)); msgBox.value = ''; }
+  respond();
+}
+
+// Answer whatever user turn currently sits at the end of the open thread. Split
+// out of send() so a failed reply can be retried in place: the trailing user
+// turn is already in active.thread (and persisted), so retry never re-appends
+// it — it just re-runs the call. postWithRetry() has already ridden out the
+// transient blips; anything that reaches the catch is worth showing the user.
+async function respond() {
+  if (busy || !active || !active.thread.length) return;
+  const stale = document.getElementById('err-turn');
+  if (stale) stale.remove();
   threadEl.insertAdjacentHTML('beforeend',
     '<div class="turn them" id="pending"><div class="turn-who">Companion</div><div class="turn-body">' + deliberating() + '</div></div>');
   setBusy(true); scrollEnd();
@@ -775,17 +825,34 @@ async function send(text, opts) {
   try {
     const ctx = await gatherContext();
     const reply = await callClaudeRaw(ctx.system, apiMessages(active), 1200);
+    if (!reply) throw new ApiError('empty', 'That reply came back empty.');
     active.thread.push({ role: 'assistant', text: reply });
     persist();
     const pend = document.getElementById('pending');
     if (pend) pend.outerHTML = turnHTML('assistant', reply);
   } catch (err) {
     const pend = document.getElementById('pending');
-    if (pend) pend.outerHTML = turnHTML('assistant', err.message || 'I couldn’t respond just now.', true);
-    if (err.kind === 'key') showSetup(true);
+    if (pend) pend.remove();
+    showErrorTurn((err && err.message) || 'I couldn’t respond just now.');
+    if (err && err.kind === 'key') showSetup(true);
   } finally {
     setBusy(false); refreshSees(); scrollEnd();
   }
+}
+
+// A failed reply, shown with a "Try again" that re-answers the same user turn.
+// Deliberately NOT written into active.thread — so retry (and any re-render)
+// just re-runs respond() against the still-unanswered trailing user turn.
+function showErrorTurn(message) {
+  threadEl.insertAdjacentHTML('beforeend',
+    '<div class="turn them error" id="err-turn">' +
+      '<div class="turn-who">Companion</div>' +
+      '<div class="turn-body"><p>' + esc(message) + '</p>' +
+        '<div class="err-actions"><button class="ghost retry-btn" id="retry-btn" type="button">Try again</button></div>' +
+      '</div>' +
+    '</div>');
+  const rb = document.getElementById('retry-btn');
+  if (rb) rb.addEventListener('click', respond);
 }
 
 sendBtn.addEventListener('click', () => send(msgBox.value));
