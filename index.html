@@ -857,7 +857,7 @@
       return streak;
     }
 
-    function render(sets) {
+    function render(sets, log) {
       APPS.forEach(function (app) {
         const week = daysThisWeek(sets[app]);
         const strip = document.querySelector('[data-strip="' + app + '"]');
@@ -881,18 +881,36 @@
       if (streakEl) streakEl.textContent = weeklyStreak(sets);
     }
 
-    const log = readUsageLog();
-    const sets = {
-      meditate: logDaySet(log, 'meditate'),
-      breathe:  logDaySet(log, 'breathe'),
-      reflect:  new Set(),   // filled async from the journal IndexedDB
-      nourish:  logDaySet(log, 'nourish'),
-      levity:   logDaySet(log, 'levity'),
-      climb:    logDaySet(log, 'climb'),
-      train:    logDaySet(log, 'train'),
-    };
-    render(sets);            // instant: meditate + breathe (+ partial streak), even if IDB is unavailable
-    journalDaySet().then(function (js) { sets.reflect = js; render(sets); });
+    // Usage source: prefer hc-usage.js's cross-device aggregate (per-session +
+    // per-day-flag records summed over every device); fall back to this device's
+    // legacy localStorage log if the module is unavailable. Both share the same
+    // { app: { 'YYYY-MM-DD': {s,n} } } shape, so the readers below don't care which.
+    function loadUsage() {
+      if (window.HCUsage && HCUsage.aggregate) {
+        const wait = HCUsage.ready || Promise.resolve();
+        return wait.then(function () { return HCUsage.aggregate(); }).catch(readUsageLog);
+      }
+      return Promise.resolve(readUsageLog());
+    }
+    let reflectSet = new Set();       // filled async from the journal IndexedDB
+    function paint(log) {
+      render({
+        meditate: logDaySet(log, 'meditate'),
+        breathe:  logDaySet(log, 'breathe'),
+        reflect:  reflectSet,
+        nourish:  logDaySet(log, 'nourish'),
+        levity:   logDaySet(log, 'levity'),
+        climb:    logDaySet(log, 'climb'),
+        train:    logDaySet(log, 'train'),
+      }, log);
+    }
+    function refresh() { loadUsage().then(paint); }
+
+    paint(readUsageLog());   // instant first paint from this device's localStorage, no async wait
+    refresh();               // then the full cross-device aggregate
+    journalDaySet().then(function (js) { reflectSet = js; refresh(); });
+    // A remote sync pull that merges new usage records re-renders the dashboard.
+    if (window.HCUsage) HCUsage.onMerge = refresh;
   })();
   </script>
 
@@ -1032,6 +1050,7 @@
 
   <!-- ── Account & sync (end-to-end encrypted; see hc-sync.js) ─────────────── -->
   <script src="/hc-sync.js"></script>
+  <script src="/hc-usage.js"></script>
   <script>
   (function () {
     // Public publishable key — safe to ship; Row-Level Security is the guard.

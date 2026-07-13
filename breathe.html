@@ -221,7 +221,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.8 · breathe</div>
+<div class="corner" id="version-label">v0.9 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 
@@ -284,6 +284,7 @@
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
 
 <script>
@@ -369,40 +370,16 @@ const s = {
 };
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────────
-// Records one flag per app per day in a shared localStorage log the hub reads.
+// The usage log (per-app day-flags + per-session durations) lives in the shared
+// hc-usage.js module now, so all apps write one consistent, cross-device-syncable
+// store. markUsage marks the day active; addUsageDuration records a completed
+// session's seconds. Both delegate to HCUsage; wrappers keep the call sites below
+// unchanged. hcDayKey stays for any local use.
 function hcDayKey(d = new Date()) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-function markUsage(app) {
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log[app] ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-  } catch (e) { /* private mode / quota — never break the session */ }
-}
-// Record how long a session actually ran, on top of markUsage's day-flag.
-// Upgrades the day's value from the `1` flag to a per-day aggregate
-// { s: total seconds, n: session count }. Every existing reader (hub +
-// companion) reads only the day KEYS of log[app], never the value, so this is
-// backward compatible; and it stays a bounded per-day union, not a growing
-// list of timestamped records.
-function addUsageDuration(app, secs) {
-  try {
-    secs = Math.round(Number(secs) || 0);
-    if (secs <= 0 || secs > 21600) return;   // ignore nothing / a stuck tab (>6h)
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1;
-    const bucket = (log[app] ||= {});
-    const day = hcDayKey();
-    const cur = bucket[day];
-    const rec = (cur && typeof cur === 'object') ? cur : { s: 0, n: 0 };
-    rec.s += secs; rec.n += 1;
-    bucket[day] = rec;
-    localStorage.setItem(KEY, JSON.stringify(log));
-  } catch (e) { /* private mode / quota — never break the session */ }
-}
+function markUsage(app) { if (window.HCUsage) HCUsage.mark(app); }
+function addUsageDuration(app, secs) { if (window.HCUsage) HCUsage.addDuration(app, secs); }
 // One timestamp for the session in flight (breathwork OR training), 0 when
 // none. Set at each real start; the single record-and-clear helper below makes
 // double-counting impossible regardless of which of the many stop/switch paths

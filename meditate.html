@@ -1039,7 +1039,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.77</p>
+    <p id="version-label">v1.78</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1057,6 +1057,7 @@
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
 
 <script>
@@ -1372,45 +1373,16 @@ function saveGame() {
 let saveAccumulator = 0; // periodic save throttle (seconds since last save)
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────
-// Records one flag per app per day in a shared localStorage log the hub reads.
-// NOTE: do NOT reuse todayKey() above for this — its format ("Y-M-D", unpadded)
-// differs from the canonical hub key. Always use hcDayKey() for the usage log.
+// The usage log (per-app day-flags + per-session durations) lives in the shared
+// hc-usage.js module now, so all apps write one consistent store and it can sync
+// across devices. markUsage marks the day active (session start); addUsageDuration
+// records the elapsed seconds of a completed sit. Both delegate to HCUsage; the
+// wrappers keep these call sites unchanged. hcDayKey stays for any local use.
 function hcDayKey(d = new Date()) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-function markUsage(app) {
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log[app] ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-  } catch (e) { /* private mode / quota — never break the session */ }
-}
-// Record how long a session actually ran, on top of the day-flag markUsage
-// writes. Opening the app and bailing is a different signal from following
-// through a full sit; the duration is what tells them apart. We *upgrade* the
-// day's value in place — from the `1` flag markUsage set to a per-day
-// aggregate { s: total seconds, n: session count } — so every existing reader
-// (the hub + companion read only the day KEYS of log[app], never the value)
-// keeps working unchanged, and the log stays a bounded per-day union rather
-// than a growing list of timestamped session records (which would trip the
-// IndexedDB-migration trigger noted in CLAUDE.md §7).
-function addUsageDuration(app, secs) {
-  try {
-    secs = Math.round(Number(secs) || 0);
-    if (secs <= 0 || secs > 21600) return;   // ignore nothing / a stuck tab (>6h)
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1;
-    const bucket = (log[app] ||= {});
-    const day = hcDayKey();
-    const cur = bucket[day];
-    const rec = (cur && typeof cur === 'object') ? cur : { s: 0, n: 0 };
-    rec.s += secs; rec.n += 1;
-    bucket[day] = rec;
-    localStorage.setItem(KEY, JSON.stringify(log));
-  } catch (e) { /* private mode / quota — never break the session */ }
-}
+function markUsage(app) { if (window.HCUsage) HCUsage.mark(app); }
+function addUsageDuration(app, secs) { if (window.HCUsage) HCUsage.addDuration(app, secs); }
 let hcLoggedToday = false; // count one meditation/day; settling fires once per round
 
 // ─────────────────────────────────────────────
@@ -3166,7 +3138,7 @@ reportSubmit.addEventListener('click', () => {
 });
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.77 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.78 · t${TIER}`;
 
 // ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
 // One localStorage blob: the staircase (timeLimit, requiredRate, wins, round,
