@@ -771,6 +771,25 @@
     }
     function logDaySet(log, app) { return new Set(Object.keys((log && log[app]) || {})); }
 
+    // Minutes practised this week, summed from the { s: seconds, n: sessions }
+    // day-records meditate.html and breathe.html now write. Days logged before
+    // duration tracking existed hold the bare `1` flag and contribute 0 — we
+    // honestly have no time for them, so they add nothing rather than a fake zero.
+    function weekMinutes(log, app) {
+      const bucket = (log && log[app]) || {};
+      let secs = 0;
+      weekKeysFrom(weekStartDate(new Date())).forEach(function (k) {
+        const v = bucket[k];
+        if (v && typeof v === 'object' && typeof v.s === 'number') secs += v.s;
+      });
+      return Math.round(secs / 60);
+    }
+    function fmtMins(m) {
+      if (m <= 0) return '';
+      if (m < 60) return m + 'm';
+      return Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '');
+    }
+
     // Read journal days from the SAME IndexedDB reflect.html writes — read-only.
     // Open with NO version: opens whatever version exists (so a future reflect
     // schema bump never throws VersionError here), and never alters the schema.
@@ -851,7 +870,12 @@
           });
         }
         const count = document.querySelector('[data-count="' + app + '"]');
-        if (count) count.textContent = week.filter(Boolean).length + ' / 7';
+        if (count) {
+          // Meditate & breathe carry a time signal too — following through a
+          // full sit reads very differently from just opening the app.
+          const mins = (app === 'meditate' || app === 'breathe') ? fmtMins(weekMinutes(log, app)) : '';
+          count.textContent = week.filter(Boolean).length + ' / 7' + (mins ? ' · ' + mins : '');
+        }
       });
       const streakEl = document.getElementById('streak-num');
       if (streakEl) streakEl.textContent = weeklyStreak(sets);
