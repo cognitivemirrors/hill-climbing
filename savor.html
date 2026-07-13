@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Browser-chrome tint — explicit so Chrome Android matches the dark page. -->
+  <meta name="theme-color" content="#0a0b12">
+  <title>Savor · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Savor">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Savor (ripe berry / wine) ──────────
+         Taste is the theme, so the accent reads as ripe fruit and wine —
+         the colour of a developing palate. It fills the open gap between
+         Anime (magenta 288°) and Levity (rose 348°), sitting clearly apart
+         from Nourish's herb green: the two food apps are visually distinct,
+         one for *making* (Nourish) and one for *tasting* (Savor). */
+      --accent:      hsl(322,60%,66%);
+      --accent-soft: hsla(322,56%,64%,0.5);
+      --accent-glow: hsla(322,64%,52%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner data menu — export / import. Mirrors #home-link on the right. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 240px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 16px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+
+    /* ── WATCH — the show home ──────────────────────────────────── */
+    #watch-view { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 12px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 22px; }
+    .show-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 2.5rem; line-height: 1;
+      color: var(--text); text-shadow: 0 0 40px var(--accent-glow); margin-bottom: 8px;
+    }
+    .show-tag { font-family: var(--font-display); font-style: italic; font-size: 1.02rem; color: var(--mid); margin-bottom: 30px; }
+
+    /* filmstrip — the season at a glance */
+    .filmstrip { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; max-width: 340px; }
+    .frame {
+      width: 24px; height: 17px; border-radius: 3px; border: 1px solid var(--line);
+      background: var(--faint); transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+    .frame.done { background: var(--accent-soft); border-color: var(--accent-soft); }
+    .frame.next { border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); }
+    .season-count { font-size: 11px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 30px; }
+
+    /* the tune-in hero */
+    .hero {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 18px; padding: 24px 24px 26px; text-align: left; animation: fadeUp 0.35s ease;
+    }
+    .hero-badge-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .ep-badge {
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 999px; padding: 4px 11px; white-space: nowrap;
+    }
+    .taste-chip {
+      font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid);
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; white-space: nowrap;
+    }
+    .hero-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.6rem; line-height: 1.25;
+      color: var(--text); margin-bottom: 12px;
+    }
+    .hero-host { font-family: var(--font-display); font-style: italic; font-size: 1.02rem; color: var(--mid); line-height: 1.6; margin-bottom: 22px; }
+    .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
+
+    /* resume + community teaser */
+    .teaser {
+      width: 100%; margin-top: 20px; background: transparent; border: 1px solid var(--line);
+      border-radius: 16px; padding: 18px 20px; text-align: left; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s; animation: fadeUp 0.35s ease;
+    }
+    .teaser:hover { border-color: var(--accent-soft); background: rgba(255,255,255,0.03); }
+    .teaser-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+    .teaser-title { font-family: var(--font-display); font-size: 1.12rem; color: var(--text); margin-bottom: 4px; }
+    .teaser-host { font-size: 12px; color: var(--mid); font-style: italic; }
+    .watch-hint { margin-top: 26px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 340px; }
+
+    /* ── PLAYER — the tune-in flow ──────────────────────────────── */
+    #player-view { animation: fadeUp 0.3s ease; }
+    .player-back { margin: 0 0 16px; }
+    .stage-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .player-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 1.22;
+      color: var(--text); margin-bottom: 16px;
+    }
+    .player-host {
+      font-family: var(--font-display); font-style: italic; font-size: 1.04rem; line-height: 1.6;
+      color: var(--mid); border-left: 2px solid var(--accent-soft); padding-left: 16px; margin-bottom: 26px;
+    }
+    .block-label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+    .grab-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .grab-pill {
+      font-size: 13px; letter-spacing: 0.01em; color: var(--text);
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+    }
+    .grab-note { font-size: 11.5px; color: var(--faint); line-height: 1.55; margin-top: 6px; }
+    .idea { font-size: 15px; line-height: 1.62; color: var(--text); margin-bottom: 24px; }
+    .steps-block { border-top: 1px solid var(--line); padding-top: 18px; }
+    .step-list { list-style: none; margin: 0; padding: 0; counter-reset: tstep; }
+    .step-list li { position: relative; padding-left: 32px; margin-bottom: 16px; font-size: 14.5px; line-height: 1.6; color: var(--text); }
+    .step-list li:last-child { margin-bottom: 0; }
+    .step-list li::before {
+      counter-increment: tstep; content: counter(tstep);
+      position: absolute; left: 0; top: -1px; font-variant-numeric: tabular-nums;
+      color: var(--accent); font-family: var(--font-display); font-size: 16px;
+    }
+    .step-list li b { color: var(--accent); font-weight: 400; }
+    .aha {
+      background: var(--accent-glow); border: 1px solid var(--accent-soft); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 26px;
+    }
+    .aha .block-label { color: var(--accent); }
+    .aha p { font-size: 14.5px; line-height: 1.6; color: var(--text); }
+    .notice-q { font-family: var(--font-display); font-size: 1.2rem; color: var(--text); margin-bottom: 6px; }
+    .notice-sub { font-size: 12.5px; color: var(--dim); margin-bottom: 14px; line-height: 1.55; }
+    .notice-input {
+      width: 100%; min-height: 110px; resize: vertical; background: rgba(0,0,0,0.22);
+      border: 1px solid var(--line); border-radius: 12px; color: var(--text);
+      font-family: var(--font-ui); font-size: 16px; line-height: 1.55; padding: 13px 15px;
+      outline: none; transition: border-color 0.2s; margin-bottom: 22px;
+    }
+    .notice-input:focus { border-color: var(--accent-soft); }
+    .notice-input::placeholder { color: var(--faint); }
+    .player-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; margin-top: 26px; }
+    .stage-close { text-align: center; padding-top: 20px; }
+    .close-line {
+      font-family: var(--font-display); font-size: 1.5rem; line-height: 1.45;
+      color: var(--text); max-width: 440px; margin: 0 auto 16px;
+    }
+    .close-sub { font-size: 13px; color: var(--mid); max-width: 360px; margin: 0 auto 34px; line-height: 1.6; }
+    .close-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+    /* ── LESSONS — the library ──────────────────────────────────── */
+    .section-label {
+      font-family: var(--font-display); font-size: 13px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 4px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .section-note { font-size: 11.5px; color: var(--faint); line-height: 1.6; margin: 10px 0 14px; }
+    .ep-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 34px; }
+    .ep-row {
+      display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+      padding: 13px 14px; border: none; border-radius: 12px; background: transparent;
+      color: var(--text); font-family: var(--font-ui); cursor: pointer; transition: background 0.15s;
+    }
+    .ep-row:hover { background: rgba(255,255,255,0.04); }
+    .ep-tick {
+      width: 22px; height: 22px; flex: none; border-radius: 50%;
+      border: 1.5px solid var(--line-strong); display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: transparent; transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .ep-row.done .ep-tick { background: var(--accent); border-color: var(--accent); color: #0a0b12; font-weight: 700; }
+    .ep-main { flex: 1; min-width: 0; }
+    .ep-name { font-size: 14.5px; color: var(--text); letter-spacing: 0.01em; }
+    .ep-row.done .ep-name { color: var(--mid); }
+    .ep-sub { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+    .ep-sub .mine { color: var(--accent); }
+    .ep-num { font-family: var(--font-display); font-size: 13px; color: var(--dim); flex: none; width: 30px; text-align: center; font-variant-numeric: tabular-nums; }
+    .lessons-cta { display: flex; justify-content: center; margin-bottom: 12px; }
+
+    /* ── CONTRIBUTE — write your own lesson ─────────────────────── */
+    #contribute-view { animation: fadeUp 0.3s ease; }
+    .contrib-intro { margin-bottom: 22px; }
+    .contrib-title { font-family: var(--font-display); font-size: 1.55rem; color: var(--text); margin-bottom: 8px; }
+    .contrib-sub { font-size: 13px; color: var(--mid); line-height: 1.6; }
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+    .field .opt { color: var(--faint); text-transform: none; letter-spacing: 0.02em; }
+    .field input, .field textarea {
+      width: 100%; background: rgba(0,0,0,0.22); border: 1px solid var(--line);
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px; line-height: 1.5; padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .field input:focus, .field textarea:focus { border-color: var(--accent-soft); }
+    .field input::placeholder, .field textarea::placeholder { color: var(--faint); }
+    .field textarea { min-height: 84px; resize: vertical; }
+    .field-help { font-size: 11px; color: var(--faint); margin-top: 6px; line-height: 1.5; }
+    .contrib-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 24px; }
+    #contrib-msg { font-size: 12.5px; color: hsl(8,62%,66%); min-height: 1em; margin-top: 10px; }
+    .privacy-note {
+      font-size: 12.5px; line-height: 1.6; color: var(--text);
+      background: var(--accent-glow); border: 1px solid var(--accent-soft);
+      border-radius: 12px; padding: 13px 15px; margin-bottom: 22px;
+    }
+    .privacy-note b { color: var(--accent); font-weight: 400; }
+
+    /* ── NOTEBOOK — your tasting notes ──────────────────────────── */
+    .prog-summary { display: flex; gap: 12px; margin-bottom: 30px; flex-wrap: wrap; }
+    .stat {
+      flex: 1; min-width: 92px; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 16px 14px; text-align: center;
+    }
+    .stat-num { font-family: var(--font-display); font-size: 1.8rem; color: var(--text); line-height: 1; }
+    .stat-cap { font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dim); margin-top: 8px; }
+    .note-day { margin-bottom: 24px; }
+    .note-day-h {
+      font-family: var(--font-display); font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 12px;
+    }
+    .note-card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 15px 17px; margin-bottom: 10px; position: relative;
+    }
+    .note-ep { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); text-transform: uppercase; margin-bottom: 7px; }
+    .note-text { font-size: 14px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .note-del {
+      position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; padding: 0;
+      background: transparent; border: none; color: var(--faint); font-size: 17px; line-height: 1;
+      cursor: pointer; border-radius: 8px; transition: color 0.2s;
+    }
+    .note-del:hover { color: hsl(8,62%,62%); }
+    .empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 54px; line-height: 1.9; }
+
+    @media (max-width: 420px) { .mode-btn { padding: 5px 11px; letter-spacing: 0.04em; } }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .show-title { font-size: 2.1rem; }
+      .hero-title { font-size: 1.42rem; }
+      .player-title { font-size: 1.5rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .hero, .teaser, #player-view, #contribute-view { animation: none; }
+      .frame { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · savor</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="watch">Watch</button>
+  <button class="mode-btn"        data-view="lessons">Lessons</button>
+  <button class="mode-btn"        data-view="notebook">Notebook</button>
+</nav>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Notes + your lessons, as a backup file</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore, or receive a shared lesson</span>
+    </button>
+    <div class="menu-note">Your notes and lessons live only on this device — until you choose to share the file.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- ══ WATCH — the show ══════════════════════════════════════ -->
+  <section id="watch-view" class="panel">
+    <div class="kicker" id="watch-kicker">A cooking show</div>
+    <div class="show-title">Savor</div>
+    <div class="show-tag">Learn to cook by learning to taste.</div>
+    <div class="filmstrip" id="filmstrip" aria-hidden="true"></div>
+    <div class="season-count" id="season-count"></div>
+    <div id="resume-slot"></div>
+    <div class="hero" id="hero"></div>
+    <div id="community-slot"></div>
+    <div class="watch-hint" id="watch-hint">Each episode is a few minutes of reading, then a small tasting you do at your own counter. No recipe to follow — just your tongue, learning.</div>
+  </section>
+
+  <!-- ══ PLAYER — the tune-in flow ═════════════════════════════ -->
+  <section id="player-view" class="hidden">
+    <button class="btn ghost player-back" id="player-back">‹ back to the show</button>
+
+    <!-- stage 1 · intro -->
+    <div id="stage-intro">
+      <div class="stage-head">
+        <span class="ep-badge" id="pi-badge">EPISODE</span>
+        <span class="taste-chip" id="pi-taste">TASTE</span>
+      </div>
+      <div class="player-title" id="pi-title">title</div>
+      <div class="player-host" id="pi-host">host</div>
+      <div class="block-label">Grab from your kitchen</div>
+      <div class="grab-list" id="pi-grab"></div>
+      <div class="grab-note" id="pi-grabnote">Nothing fancy — whatever's closest works. Everything here is safe to taste as-is.</div>
+      <div class="player-actions">
+        <button class="btn primary" id="pi-start">I'M AT THE COUNTER →</button>
+      </div>
+    </div>
+
+    <!-- stage 2 · taste (the experiment) -->
+    <div id="stage-taste" class="hidden">
+      <div class="stage-head"><span class="ep-badge" id="pt-badge">EPISODE</span></div>
+      <div class="block-label">The idea</div>
+      <div class="idea" id="pt-idea">idea</div>
+      <div class="steps-block">
+        <div class="block-label">Taste along</div>
+        <ol class="step-list" id="pt-steps"></ol>
+      </div>
+      <div class="player-actions">
+        <button class="btn primary" id="pt-done">I TASTED IT →</button>
+        <button class="btn ghost" id="pt-back">‹ back</button>
+      </div>
+    </div>
+
+    <!-- stage 3 · notice (payoff + capture) -->
+    <div id="stage-notice" class="hidden">
+      <div class="aha">
+        <div class="block-label">What just happened</div>
+        <p id="pn-aha">aha</p>
+      </div>
+      <div class="notice-q">What did you notice?</div>
+      <div class="notice-sub">A word or a sentence. This is your tasting notebook — it's how you'll remember what your tongue learned tonight. Optional.</div>
+      <textarea class="notice-input" id="pn-input" placeholder="e.g. the salted tomato tasted rounder, almost sweet — the plain one was watery…" aria-label="What did you notice?"></textarea>
+      <div class="player-actions">
+        <button class="btn primary" id="pn-save">SAVE TO NOTEBOOK</button>
+        <button class="btn ghost" id="pn-skip">just mark it tasted</button>
+      </div>
+    </div>
+
+    <!-- stage 4 · close -->
+    <div id="stage-close" class="hidden stage-close">
+      <div class="close-line" id="pc-line">nice.</div>
+      <div class="close-sub" id="pc-sub"></div>
+      <div class="close-actions">
+        <button class="btn primary" id="pc-next">NEXT EPISODE</button>
+        <button class="btn ghost" id="pc-done">back to the show</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ LESSONS — the library ═════════════════════════════════ -->
+  <section id="lessons-view" class="hidden panel">
+    <div class="section-label">The season · learning to taste</div>
+    <div class="section-note">Ten episodes, in order. Each trains one thing your tongue can do — the foundations every cook works from.</div>
+    <div class="ep-list" id="core-list"></div>
+
+    <div class="section-label">From the community</div>
+    <div class="section-note" id="community-note">Guest lessons — small tasting habits passed between cooks. A handful of starters to begin with; the rest grows from what you and others add and share.</div>
+    <div class="ep-list" id="community-list"></div>
+    <div class="lessons-cta">
+      <button class="btn primary" id="contribute-btn">＋ SHARE A TASTE LESSON</button>
+    </div>
+  </section>
+
+  <!-- ══ CONTRIBUTE — write your own ═══════════════════════════ -->
+  <section id="contribute-view" class="hidden">
+    <button class="btn ghost player-back" id="contrib-back">‹ back to lessons</button>
+    <div class="contrib-intro">
+      <div class="contrib-title">Teach a tasting</div>
+      <div class="contrib-sub">Something a friend, a parent, a cook you worked with, or your own tongue taught you. Keep it to one small thing someone can taste tonight.</div>
+    </div>
+    <div class="privacy-note">
+      Your lesson is saved <b>only on this device</b>. To pass it to someone — or into the show — export it from the menu and share the file. Nothing is uploaded.
+    </div>
+    <form id="contrib-form">
+      <div class="field">
+        <label for="cf-title">Title</label>
+        <input type="text" id="cf-title" maxlength="80" placeholder="e.g. Salt your pasta water like the sea" required>
+      </div>
+      <div class="field">
+        <label for="cf-taste">What it trains <span class="opt">(a word or two)</span></label>
+        <input type="text" id="cf-taste" maxlength="40" placeholder="e.g. Salt · Acid · Aroma · Balance">
+      </div>
+      <div class="field">
+        <label for="cf-host">Who taught you <span class="opt">(optional)</span></label>
+        <input type="text" id="cf-host" maxlength="60" placeholder="e.g. My grandmother · A line cook I worked with · Me">
+      </div>
+      <div class="field">
+        <label for="cf-idea">The idea</label>
+        <textarea id="cf-idea" maxlength="400" placeholder="What are you teaching the tongue to notice? A sentence or two." required></textarea>
+      </div>
+      <div class="field">
+        <label for="cf-steps">Taste along <span class="opt">(one step per line)</span></label>
+        <textarea id="cf-steps" maxlength="700" placeholder="Taste the plain thing.&#10;Add the one change.&#10;Taste again — notice the difference." required></textarea>
+        <div class="field-help">Each line becomes a numbered step. Keep the ingredients cheap and safe to taste as they are.</div>
+      </div>
+      <div class="field">
+        <label for="cf-aha">What just happened <span class="opt">(the takeaway)</span></label>
+        <textarea id="cf-aha" maxlength="300" placeholder="The one thing you hope they walk away tasting."></textarea>
+      </div>
+      <div id="contrib-msg" role="alert"></div>
+      <div class="contrib-actions">
+        <button type="submit" class="btn primary" id="cf-save">SAVE LESSON</button>
+        <button type="button" class="btn ghost" id="cf-cancel">cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ══ NOTEBOOK — your tasting notes ═════════════════════════ -->
+  <section id="notebook-view" class="hidden panel">
+    <div class="prog-summary" id="nb-stats"></div>
+    <div class="section-label">Your tasting notes</div>
+    <div id="nb-notes"></div>
+  </section>
+</main>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const VERSION   = 'v0.1 · savor';
+const STATE_KEY = 'hill-climbing-savor';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-savor';   // this app's registered E2E-sync doc (see hc-sync.js)
+
+// ── The season — learning to taste is learning to cook ─────────────────────────
+// Every episode sends you to your own counter for a small, safe tasting. The
+// ingredients are deliberately cheap and safe to eat raw (salt, lemon, a tomato,
+// oil, bread, broth, cheese, coffee) — no raw meat, no eggs, nothing that needs
+// a recipe. The pedagogy is Salt-Fat-Acid + the five tastes + aroma, ending on
+// the only question a cook really asks: "what does this need?"
+const CORE = [
+  { id: 'c1', season: 1, ep: 1, taste: 'Salt',
+    title: 'Salt makes it taste more like itself',
+    host: "We start where every cook starts — not with heat, but with salt and your own tongue.",
+    grab: ['a ripe tomato (or cucumber, or apple)', 'fine salt'],
+    idea: "Salt's first job isn't to make food taste <b>salty</b>. In small amounts it makes food taste more like <i>itself</i> — brighter, sweeter, fuller. Tonight you catch the exact moment that happens.",
+    steps: [
+      "Cut two pieces. Taste the first plain — really notice it. Watery? Flat? A little sweet?",
+      "Put three or four grains of salt on the second piece. Taste it slowly.",
+      "It shouldn't taste salty — it should taste <b>more like tomato</b>. That jump is the whole lesson.",
+      "Now heavily salt a third bite. Too much. Notice where 'more alive' tipped into 'salty'.",
+    ],
+    aha: "A pinch of salt is a volume knob for flavour that's already there. Most 'bland' food is just under-salted.",
+    close: "You just found the line between seasoned and salty." },
+
+  { id: 'c2', season: 1, ep: 2, taste: 'Salt · threshold',
+    title: 'Find the edge of enough',
+    host: "Cooks don't measure salt — they taste to a threshold. Tonight you find yours, so 'season to taste' stops being a mystery.",
+    grab: ['a cup of warm water or plain broth', 'salt', 'a spoon'],
+    idea: "There's a narrow band where food goes from flat to alive without ever tasting salty. You're going to walk right up to that edge and over it, so your tongue knows where it is.",
+    steps: [
+      "Taste the plain water or broth. Boring on purpose.",
+      "Stir in a small pinch. Taste. Still flat? Keep going.",
+      "Add pinches one at a time, tasting each, until it suddenly tastes <b>good</b> — round, not salty. That's your threshold.",
+      "One more pinch past it — now it's too salty. You've bracketed the target from both sides.",
+    ],
+    aha: "'Enough salt' is a band you can now feel. You'll recognise it in soup, pasta water, everything.",
+    close: "Your tongue is a measuring tool now. It travels with you." },
+
+  { id: 'c3', season: 1, ep: 3, taste: 'Acid',
+    title: 'Acid wakes it up',
+    host: "When a dish tastes flat but is salted enough, it's usually missing acid. Acid is brightness.",
+    grab: ['something bland and rich — plain beans, avocado, or a spoon of soup', 'half a lemon (or any vinegar)'],
+    idea: "Acid makes heavy food feel lively — it's the lift you reach for when a dish 'sits there'. Feel it happen on the sides of your tongue.",
+    steps: [
+      "Taste the bland thing. Notice the heaviness — it kind of just sits.",
+      "Squeeze a few drops of lemon over half of it. Taste again.",
+      "Feel it <b>lift</b>. The sides of your tongue wake up. Same food, suddenly it has edges.",
+      "Add too much — now it's sour. Learn that line too.",
+    ],
+    aha: "'What's missing?' is answered by acid more often than you'd think. Reach for lemon before you give up on a dish.",
+    close: "Salt for depth, acid for lift. Two of the four levers." },
+
+  { id: 'c4', season: 1, ep: 4, taste: 'Fat',
+    title: 'Fat carries flavour',
+    host: "Fat spreads flavour across your whole mouth and makes it last. It's why a drizzle of oil changes everything.",
+    grab: ['good bread or a plain cracker', 'olive oil', 'salt', '(optional) a dried herb or chilli flakes'],
+    idea: "Richness isn't only a taste — it's <i>duration and spread</i>. A little fat carries seasoning further and holds it on your tongue.",
+    steps: [
+      "Taste a bite of plain bread. Notice how quickly the flavour fades.",
+      "Dip the next bite in olive oil with a pinch of salt. Taste slowly.",
+      "The flavour now <b>coats your mouth and stays</b>. Fat is the carrier.",
+      "Optional: rub a pinch of dried herb into the oil first — fat pulls the aroma out and delivers it.",
+    ],
+    aha: "A little fat makes seasoning go further and last longer. That's why cooks finish dishes with oil or butter.",
+    close: "Salt, acid, fat. One lever left." },
+
+  { id: 'c5', season: 1, ep: 5, taste: 'The five tastes',
+    title: 'The five tastes, one flight',
+    host: "Your tongue reads five basic tastes. Tonight you name each on purpose, so you can tell them apart when they're tangled together in real food.",
+    grab: ['sugar (sweet)', 'lemon (sour)', 'salt (salty)', 'black coffee or a bitter green (bitter)', 'soy sauce, parmesan, or tomato paste (umami)'],
+    idea: "Flavour isn't one thing — it's a chord. Once you can hear the separate notes, you can tune them.",
+    steps: [
+      "Taste each one alone, with a sip of water between. Say the name out loud: sweet, sour, salty, bitter, umami.",
+      "Notice <b>where</b> each lands — sweet on the tip, sour on the sides, bitter at the back.",
+      "Umami is the sneaky one: savoury, mouth-filling, makes you salivate. Chase that feeling.",
+      "Now taste a food you love and try to pick out which of the five are hiding in it.",
+    ],
+    aha: "You've met the whole palette. The rest of cooking is learning to mix these five.",
+    close: "Five notes. Now you can hear them." },
+
+  { id: 'c6', season: 1, ep: 6, taste: 'Sweet · balance',
+    title: 'Sweetness as a counterweight',
+    host: "Sweet isn't just dessert — a tiny amount balances sour and salt and rounds sharp edges.",
+    grab: ['a sharp vinaigrette, or just lemon juice + oil + salt', 'a pinch of sugar or a drop of honey'],
+    idea: "Used right, you won't taste 'sweet' — you'll taste 'balanced'. Sweetness is a counterweight, not a flavour you're adding.",
+    steps: [
+      "Mix a quick dressing: lemon or vinegar + oil + salt. Taste. Too sharp?",
+      "Add a small pinch of sugar or a drop of honey. Stir, taste.",
+      "The sharpness <b>softens</b> without becoming dessert. That's balance.",
+      "Add too much — now it's candy. Note the line.",
+    ],
+    aha: "A pinch of sugar fixes 'too sour' the way a squeeze of lemon fixes 'too flat'. Counterweights.",
+    close: "You're not adding flavours now — you're balancing them. That's cooking." },
+
+  { id: 'c7', season: 1, ep: 7, taste: 'Bitter',
+    title: 'Making friends with bitter',
+    host: "Bitter is the grown-up taste we're wired to distrust — and the one that makes food interesting.",
+    grab: ['something bitter — dark greens, unsweetened cocoa or coffee, grapefruit, or radicchio', 'salt, oil, or lemon'],
+    idea: "Learn how salt and fat tame bitterness, and a taste you flinch from becomes one you can crave.",
+    steps: [
+      "Taste the bitter thing alone. Notice the reflex to pull back.",
+      "Now add a little salt, or a drizzle of oil, or a squeeze of lemon.",
+      "The bitterness recedes into <b>depth</b> — pleasant, complex, adult.",
+      "Sit with it. This is a taste you can learn to want.",
+    ],
+    aha: "Bitterness, balanced, is what makes coffee, greens, and dark chocolate worth it. Salt and fat are its friends.",
+    close: "Your palate just grew up a little." },
+
+  { id: 'c8', season: 1, ep: 8, taste: 'Umami',
+    title: 'Umami, the savoury depth',
+    host: "Umami is the 'meaty', full, satisfying sensation — and you can build it without meat.",
+    grab: ['plain broth or warm water', 'a drop of soy sauce — or a little miso, parmesan, or tomato paste'],
+    idea: "Umami is the difference between thin and deep. It's what a dish wants when salt and acid are fine but it still feels hollow.",
+    steps: [
+      "Taste the plain broth or water. Thin, one-note.",
+      "Stir in a few drops of soy (or dissolve a little miso, parmesan, or tomato paste). Taste.",
+      "Feel it get <b>round and full</b> — your mouth waters, it lingers. That's umami.",
+      "Notice you didn't add saltiness or brightness — you added <i>depth</i>.",
+    ],
+    aha: "When a dish is 'missing something' but salt and acid are fine, it usually wants umami: soy, miso, parmesan, mushrooms, tomato.",
+    close: "Salt, acid, fat, sweet, bitter, umami — you can name what a dish needs now." },
+
+  { id: 'c9', season: 1, ep: 9, taste: 'Aroma',
+    title: 'Aroma is most of flavour',
+    host: "Most of what you call 'taste' is actually smell. Prove it to yourself.",
+    grab: ['something aromatic — coffee, an orange, cinnamon, or a bruised herb', 'your fingers (to pinch your nose)'],
+    idea: "Once you feel how much flavour is aroma, you'll understand why toasting, browning, and blooming spices matter so much.",
+    steps: [
+      "Pinch your nose closed. Taste the aromatic thing. Notice how <b>flat</b> it is — just sweet or sour or bitter.",
+      "Keep chewing and let your nose go. The flavour <b>floods in</b>.",
+      "That flood is aroma reaching your nose from the back of your throat — most of the experience.",
+      "Now smell a spice, warm it in a dry pan, and smell again. Heat unlocks even more.",
+    ],
+    aha: "Cooking is largely aroma management: toasting, browning, blooming. Your nose is half your palate.",
+    close: "You've been tasting with your nose all along. Now you know it." },
+
+  { id: 'c10', season: 1, ep: 10, taste: 'The whole palate',
+    title: 'What does this need?',
+    host: "The last episode of the season is the only question a cook really asks.",
+    grab: ['any dish you can make bland on purpose — plain rice, unsalted soup, a dull salad', 'salt, lemon, oil, and something umami, all within reach'],
+    idea: "Every adjustment you've learned collapses into one habit: taste, then ask <b>what does this need?</b> — and run the checklist.",
+    steps: [
+      "Taste the bland dish. Resist fixing it yet.",
+      "Run the checklist out loud: <b>Salt?</b> (flat) <b>Acid?</b> (heavy, dull) <b>Fat?</b> (thin, fleeting) <b>Sweet?</b> (too sharp) <b>Umami?</b> (hollow) <b>Aroma?</b> (sleepy).",
+      "Add the <i>one</i> thing it most needs. Taste again. Reassess.",
+      "Stop when your tongue says 'there'. You just cooked — by tasting.",
+    ],
+    aha: "You don't need recipes to fix food. You need to taste and ask one question. That's the whole show.",
+    close: "That's the season. From here, every meal is practice — keep a spoon handy." },
+];
+
+// ── From the community — seed guest lessons ────────────────────────────────────
+// Honest provenance: these are a handful of starter lessons written to get the
+// community shelf going — folk / kitchen wisdom attributed by role or relationship,
+// not testimonials from specific named people. The real community grows from user
+// contributions (state.myLessons), which merge into this shelf and can be shared
+// as export files. Same shape as CORE so the player renders them identically.
+const COMMUNITY = [
+  { id: 'g1', taste: 'Salt', host: 'Every Italian grandmother',
+    title: 'Salt your pasta water like the sea',
+    hostNote: "Pasta only takes on salt in the pot — this is your one chance to season it from the inside.",
+    grab: ['a small pot of water', 'salt', 'a spoon'],
+    idea: "Under-salted pasta water is why so much homemade pasta tastes like it's missing something. It should taste like seawater — pleasantly salty, not the ocean floor.",
+    steps: [
+      "Boil a little water. Add a big pinch of salt and let it dissolve.",
+      "Spoon a taste (careful, hot — let it cool a second). Too weak?",
+      "Add more and taste until it's <b>seawater</b>, then remember that amount.",
+      "Compare with a pinch-only pot — the difference is the whole seasoning of the dish.",
+    ],
+    aha: "Season the water generously; the pasta drinks up exactly what it needs and leaves the rest." },
+
+  { id: 'g2', taste: 'Temperature', host: 'A pastry chef I know',
+    title: 'Taste it at the temperature you\'ll eat it',
+    hostNote: "A sauce tasted boiling hot will lie to you about how salty and sweet it is.",
+    grab: ['a soup, sauce, or dressing you\'re making', 'two spoons'],
+    idea: "Cold dulls salt and sweetness; heat sharpens them. Season a dish at pot temperature and it can land wrong on the plate.",
+    steps: [
+      "Taste a spoonful straight from the hot pot. Note how it reads.",
+      "Let a second spoonful sit and cool for two minutes.",
+      "Taste again. Feel how <b>flatter and saltier</b> it got as it cooled.",
+      "Season for the temperature it'll be <i>eaten</i> at, not the pot.",
+    ],
+    aha: "Chilled dishes need a heavier hand; piping-hot ones, a lighter one. Taste at serving temperature." },
+
+  { id: 'g3', taste: 'The habit', host: 'Every professional kitchen',
+    title: 'Keep two spoons going',
+    hostNote: "The single habit that separates cooks who taste from cooks who guess.",
+    grab: ['anything you\'re cooking', 'two clean spoons'],
+    idea: "One spoon stirs, the other tastes — and never the same spoon twice. It sounds fussy; it's the whole game.",
+    steps: [
+      "Set two spoons by the stove before you start.",
+      "Stir with one. When you taste, use the other, then set it in the sink.",
+      "Grab a fresh spoon next time. You'll taste <b>ten or twenty times</b>, not once at the end.",
+      "Notice how many little corrections you make that you'd have missed.",
+    ],
+    aha: "Great cooking isn't one big seasoning at the end — it's a hundred small tastes along the way." },
+
+  { id: 'g4', taste: 'Aroma', host: 'A friend from Chengdu',
+    title: 'Toast it, then smell the shift',
+    hostNote: "Dry spices and grains are asleep until heat wakes them up.",
+    grab: ['whole spices, raw rice, or nuts', 'a dry pan'],
+    idea: "Aroma is flavour you haven't tasted yet. Toasting is the cheapest way to double it, and you can smell it happen.",
+    steps: [
+      "Smell your cumin, rice, or nuts cold. Remember it.",
+      "Toast them in a dry pan over medium heat, shaking, until they <b>speak</b> — a nutty, fragrant shift.",
+      "Smell again. It's a different, deeper thing.",
+      "Now imagine that difference inside every dish you toast them into.",
+    ],
+    aha: "A dry pan and two minutes is the best flavour-for-effort trade in cooking." },
+
+  { id: 'g5', taste: 'Salt · layering', host: 'A line cook',
+    title: 'Under-salt the pot, finish on the plate',
+    hostNote: "The same salt does twice the work when some of it lands last.",
+    grab: ['a finished dish', 'flaky or coarse finishing salt'],
+    idea: "Salt stirred in seasons evenly; a few flakes on top hit your tongue <i>first</i> and read as brighter. Layer it.",
+    steps: [
+      "Season your dish a touch lighter than usual as it cooks.",
+      "Just before eating, sprinkle a pinch of flaky salt over the top.",
+      "Take a bite — the crystals land on your tongue first, then dissolve.",
+      "Compare with an all-stirred-in bite. <b>Same salt, more effect.</b>",
+    ],
+    aha: "Season in layers: most in the cooking, a little bright hit right at the end." },
+
+  { id: 'g6', taste: 'Heat', host: 'The person who taught me to cook',
+    title: 'Save one raw bite',
+    hostNote: "The easiest way to learn what heat does is to taste before and after.",
+    grab: ['a vegetable you\'re about to cook — onion, carrot, pepper'],
+    idea: "Heat is a flavour. Keep one raw slice back and, at the end, taste it against the cooked one — you'll taste exactly what the pan did.",
+    steps: [
+      "Before cooking, set aside one small raw slice.",
+      "Cook the rest however you're cooking it.",
+      "At the end, taste the raw slice, then the cooked. Sharp vs. sweet, harsh vs. mellow.",
+      "That gap is what heat gave you. Now you can <b>aim</b> for it.",
+    ],
+    aha: "Cooking transforms flavour, not just texture. Taste the before and after and you'll cook on purpose." },
+];
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let state = {
+  v: 1,
+  watched: {},      // { epId: firstWatchedTimestamp }
+  notes: [],        // { id, ep, epTitle, taste, text, created }
+  myLessons: [],    // user-contributed lessons (same shape as COMMUNITY)
+  current: null,    // resume an in-progress tune-in: { ep: epId, stage }
+};
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    if (raw && typeof raw === 'object') {
+      state.watched   = (raw.watched && typeof raw.watched === 'object') ? raw.watched : {};
+      state.notes     = Array.isArray(raw.notes) ? raw.notes : [];
+      state.myLessons = Array.isArray(raw.myLessons) ? raw.myLessons.map(normalizeLesson).filter(Boolean) : [];
+      state.current   = (raw.current && typeof raw.current === 'object') ? raw.current : null;
+    }
+  } catch (e) { /* corrupt / private mode — start fresh, never throw */ }
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+}
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+// Same shared localStorage log the other practices write. hcDayKey is the
+// canonical zero-padded key the hub reads — never reuse another app's date helper.
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+let loggedThisLoad = false;   // one "tasted today" flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  try {
+    const KEY = 'hill-climbing-usage';
+    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
+    log.v = 1; (log.savor ||= {})[hcDayKey()] = 1;
+    localStorage.setItem(KEY, JSON.stringify(log));
+    loggedThisLoad = true;
+  } catch (e) { /* private mode / quota — never break the session */ }
+}
+
+// ── Derived helpers ────────────────────────────────────────────────────────────
+function communityAll() { return COMMUNITY.concat(state.myLessons); }
+function episodeById(id) {
+  return CORE.find(e => e.id === id) || communityAll().find(e => e.id === id) || null;
+}
+function isDone(id) { return !!state.watched[id]; }
+function coreDoneCount() { return CORE.filter(e => isDone(e.id)).length; }
+function nextCore() { return CORE.find(e => !isDone(e.id)) || null; }
+function tastesExplored() {
+  // distinct top-level taste words among watched episodes
+  const s = new Set();
+  Object.keys(state.watched).forEach(id => {
+    const e = episodeById(id);
+    if (e && e.taste) s.add(e.taste.split('·')[0].trim().toLowerCase());
+  });
+  return s.size;
+}
+
+function normalizeLesson(l) {
+  if (!l || typeof l !== 'object' || typeof l.title !== 'string') return null;
+  return {
+    id: typeof l.id === 'string' ? l.id : 'm' + Math.random().toString(36).slice(2),
+    mine: true,
+    taste: typeof l.taste === 'string' ? l.taste : '',
+    host: typeof l.host === 'string' ? l.host : '',
+    title: l.title.slice(0, 120),
+    hostNote: typeof l.hostNote === 'string' ? l.hostNote : '',
+    idea: typeof l.idea === 'string' ? l.idea : '',
+    grab: Array.isArray(l.grab) ? l.grab.filter(x => typeof x === 'string') : [],
+    steps: Array.isArray(l.steps) ? l.steps.filter(x => typeof x === 'string') : [],
+    aha: typeof l.aha === 'string' ? l.aha : '',
+    close: typeof l.close === 'string' ? l.close : 'Nicely tasted.',
+    created: typeof l.created === 'number' ? l.created : Date.now(),
+  };
+}
+
+// ── View switching ─────────────────────────────────────────────────────────────
+const SECTIONS = ['watch', 'lessons', 'notebook', 'player', 'contribute'];
+function showSection(name) {
+  SECTIONS.forEach(s => document.getElementById(s + '-view').classList.toggle('hidden', s !== name));
+}
+function switchView(name) {
+  // tabs only cover the three top-level views; player/contribute exit back here
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  showSection(name);
+  if (name === 'watch') renderWatch();
+  if (name === 'lessons') renderLessons();
+  if (name === 'notebook') renderNotebook();
+  window.scrollTo(0, 0);
+}
+
+// ── WATCH ───────────────────────────────────────────────────────────────────────
+function el(tag, cls, html) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
+
+function renderWatch() {
+  // filmstrip
+  const strip = document.getElementById('filmstrip');
+  strip.innerHTML = '';
+  const upcoming = nextCore();
+  CORE.forEach(e => {
+    const f = el('div', 'frame' + (isDone(e.id) ? ' done' : '') + (upcoming && e.id === upcoming.id ? ' next' : ''));
+    f.title = 'S' + e.season + ' · E' + e.ep + ' — ' + e.title;
+    strip.appendChild(f);
+  });
+  const done = coreDoneCount();
+  document.getElementById('season-count').textContent = done + ' of ' + CORE.length + ' episodes tasted';
+  document.getElementById('watch-kicker').textContent = done === 0 ? 'A cooking show' : (done >= CORE.length ? 'Season one · complete' : 'Season one');
+
+  // resume slot
+  const resume = document.getElementById('resume-slot');
+  resume.innerHTML = '';
+  if (state.current && episodeById(state.current.ep) && !isDone(state.current.ep)) {
+    const ep = episodeById(state.current.ep);
+    const t = el('button', 'teaser', '');
+    t.appendChild(el('div', 'teaser-label', 'Pick up where you left off'));
+    t.appendChild(el('div', 'teaser-title', ep.title));
+    t.appendChild(el('div', 'teaser-host', 'Mid-tasting — tap to continue'));
+    t.addEventListener('click', () => openEpisode(ep.id, true));
+    resume.appendChild(t);
+  }
+
+  // hero — the next episode to tune into
+  const hero = document.getElementById('hero');
+  hero.innerHTML = '';
+  if (upcoming) {
+    const row = el('div', 'hero-badge-row');
+    row.appendChild(el('span', 'ep-badge', 'Season ' + upcoming.season + ' · Episode ' + upcoming.ep));
+    row.appendChild(el('span', 'taste-chip', upcoming.taste));
+    hero.appendChild(row);
+    hero.appendChild(el('div', 'hero-title', upcoming.title));
+    hero.appendChild(el('div', 'hero-host', '“' + upcoming.host + '”'));
+    const acts = el('div', 'hero-actions');
+    const tune = el('button', 'btn primary', done === 0 ? 'TUNE IN' : 'TUNE IN →');
+    tune.addEventListener('click', () => openEpisode(upcoming.id));
+    acts.appendChild(tune);
+    const browse = el('button', 'btn ghost', 'browse all episodes');
+    browse.addEventListener('click', () => switchView('lessons'));
+    acts.appendChild(browse);
+    hero.appendChild(acts);
+  } else {
+    // season complete
+    hero.appendChild(el('div', 'hero-badge-row', '<span class="ep-badge">The season · complete</span>'));
+    hero.appendChild(el('div', 'hero-title', 'You can taste, and adjust. That’s cooking.'));
+    hero.appendChild(el('div', 'hero-host', '“You finished the season. Re-taste any episode any time — your palate keeps changing — or take a lesson from the community.”'));
+    const acts = el('div', 'hero-actions');
+    const b1 = el('button', 'btn primary', 'FROM THE COMMUNITY');
+    b1.addEventListener('click', () => switchView('lessons'));
+    acts.appendChild(b1);
+    const b2 = el('button', 'btn ghost', 'your notebook');
+    b2.addEventListener('click', () => switchView('notebook'));
+    acts.appendChild(b2);
+    hero.appendChild(acts);
+  }
+
+  // community teaser — a guest lesson to try
+  const cs = document.getElementById('community-slot');
+  cs.innerHTML = '';
+  const all = communityAll();
+  const guest = all.find(e => !isDone(e.id)) || all[0];
+  if (guest) {
+    const t = el('button', 'teaser', '');
+    t.appendChild(el('div', 'teaser-label', 'From the community' + (guest.mine ? ' · yours' : '')));
+    t.appendChild(el('div', 'teaser-title', guest.title));
+    t.appendChild(el('div', 'teaser-host', guest.host ? '— ' + guest.host : 'a guest lesson'));
+    t.addEventListener('click', () => openEpisode(guest.id));
+    cs.appendChild(t);
+  }
+}
+
+// ── PLAYER ──────────────────────────────────────────────────────────────────────
+let player = { ep: null };
+const stageEls = {
+  intro: document.getElementById('stage-intro'),
+  taste: document.getElementById('stage-taste'),
+  notice: document.getElementById('stage-notice'),
+  close: document.getElementById('stage-close'),
+};
+function setStage(name, persist = true) {
+  Object.keys(stageEls).forEach(k => stageEls[k].classList.toggle('hidden', k !== name));
+  // resume support: remember where we are mid-tasting (not for the payoff/close stages)
+  if (persist && player.ep) {
+    if (name === 'intro' || name === 'taste') { state.current = { ep: player.ep.id, stage: name }; save(); }
+  }
+  window.scrollTo(0, 0);
+}
+
+function badgeFor(ep) { return ep.ep ? ('Season ' + ep.season + ' · Episode ' + ep.ep) : ('Guest' + (ep.host ? ' · ' + ep.host : '')); }
+
+function openEpisode(id, resume = false) {
+  const ep = episodeById(id);
+  if (!ep) return;
+  player.ep = ep;
+
+  // intro stage
+  document.getElementById('pi-badge').textContent = badgeFor(ep);
+  document.getElementById('pi-taste').textContent = ep.taste || 'Taste';
+  document.getElementById('pi-title').textContent = ep.title;
+  document.getElementById('pi-host').innerHTML = '“' + (ep.hostNote || ep.host || '') + '”';
+  const grab = document.getElementById('pi-grab');
+  grab.innerHTML = '';
+  (ep.grab || []).forEach(g => grab.appendChild(el('span', 'grab-pill', g)));
+
+  // taste stage
+  document.getElementById('pt-badge').textContent = badgeFor(ep);
+  document.getElementById('pt-idea').innerHTML = ep.idea || '';
+  const steps = document.getElementById('pt-steps');
+  steps.innerHTML = '';
+  (ep.steps || []).forEach(s => { const li = document.createElement('li'); li.innerHTML = s; steps.appendChild(li); });
+
+  // notice stage
+  document.getElementById('pn-aha').innerHTML = ep.aha || 'Nicely tasted.';
+  document.getElementById('pn-input').value = '';
+
+  showSection('player');
+  setStage(resume && state.current && state.current.ep === id && state.current.stage === 'taste' ? 'taste' : 'intro');
+}
+
+function finishEpisode(withNote) {
+  const ep = player.ep;
+  if (!ep) return;
+  const text = (document.getElementById('pn-input').value || '').trim();
+  // mark watched (first time only keeps the original timestamp)
+  if (!state.watched[ep.id]) state.watched[ep.id] = Date.now();
+  if (withNote && text) {
+    state.notes.unshift({
+      id: 'n' + Date.now(), ep: ep.id, epTitle: ep.title,
+      taste: ep.taste || '', text: text, created: Date.now(),
+    });
+  }
+  state.current = null;
+  markUsage();          // you did a tasting today — log it for the hub dashboard
+  save();
+  // close stage
+  document.getElementById('pc-line').textContent = ep.close || 'Nicely tasted.';
+  const nxt = nextCore();
+  const nextBtn = document.getElementById('pc-next');
+  if (nxt) {
+    document.getElementById('pc-sub').textContent = 'Next up — S' + nxt.season + ' · E' + nxt.ep + ': ' + nxt.title;
+    nextBtn.classList.remove('hidden');
+    nextBtn.textContent = 'NEXT EPISODE';
+    nextBtn.onclick = () => openEpisode(nxt.id);
+  } else {
+    document.getElementById('pc-sub').textContent = withNote && text ? 'Saved to your notebook.' : "That's the whole core season — nicely done.";
+    nextBtn.classList.add('hidden');
+  }
+  setStage('close', false);
+}
+
+// ── LESSONS ─────────────────────────────────────────────────────────────────────
+function epRow(ep, numLabel) {
+  const row = el('button', 'ep-row' + (isDone(ep.id) ? ' done' : ''));
+  row.appendChild(el('div', 'ep-num', numLabel || ''));
+  const tick = el('div', 'ep-tick', '✓');
+  row.appendChild(tick);
+  const main = el('div', 'ep-main');
+  main.appendChild(el('div', 'ep-name', ep.title));
+  let sub = ep.taste || '';
+  if (ep.host) sub += (sub ? ' · ' : '') + (ep.mine ? '<span class="mine">yours</span>' : ep.host);
+  main.appendChild(el('div', 'ep-sub', sub));
+  row.appendChild(main);
+  row.addEventListener('click', () => openEpisode(ep.id));
+  return row;
+}
+function renderLessons() {
+  const core = document.getElementById('core-list');
+  core.innerHTML = '';
+  CORE.forEach(e => core.appendChild(epRow(e, 'E' + e.ep)));
+
+  const comm = document.getElementById('community-list');
+  comm.innerHTML = '';
+  communityAll().forEach(e => comm.appendChild(epRow(e, '·')));
+
+  const note = document.getElementById('community-note');
+  const mine = state.myLessons.length;
+  note.innerHTML = mine
+    ? 'Guest lessons — small tasting habits passed between cooks. You’ve added <b style="color:var(--accent);font-weight:400">' + mine + '</b> of your own. Export from the menu to share one.'
+    : 'Guest lessons — small tasting habits passed between cooks. A handful of starters to begin with; the rest grows from what you and others add and share.';
+}
+
+// ── CONTRIBUTE ──────────────────────────────────────────────────────────────────
+function openContribute() {
+  document.getElementById('contrib-msg').textContent = '';
+  showSection('contribute');
+  window.scrollTo(0, 0);
+}
+function saveContribution(e) {
+  e.preventDefault();
+  const msg = document.getElementById('contrib-msg');
+  const title = document.getElementById('cf-title').value.trim();
+  const idea  = document.getElementById('cf-idea').value.trim();
+  const stepsRaw = document.getElementById('cf-steps').value.trim();
+  const steps = stepsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!title) { msg.textContent = 'Give it a title.'; return; }
+  if (!idea)  { msg.textContent = 'Add a sentence on what it teaches the tongue.'; return; }
+  if (!steps.length) { msg.textContent = 'Add at least one tasting step.'; return; }
+
+  const lesson = normalizeLesson({
+    id: 'm' + Date.now(),
+    title: title,
+    taste: document.getElementById('cf-taste').value.trim(),
+    host: document.getElementById('cf-host').value.trim(),
+    idea: idea,
+    steps: steps,
+    aha: document.getElementById('cf-aha').value.trim(),
+    hostNote: '',
+    grab: [],
+    created: Date.now(),
+  });
+  state.myLessons.push(lesson);
+  save();
+  // reset the form
+  document.getElementById('contrib-form').reset();
+  switchView('lessons');
+}
+
+// ── NOTEBOOK ────────────────────────────────────────────────────────────────────
+function dayLabel(ts) {
+  const d = new Date(ts), now = new Date();
+  const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (same(d, now)) return 'Today';
+  if (same(d, y)) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+function renderNotebook() {
+  // stats
+  const stats = document.getElementById('nb-stats');
+  stats.innerHTML = '';
+  const mk = (num, cap) => { const s = el('div', 'stat'); s.appendChild(el('div', 'stat-num', String(num))); s.appendChild(el('div', 'stat-cap', cap)); return s; };
+  stats.appendChild(mk(Object.keys(state.watched).length, 'Episodes tasted'));
+  stats.appendChild(mk(state.notes.length, 'Notes kept'));
+  stats.appendChild(mk(tastesExplored(), 'Tastes explored'));
+
+  const wrap = document.getElementById('nb-notes');
+  wrap.innerHTML = '';
+  if (!state.notes.length) {
+    wrap.appendChild(el('div', 'empty', 'No notes yet.<br>Tune into an episode, taste,<br>and write down what you noticed.'));
+    return;
+  }
+  // group by local day (notes are newest-first already)
+  let lastDay = null, dayWrap = null;
+  state.notes.forEach(n => {
+    const key = hcDayKey(new Date(n.created));
+    if (key !== lastDay) {
+      lastDay = key;
+      dayWrap = el('div', 'note-day');
+      dayWrap.appendChild(el('div', 'note-day-h', dayLabel(n.created)));
+      wrap.appendChild(dayWrap);
+    }
+    const card = el('div', 'note-card');
+    card.appendChild(el('div', 'note-ep', (n.taste ? n.taste + ' · ' : '') + n.epTitle));
+    card.appendChild(el('div', 'note-text', escapeHtml(n.text)));
+    const del = el('button', 'note-del', '×');
+    del.title = 'Delete this note';
+    del.addEventListener('click', () => { deleteNote(n.id); });
+    card.appendChild(del);
+    dayWrap.appendChild(card);
+  });
+}
+function deleteNote(id) {
+  state.notes = state.notes.filter(n => n.id !== id);
+  save();
+  renderNotebook();
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ── Export / import ──────────────────────────────────────────────────────────────
+function exportData() {
+  const payload = { app: 'savor', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `savor-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    // Two shapes accepted: a full Savor backup ({ app:'savor', state }), or a
+    // single shared lesson (a bare lesson object, or { lesson: {...} }). Sharing
+    // one lesson is the community loop — we merge it into your own lessons.
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    const single = (parsed && parsed.lesson) ? parsed.lesson
+      : (incoming && !incoming.watched && !incoming.notes && incoming.title) ? incoming : null;
+
+    if (single) {
+      const lesson = normalizeLesson(single);
+      if (!lesson) throw new Error('not a readable lesson');
+      lesson.id = 'm' + Date.now();
+      state.myLessons.push(lesson);
+      save();
+      switchView('lessons');
+      alert('Added “' + lesson.title + '” to your lessons.');
+      return;
+    }
+
+    if (!incoming || typeof incoming !== 'object') throw new Error('not a Savor export');
+    if (incoming.watched && typeof incoming.watched === 'object') state.watched = incoming.watched;
+    if (Array.isArray(incoming.notes)) state.notes = incoming.notes;
+    if (Array.isArray(incoming.myLessons)) state.myLessons = incoming.myLessons.map(normalizeLesson).filter(Boolean);
+    state.current = null;   // don't resume a half-tasting from an import
+    save();
+    switchView('notebook');
+    alert('Imported your Savor data.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+
+// player
+document.getElementById('player-back').addEventListener('click', () => switchView('watch'));
+document.getElementById('pi-start').addEventListener('click', () => setStage('taste'));
+document.getElementById('pt-back').addEventListener('click', () => setStage('intro'));
+document.getElementById('pt-done').addEventListener('click', () => setStage('notice', false));
+document.getElementById('pn-save').addEventListener('click', () => finishEpisode(true));
+document.getElementById('pn-skip').addEventListener('click', () => finishEpisode(false));
+document.getElementById('pc-done').addEventListener('click', () => switchView('watch'));
+
+// contribute
+document.getElementById('contribute-btn').addEventListener('click', openContribute);
+document.getElementById('contrib-back').addEventListener('click', () => switchView('lessons'));
+document.getElementById('cf-cancel').addEventListener('click', () => switchView('lessons'));
+document.getElementById('contrib-form').addEventListener('submit', saveContribution);
+
+// corner data menu
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+const importFile = document.getElementById('import-file');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ────────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+switchView('watch');
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (watched episodes, tasting notes, your own lessons).
+// Sign-in / unlock live at the hub; this app only registers its store, shows
+// status, and pushes on save.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                      // remote-apply path — deliberately NOT through save()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'watch');
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'savor' });
+}
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
