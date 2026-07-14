@@ -374,7 +374,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · savor</div>
+<div class="corner" id="version-label">v0.3 · savor</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="watch">Watch</button>
   <button class="mode-btn"        data-view="lessons">Lessons</button>
@@ -546,13 +546,14 @@
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.2 · savor';
+const VERSION   = 'v0.3 · savor';
 const STATE_KEY = 'hill-climbing-savor';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-savor';   // this app's registered E2E-sync doc (see hc-sync.js)
 
@@ -817,21 +818,18 @@ function save() {
 }
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────────
-// Same shared localStorage log the other practices write. hcDayKey is the
-// canonical zero-padded key the hub reads — never reuse another app's date helper.
+// Routed through the shared hc-usage.js (like the other practices): it updates
+// both the legacy per-device localStorage aggregate and the cross-device-synced
+// hc-usage/records store. hcDayKey stays local — renderNotebook groups notes by
+// day with it (never reuse another app's date helper; the month formats differ).
 function hcDayKey(d = new Date()) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 let loggedThisLoad = false;   // one "tasted today" flag per page-load; markUsage is idempotent anyway
 function markUsage() {
   if (loggedThisLoad) return;
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log.savor ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-    loggedThisLoad = true;
-  } catch (e) { /* private mode / quota — never break the session */ }
+  if (window.HCUsage) HCUsage.mark('savor');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
 }
 
 // ── Derived helpers ────────────────────────────────────────────────────────────

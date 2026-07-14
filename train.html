@@ -468,6 +468,7 @@
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
 
 <script>
@@ -566,13 +567,8 @@ function hcDayKey(d = new Date()) {
 let loggedThisLoad = false;   // one "trained today" flag per page-load; markUsage is idempotent anyway
 function markUsage() {
   if (loggedThisLoad) return;
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log.train ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-    loggedThisLoad = true;
-  } catch (e) { /* private mode / quota — never break the session */ }
+  if (window.HCUsage) HCUsage.mark('train');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
 }
 
 // ── Formatting / parsing ─────────────────────────────────────────────────────
