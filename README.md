@@ -1,23 +1,29 @@
 # Hill Climbing
 
-Four small, private practices for coming back to yourself — a single static site (installable as a PWA), no build step, no backend, no accounts. Everything runs and stores on your device.
+Ten small practices for coming back to yourself — a single static site (installable as a PWA), no build step, no backend of our own, no account required. Everything runs on your device by default; a few clearly-marked features can reach the network **only if you turn them on** (see [State & privacy](#state--privacy)).
 
-A landing **hub** (`index.html`) links to four single-file apps:
+A landing **hub** (`index.html`) links to the practices:
 
 | Practice | File | What it is |
 |---|---|---|
-| **Meditate** | `meditate.html` | A stillness practice using your camera and synthesised sound. A 2-up / 1-down staircase adapts round duration and stillness threshold to keep practice in the engagement zone (~71% success). |
+| **Meditate** | `meditate.html` | A quiet timed sit with a bell-bookended ambient sound bed. (A camera-guided "stillness" mode — webcam motion detection + an adaptive 2-up/1-down staircase — exists in the code but is currently hidden.) |
 | **Breathe** | `breathe.html` | Guided breathwork (coherence, physiological sigh, box, 4-7-8) plus a nervous-system "training loop": stress, then practice returning to calm. |
 | **Reflect** | `reflect.html` | A journal — free-text entries with optional mood / satisfaction ratings. Stored in IndexedDB, on-device. |
-| **Nourish** | `nourish.html` | Learn to cook by climbing a 10-level ladder of real cooking challenges. The same 2-up / 1-down staircase adapts difficulty; you cook the dish and self-report how it went. |
+| **Nourish** | `nourish.html` | Learn to cook by climbing a 10-level ladder of real cooking challenges (General + Sushi tracks). A 2-up / 1-down staircase adapts difficulty; you cook and self-report. An optional "chef" mode can write a recipe from your pantry. |
+| **Levity** | `levity.html` | Learn to be funny by climbing a 10-level comedy-craft ladder, with a notebook for your bits. |
+| **Climb** | `climb.html` | A goals-and-steps tracker with an honest, on-device history of your own follow-through. No due dates, points, or streaks by design. |
+| **Train** | `train.html` | A workout logger — exercises and sets with quiet progressive-overload defaults. |
+| **Council** | `council.html` | An LLM "board of directors" you bring a decision to — four directors and a Chair. Uses your own Anthropic API key. |
+| **Companion** | `companion.html` | A conversational companion that can see your current goals, recent journal, and activity, and can look things up on the web. Uses your own Anthropic API key. |
+| **Anime** | `anime.html` | An experiment: your webcam, drawn as a cel-shaded character in real time. Snapshot or record a clip. |
 
-The hub also shows a quiet weekly-usage dashboard (which practices you touched each day) and an optional, opt-in daily-reminder toggle.
+The hub also shows a quiet weekly-usage dashboard (which practices you touched each day), an optional PWA install prompt, and an optional daily-reminder toggle.
 
 ## Use
 
 Open the hub URL in a modern browser and pick a practice. Each app links back to the hub via the home icon, top-left. Install to your home screen (PWA) for a full-screen, offline experience.
 
-**Meditate** needs a camera: Begin → grant camera permission → frame yourself in the silhouette guide → hold above the threshold floor for the round. First run shows a guided introduction (re-openable via *about this practice*). **Breathe** and **Nourish** need no camera. **Reflect** is just writing.
+Most apps need nothing but the page: **Meditate** (in its current timed mode), **Breathe**, **Nourish**, **Levity**, **Climb**, and **Train** all run without a camera; **Reflect** is just writing. **Anime** needs a camera. The AI apps (**Council**, **Companion**, and Nourish's optional chef mode) need your own Anthropic API key, which you paste once and it's stored locally.
 
 ## Devices
 
@@ -25,14 +31,13 @@ Designed for desktop, tablet, and phone (responsive). Camera and audio require *
 
 ## State & privacy
 
-Each app stores its state locally on the device that ran it:
+Every app stores its state locally on the device that ran it — browser `localStorage`, and `IndexedDB` for Reflect's journal and Climb's event log. **By default nothing leaves the device.** The exceptions are all opt-in, off by default, and named here:
 
-- **localStorage** — meditation game state and adverse-event reports (`meditate.html`), breath-session and meditation preferences, per-app daily usage flags (`hill-climbing-usage`), the cooking ladder (`hill-climbing-nourish`), and the install-banner dismissal flag.
-- **IndexedDB** — the journal entries (`reflect.html`, database `journal`).
+- **Bring-your-own-key AI apps** — Council, Companion, and Nourish's optional chef mode. These call the Anthropic API **directly from your browser using a key you supply and store locally** — there is no server of ours in between. What you send (Council's situation text; a pantry list; or, for Companion, a digest of your current goals + recent journal + activity, plus any web searches it runs) is readable by Anthropic under **your own** API terms — and Companion's web queries are visible to the search providers that serve them. Billed to your account.
+- **End-to-end-encrypted cross-device sync** — optional; sign in and turn it on. Your data is encrypted **on your device** before it reaches a backend (Supabase) that stores only ciphertext: the operator holds no key and cannot read your content. Only ciphertext plus metadata (sizes, counts, timestamps, your account email) leaves the device.
+- **Daily reminders** — optional Web Push. If you enable them, your browser registers a push subscription so a fixed practice prompt can be delivered. No analytics, no behavioural data; revocable any time.
 
-Nothing leaves the device **except** the optional **daily reminders**: if you turn them on, your browser registers a Web Push subscription with its push service so reminders can be delivered. Reminders are off by default and opt-in. There is no analytics, telemetry, advertising, or third-party tracking anywhere in the suite.
-
-See `REQUIREMENTS.md §1` for the full data inventory. To reset an app, clear the site's local storage / IndexedDB in your browser.
+There is **no analytics, telemetry, advertising, or third-party tracking** anywhere in the suite, and **no account is required** to use any app (an optional account exists only to enable sync). See **`REQUIREMENTS.md §1`** for the standard every data practice must meet, and **Appendix A** for the full per-item inventory. To reset an app, clear the site's local storage / IndexedDB, or use an app's in-app data menu where present.
 
 ## Tier
 
@@ -43,14 +48,14 @@ The suite runs at **Tier 0** (solo / developer). The `TIER` constant at the top 
 | File | What it is |
 |---|---|
 | `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. (Binding.) |
-| `REQUIREMENTS.md` | Auditable requirements: data inventory, response runbook, tier transition criteria. (Binding.) |
-| `BACKLOG.md` | Work tracking. Bugs, features, tuning, design questions, completed versions. |
+| `REQUIREMENTS.md` | Auditable requirements. Data practices are stated **standard-first** (value → consent-scaled-to-audience → controls-proportional-to-risk); the full per-item data inventory is Appendix A. Also: adverse-event runbook, tier-transition criteria, verification. (Binding.) |
+| `BACKLOG.md` | Work tracking. Bugs, features, tuning, experiments, design questions, completed versions. |
 | `KNOWN_RISKS.md` | Self-flagged uncertainties, ranked by user-safety severity. |
 | `CLAUDE.md` | Agent handoff for AI assistants working on this project. |
 
 ## Versioning
 
-Production iterations are tagged `vX.Y` in git as a single global line across the suite; each version bump is its own commit with a matching annotated tag, so reverting is `git checkout vX.Y` followed by reload. Individual apps also carry their own in-product labels (e.g. `v1.75 · meditate`-era, `v0.6 · breathe`, `v0.1 · nourish`). Pushing to `main` deploys to GitHub Pages.
+Each app carries its own in-product version label (e.g. `v1.76` in Meditate, `v0.7 · breathe`). There is no global suite version and no git tags. Changes land on `claude/<slug>` branches merged to `main` via pull request; pushing to `main` deploys to GitHub Pages. The PWA service worker's `CACHE_VERSION` is bumped on each deploy so clients pull fresh files.
 
 ## Safety
 

@@ -86,6 +86,8 @@
     .card:nth-child(6) { animation-delay: 0.41s; }
     .card:nth-child(7) { animation-delay: 0.48s; }
     .card:nth-child(8) { animation-delay: 0.55s; }
+    .card:nth-child(9) { animation-delay: 0.62s; }
+    .card:nth-child(10) { animation-delay: 0.69s; }
     .card:hover, .card:focus-visible {
       transform: translateY(-4px);
       background: rgba(255,255,255,0.055);
@@ -114,6 +116,7 @@
     .card.breathe  { --accent: hsl(200,76%,68%); --accent-soft: hsla(200,76%,66%,0.45); --accent-glow: hsla(200,76%,60%,0.16); }
     .card.reflect  { --accent: hsl(38,80%,66%);  --accent-soft: hsla(38,75%,64%,0.45);  --accent-glow: hsla(38,75%,58%,0.15); }
     .card.nourish  { --accent: hsl(150,45%,60%); --accent-soft: hsla(150,43%,58%,0.45); --accent-glow: hsla(150,52%,46%,0.16); }
+    .card.savor    { --accent: hsl(322,64%,68%); --accent-soft: hsla(322,58%,64%,0.45); --accent-glow: hsla(322,64%,56%,0.16); }
     .card.levity   { --accent: hsl(348,78%,72%); --accent-soft: hsla(348,72%,68%,0.45); --accent-glow: hsla(348,78%,60%,0.16); }
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
@@ -157,6 +160,7 @@
     .dash-row.breathe  { --accent: hsl(200,76%,68%); }
     .dash-row.reflect  { --accent: hsl(38,80%,66%); }
     .dash-row.nourish  { --accent: hsl(150,45%,60%); }
+    .dash-row.savor    { --accent: hsl(322,64%,68%); }
     .dash-row.levity   { --accent: hsl(348,78%,72%); }
     .dash-row.climb    { --accent: hsl(230,65%,72%); }
     .dash-row.train    { --accent: hsl(20,72%,66%); }
@@ -445,6 +449,19 @@
       <p>Learn to cook, one skill at a time.</p>
     </a>
 
+    <a class="card savor" href="savor.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6c1.6 2.2 1.6 4 0 6.2" opacity="0.75"/>
+          <path d="M28 5c1.6 2.4 1.6 4.4 0 6.8" opacity="0.75"/>
+          <ellipse cx="24" cy="24" rx="7" ry="8.5"/>
+          <path d="M24 32.5V43"/>
+        </svg>
+      </span>
+      <h2>Savor</h2>
+      <p>Learn to cook by learning to taste.</p>
+    </a>
+
     <a class="card levity" href="levity.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -533,6 +550,11 @@
       <span class="dash-label">Nourish</span>
       <span class="dash-strip" data-strip="nourish" aria-hidden="true"></span>
       <span class="dash-count" data-count="nourish">·</span>
+    </div>
+    <div class="dash-row savor">
+      <span class="dash-label">Savor</span>
+      <span class="dash-strip" data-strip="savor" aria-hidden="true"></span>
+      <span class="dash-count" data-count="savor">·</span>
     </div>
     <div class="dash-row levity">
       <span class="dash-label">Levity</span>
@@ -746,7 +768,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'reflect', 'nourish', 'levity', 'climb', 'train'];
+    const APPS = ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -770,6 +792,25 @@
       try { return JSON.parse(localStorage.getItem(USAGE_KEY) || '{}'); } catch (e) { return {}; }
     }
     function logDaySet(log, app) { return new Set(Object.keys((log && log[app]) || {})); }
+
+    // Minutes practised this week, summed from the { s: seconds, n: sessions }
+    // day-records meditate.html and breathe.html now write. Days logged before
+    // duration tracking existed hold the bare `1` flag and contribute 0 — we
+    // honestly have no time for them, so they add nothing rather than a fake zero.
+    function weekMinutes(log, app) {
+      const bucket = (log && log[app]) || {};
+      let secs = 0;
+      weekKeysFrom(weekStartDate(new Date())).forEach(function (k) {
+        const v = bucket[k];
+        if (v && typeof v === 'object' && typeof v.s === 'number') secs += v.s;
+      });
+      return Math.round(secs / 60);
+    }
+    function fmtMins(m) {
+      if (m <= 0) return '';
+      if (m < 60) return m + 'm';
+      return Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '');
+    }
 
     // Read journal days from the SAME IndexedDB reflect.html writes — read-only.
     // Open with NO version: opens whatever version exists (so a future reflect
@@ -823,7 +864,7 @@
     function weekIsActive(weekKeys, sets) {
       let n = 0;
       for (const k of weekKeys) {
-        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.levity.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.savor.has(k) || sets.levity.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
       }
       return n >= STREAK_MIN_DAYS;
     }
@@ -838,7 +879,7 @@
       return streak;
     }
 
-    function render(sets) {
+    function render(sets, log) {
       APPS.forEach(function (app) {
         const week = daysThisWeek(sets[app]);
         const strip = document.querySelector('[data-strip="' + app + '"]');
@@ -851,24 +892,48 @@
           });
         }
         const count = document.querySelector('[data-count="' + app + '"]');
-        if (count) count.textContent = week.filter(Boolean).length + ' / 7';
+        if (count) {
+          // Meditate & breathe carry a time signal too — following through a
+          // full sit reads very differently from just opening the app.
+          const mins = (app === 'meditate' || app === 'breathe') ? fmtMins(weekMinutes(log, app)) : '';
+          count.textContent = week.filter(Boolean).length + ' / 7' + (mins ? ' · ' + mins : '');
+        }
       });
       const streakEl = document.getElementById('streak-num');
       if (streakEl) streakEl.textContent = weeklyStreak(sets);
     }
 
-    const log = readUsageLog();
-    const sets = {
-      meditate: logDaySet(log, 'meditate'),
-      breathe:  logDaySet(log, 'breathe'),
-      reflect:  new Set(),   // filled async from the journal IndexedDB
-      nourish:  logDaySet(log, 'nourish'),
-      levity:   logDaySet(log, 'levity'),
-      climb:    logDaySet(log, 'climb'),
-      train:    logDaySet(log, 'train'),
-    };
-    render(sets);            // instant: meditate + breathe (+ partial streak), even if IDB is unavailable
-    journalDaySet().then(function (js) { sets.reflect = js; render(sets); });
+    // Usage source: prefer hc-usage.js's cross-device aggregate (per-session +
+    // per-day-flag records summed over every device); fall back to this device's
+    // legacy localStorage log if the module is unavailable. Both share the same
+    // { app: { 'YYYY-MM-DD': {s,n} } } shape, so the readers below don't care which.
+    function loadUsage() {
+      if (window.HCUsage && HCUsage.aggregate) {
+        const wait = HCUsage.ready || Promise.resolve();
+        return wait.then(function () { return HCUsage.aggregate(); }).catch(readUsageLog);
+      }
+      return Promise.resolve(readUsageLog());
+    }
+    let reflectSet = new Set();       // filled async from the journal IndexedDB
+    function paint(log) {
+      render({
+        meditate: logDaySet(log, 'meditate'),
+        breathe:  logDaySet(log, 'breathe'),
+        reflect:  reflectSet,
+        nourish:  logDaySet(log, 'nourish'),
+        savor:    logDaySet(log, 'savor'),
+        levity:   logDaySet(log, 'levity'),
+        climb:    logDaySet(log, 'climb'),
+        train:    logDaySet(log, 'train'),
+      }, log);
+    }
+    function refresh() { loadUsage().then(paint); }
+
+    paint(readUsageLog());   // instant first paint from this device's localStorage, no async wait
+    refresh();               // then the full cross-device aggregate
+    journalDaySet().then(function (js) { reflectSet = js; refresh(); });
+    // A remote sync pull that merges new usage records re-renders the dashboard.
+    if (window.HCUsage) HCUsage.onMerge = refresh;
   })();
   </script>
 
@@ -1008,6 +1073,7 @@
 
   <!-- ── Account & sync (end-to-end encrypted; see hc-sync.js) ─────────────── -->
   <script src="/hc-sync.js"></script>
+  <script src="/hc-usage.js"></script>
   <script>
   (function () {
     // Public publishable key — safe to ship; Row-Level Security is the guard.
