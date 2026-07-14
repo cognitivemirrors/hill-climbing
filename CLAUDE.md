@@ -202,6 +202,8 @@ Before relying on anything in this file, verify (these drift fastest):
 
 If any of those are out of date, treat this file as stale and update it (this file grows freely — no confirmation needed) or ask the user to re-handoff.
 
+**Automation (so this snapshot self-corrects):** a `SessionStart` hook (`.claude/settings.json` → `.claude/hooks/session-start.sh`) prints `scripts/state.sh` into context at the start of every session and arms an advisory doc-freshness pre-commit guard (`scripts/git-hooks/pre-commit`, warns when app code is committed without a doc/version touch — never blocks). The hook takes effect for all sessions once merged to the default branch; the guard is armed per-session via `git config core.hooksPath scripts/git-hooks` (run it once yourself for a local checkout).
+
 ---
 
 ## 12. Final note from the prior instance
