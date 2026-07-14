@@ -196,6 +196,20 @@
     .teaser-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
     .teaser-title { font-family: var(--font-display); font-size: 1.12rem; color: var(--text); margin-bottom: 4px; }
     .teaser-host { font-size: 12px; color: var(--mid); font-style: italic; }
+    /* kitchen bridge — links across to Nourish (the sibling cooking app). A div,
+       not a button: the actions live in its own inner links. */
+    .bridge { cursor: default; }
+    .bridge:hover { border-color: var(--line); background: transparent; }
+    .bridge-body { font-size: 13px; line-height: 1.6; color: var(--mid); margin-top: 2px; }
+    .bridge-body b { color: var(--text); font-weight: 400; }
+    .bridge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 13px; }
+    .bridge-link {
+      background: none; border: none; padding: 0; cursor: pointer; text-decoration: none;
+      font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.05em; color: var(--accent);
+    }
+    .bridge-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .bridge-link.sub { color: var(--mid); }
+    .bridge-link.sub:hover { color: var(--text); }
     .watch-hint { margin-top: 26px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 340px; }
 
     /* ── PLAYER — the tune-in flow ──────────────────────────────── */
@@ -398,6 +412,7 @@
     <div id="resume-slot"></div>
     <div class="hero" id="hero"></div>
     <div id="community-slot"></div>
+    <div id="kitchen-slot"></div>
     <div class="watch-hint" id="watch-hint">Each episode is a few minutes of reading, then a small tasting you do at your own counter. No recipe to follow — just your tongue, learning.</div>
   </section>
 
@@ -458,6 +473,7 @@
       <div class="close-actions">
         <button class="btn primary" id="pc-next">NEXT EPISODE</button>
         <button class="btn ghost" id="pc-done">back to the show</button>
+        <a class="btn ghost" id="pc-cook" href="nourish.html">cook something in Nourish →</a>
       </div>
     </div>
   </section>
@@ -536,7 +552,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.1 · savor';
+const VERSION   = 'v0.2 · savor';
 const STATE_KEY = 'hill-climbing-savor';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-savor';   // this app's registered E2E-sync doc (see hc-sync.js)
 
@@ -836,6 +852,31 @@ function tastesExplored() {
   return s.size;
 }
 
+// ── Nourish bridge — the sibling cooking app ───────────────────────────────────
+// Savor trains the palate; Nourish trains making the dish. They pair on the shared
+// taste/skill concept. We read Nourish's saved level cross-app (same origin,
+// read-only, defensively) to suggest the episode behind what they're cooking, and
+// each episode maps to a Nourish level for a "now go cook it" handoff. Deep-links
+// (savor.html#c4) let Nourish open a specific lesson.
+const NOURISH_KEY = 'hill-climbing-nourish';
+const NOURISH_TRACKS = ['general', 'sushi'];
+// Nourish general level (1–10) → the taste episode most behind it. Best-effort
+// pairing, framed as a suggestion — approximate is fine.
+const NOURISH_PAIR = { 1:'c1', 2:'c2', 3:'c9', 4:'c9', 5:'c8', 6:'c4', 7:'c8', 8:'c9', 9:'c4', 10:'c10' };
+
+function readNourish() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NOURISH_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return null;
+    const track = NOURISH_TRACKS.includes(raw.track) ? raw.track : 'general';
+    let lvl = null;
+    if (raw.tracks && raw.tracks[track] && typeof raw.tracks[track].level === 'number') lvl = raw.tracks[track].level;
+    else if (typeof raw.level === 'number') lvl = raw.level;   // legacy flat save (pre-tracks)
+    if (lvl == null) return null;
+    return { track, level: Math.max(1, Math.round(lvl)) };
+  } catch (e) { return null; }
+}
+
 function normalizeLesson(l) {
   if (!l || typeof l !== 'object' || typeof l.title !== 'string') return null;
   return {
@@ -945,6 +986,54 @@ function renderWatch() {
     t.addEventListener('click', () => openEpisode(guest.id));
     cs.appendChild(t);
   }
+
+  renderKitchenBridge();
+}
+
+// The "In the kitchen" bridge to Nourish. Reads Nourish's saved level (if any) and
+// offers the paired taste episode + a link across.
+function renderKitchenBridge() {
+  const slot = document.getElementById('kitchen-slot');
+  slot.innerHTML = '';
+  const nourish = readNourish();
+  const card = el('div', 'teaser bridge');
+  card.appendChild(el('div', 'teaser-label', 'In the kitchen'));
+
+  if (nourish && nourish.track === 'general') {
+    const pairId = NOURISH_PAIR[nourish.level] || 'c10';
+    const pairEp = episodeById(pairId);
+    card.appendChild(el('div', 'teaser-title', 'You’re on Nourish · Level ' + nourish.level));
+    card.appendChild(el('div', 'bridge-body',
+      'The taste behind it: <b>' + (pairEp ? pairEp.title : 'What does this need?') + '</b>. Watch it here, then go make the dish.'));
+    const acts = el('div', 'bridge-actions');
+    if (pairEp) {
+      const watch = el('button', 'bridge-link', 'Watch that episode →');
+      watch.addEventListener('click', () => openEpisode(pairId));
+      acts.appendChild(watch);
+    }
+    const open = el('a', 'bridge-link sub', 'Open Nourish →');
+    open.href = 'nourish.html';
+    acts.appendChild(open);
+    card.appendChild(acts);
+  } else if (nourish && nourish.track === 'sushi') {
+    card.appendChild(el('div', 'teaser-title', 'You’re on the Sushi track in Nourish'));
+    card.appendChild(el('div', 'bridge-body', 'Tasting sharpens every part of it — season the rice, balance the vinegar, read the char.'));
+    const acts = el('div', 'bridge-actions');
+    const open = el('a', 'bridge-link sub', 'Open Nourish →');
+    open.href = 'nourish.html';
+    acts.appendChild(open);
+    card.appendChild(acts);
+  } else {
+    // no Nourish progress yet — a gentle first-time bridge
+    card.appendChild(el('div', 'teaser-title', 'Learn to make what you taste'));
+    card.appendChild(el('div', 'bridge-body', 'Savor’s sibling, <b>Nourish</b>, teaches you to cook — one dish at a time, adjusting by taste as you go.'));
+    const acts = el('div', 'bridge-actions');
+    const open = el('a', 'bridge-link', 'Open Nourish →');
+    open.href = 'nourish.html';
+    acts.appendChild(open);
+    card.appendChild(acts);
+  }
+  slot.appendChild(card);
 }
 
 // ── PLAYER ──────────────────────────────────────────────────────────────────────
@@ -1227,10 +1316,22 @@ document.getElementById('export-btn').addEventListener('click', () => { setMenu(
 document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
 importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
+// Deep-link: savor.html#c4 opens that episode directly (Nourish links in this way).
+// Open it, then strip the hash so a reload / tab-nav lands cleanly on the show.
+function handleDeepLink() {
+  const id = (location.hash || '').replace(/^#/, '');
+  if (id && episodeById(id)) {
+    openEpisode(id);
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────────
 document.getElementById('version-label').textContent = VERSION;
 load();
 switchView('watch');
+handleDeepLink();
+window.addEventListener('hashchange', handleDeepLink);
 
 // ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
 // One localStorage blob (watched episodes, tasting notes, your own lessons).
