@@ -2,38 +2,61 @@
 
 **For the next AI instance.** Read this file first, in full, before acting. Then read the files listed in §3 in the order given. Then ask the user §6's confirmation question before making any change.
 
-This is a working solo-developer project. The user is building a suite of contemplative/practice web apps under the "Hill Climbing" name (it began as a single stillness-meditation app). The git baseline is `v1.32`; this handoff has been updated through **v1.77** (committed) — the suite is now four apps behind a hub (see §1). Note: §§5–10 below were largely written during the single-app era and still describe the meditation app specifically; they remain accurate *for `meditate.html`*.
+This is a working solo-developer project. The user is building a suite of contemplative/practice web apps under the "Hill Climbing" name (it began as a single stillness-meditation app). The suite is now **eleven single-file practice apps behind a hub, plus one experimental webcam toy** (see §1 and §2), all at **TIER 0**. Note: §§4–5, 7–8, 10 below were largely written during the single-app era. The *collaboration norms, values, and decision history* they record are still current and load-bearing — but their file references and mechanics often describe `meditate.html` in its earlier camera-game form (see §1; that mode is currently hidden). Read those sections for norms-and-history; read §§1–3, 6, 9, 11 for the live factual state, which is what drifts.
 
 ---
 
 ## 1. Project state
 
-> **⚠️ STRUCTURE (updated through v1.77 — read before editing files).** The project is **four apps behind a hub**, not one. `index.html` is a static **hub/landing page** (Meditate · Breathe · Reflect · Nourish cards + a weekly-usage dashboard + opt-in Web Push reminders). The meditation app — everything this handoff calls "the app" / "index.html" below — lives in **`meditate.html`** (its own in-product label reads `v1.75`; the global git tag line is `v1.77`). The other three practices are `breathe.html` (breathwork + nervous-system training, was `nervous-system.html`), `reflect.html` (journal, IndexedDB-backed, was `journal.html`), and `nourish.html` (learn-to-cook via the staircase, added v1.77). Each app links back to the hub via a top-left `#home-link`. **When the prose below says `index.html`, it means `meditate.html`.** §§5–10 predate the multi-app split and are pinned to the meditation app — treat their file references accordingly.
+> **⚠️ STRUCTURE — read before editing files.** The project is a **hub + eleven practice apps + one experiment**, all single-file, no build, no backend of our own. `index.html` is the static **hub/landing page** (practice cards + weekly-usage dashboard + PWA install banner + opt-in Web Push reminder toggle). **When older prose below says "the app" or "index.html" as if it were the meditation app, it means `meditate.html`** — the meditation app was `index.html` until the multi-app split; each app links back to the hub via a top-left home link.
 
-- **Single-file HTML apps**, one per practice, plus the hub. No build system, no dependencies, no backend. Open any file in a browser to run.
-- **Current version:** v1.77 committed (Nourish, the fourth practice). Tier 0 (solo developer). Each app carries its own in-product version label; the git tag line (`vX.Y`) is global across the suite.
-- **Git is initialised** at v1.32 baseline. Each version bump should be its own commit + tag. See §4 for workflow.
-- **The app:** measures user stillness via webcam motion detection, plays synthesised sound that responds to stillness, and runs a 2-up/1-down staircase game that adapts both round duration and stillness threshold to keep the user near a ~71% success rate.
-- **Two round modes** alternate: "stillness" rounds (the default) and "smoothness" rounds (after every motion interlude — the user maintains slow continuous motion instead of stillness).
-- **TIER constant** at the top of the JS gates safety features: 0 (solo dev), 1 (friends & family), 2 (open beta), 3 (public). Higher tiers activate more safety scaffolding; user is at 0 for now.
-- **Audio paradigm at v1.32:** at peak stillness the harmonic drone fades to silence and is replaced by occasional pentatonic bell strikes (the "temple atmosphere" model). The user explicitly likes the bell character; the sustained drone at high volume was reported as fatiguing across multiple iterations.
+- **Single-file HTML apps**, one per practice, plus the hub and shared JS modules (`hc-sync.js`, `hc-sync-chip.js`, `sw.js`). No build system, no bundled dependencies, no backend of our own. Open any file in a browser to run. (Opt-in sync uses Supabase; opt-in reminders use Web Push via a GitHub Actions sender — see below.)
+- **Versioning is now per-app, and there are no git tags.** Each app carries its own in-product label (`v1.76 · t0` in meditate, `v0.7 · breathe`, `v0.5 · companion`, …). There is **no global `vX.Y` suite line and no annotated tags** — the old tag-per-version convention has lapsed (§4). A version lives only in the in-product label + the commit message.
+- **Tier 0 (solo developer).** `const TIER = 0` at the top of `meditate.html`'s JS gates escalating safety scaffolding: 0 (solo), 1 (friends & family), 2 (open beta), 3 (public). Nothing advances tiers automatically.
+- **Meditate's camera "stillness" game is currently hidden.** Since meditate v1.67 the camera-guided Stillness mode (webcam motion detection → 2-up/1-down staircase over duration + threshold → stillness-reactive synth) is disabled (`display:none`, code intact), leaving **Timed mode** (a quiet countdown sit with a bell-bookended ambient noise bed) as the only reachable meditation practice. Much of §7's audio/staircase history describes that hidden mode — accurate for it, not for what a user sees today.
+- **The 2-up/1-down staircase (Levitt 1971, ~71% success) is now the suite's signature**, reused beyond meditation: Nourish (cooking) and Levity (comedy) both climb a 10-level ladder with self-reported outcomes.
+- **Off-device data flows now exist** (all opt-in, off by default): three **bring-your-own-Anthropic-key** AI apps (Council, Companion, Nourish's chef) call the Anthropic API directly on the *user's own key*; **Companion additionally has live web search/fetch**; **end-to-end-encrypted, zero-knowledge cross-device sync** (Supabase) covers every app with user data; and **Web Push reminders**. The whole data policy was reframed standard-first in **REQUIREMENTS §1–§2 (v0.2)** — read it before touching anything data-related.
 
 ---
 
 ## 2. Files in the repo
 
+**Practice apps + hub** (single-file HTML; line counts approximate):
+
 | File | Purpose | Read first? |
 |---|---|---|
-| `index.html` | **Hub/landing page** (~720 lines) — four cards + weekly usage dashboard (added v1.64; Nourish row added v1.77) + install banner (v1.73) + opt-in Web Push reminders (v1.76). Added 2026-05-30. | Yes (quick skim) |
-| `meditate.html` | **The meditation app** — single-file HTML/CSS/JS, ~3,140 lines. This is what the rest of this doc calls "index.html". Was `index.html` until 2026-05-30. | Yes (skim, don't memorise) |
-| `breathe.html` | Breathwork + nervous-system training app (~710 lines). Was `nervous-system.html`. | If relevant |
-| `reflect.html` | Journal app, IndexedDB-backed (~620 lines). Was `journal.html`. | If relevant |
-| `nourish.html` | Cooking app (~940 lines). Adaptive 2-up/1-down staircase over a 10-level ladder of cooking challenges; success is self-reported. State in `hill-climbing-nourish` localStorage. Added v1.77 (2026-06-20). | If relevant |
-| `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. Contains `[DECISION]` markers for unresolved values. | Yes |
-| `REQUIREMENTS.md` | Auditable specifics: data inventory, adverse-event runbook, tier transition criteria, verification procedures, decision register | Yes |
-| `BACKLOG.md` | Work tracking. Categorised by Bugs / Features / Tuning / Design Questions / Done | Yes |
-| `KNOWN_RISKS.md` | Self-flagged uncertainties, ranked by user-safety severity (S = safety, L = low) | Yes |
-| `CLAUDE.md` | This file | (You're here) |
+| `index.html` | **Hub/landing page** (~1,225 lines) — ten practice cards (Council is reachable but not carded), weekly-usage dashboard, PWA install banner, opt-in Web Push reminder toggle. | Yes (quick skim) |
+| `meditate.html` | **Meditation app** (~3,190 lines), in-product `v1.76`; holds the `TIER` constant. Timed mode active; camera Stillness mode hidden since v1.67 (code intact). Older prose calls this "the app" / "index.html". | Yes (skim) |
+| `breathe.html` | Breathwork + nervous-system training (`v0.7`) — coherence / physiological sigh / box / 4-7-8, plus a stress-then-recover training loop. | If relevant |
+| `reflect.html` | Journal (`v0.6`), IndexedDB-backed (`journal`/`entries`): free-text + optional mood/satisfaction. **The most sensitive store in the suite.** | If relevant |
+| `nourish.html` | Learn-to-cook via the staircase (`v0.15`). 10-level ladder, self-reported outcomes; General + Sushi tracks; optional BYOK "chef" mode writes recipes from your pantry. Each challenge card deep-links to the paired **Savor** taste episode. State: `hill-climbing-nourish`. | If relevant |
+| `savor.html` | Learn-to-cook-*by-tasting*, framed as a show (`v0.2`). Ten-episode **season** on the palate (salt · acid · fat · five tastes · aroma · "what does this need?") + community guest lessons you can write & share as files; each episode is a small at-the-counter tasting + a notebook note. Fully on-device; joins E2EE sync. **Paired with Nourish** (taste↔cook deep-links — L34). State: `hill-climbing-savor`. | If relevant |
+| `levity.html` | Learn-to-be-funny via the staircase (`v0.2`). Comedy-craft ladder + a bit notebook. State: `hill-climbing-levity`. | If relevant |
+| `climb.html` | Goals + steps tracker (`v0.5`) with an append-only IndexedDB event log (`climb`/`events`). No due dates/points/streaks by design. State: `hill-climbing-climb`. | If relevant |
+| `train.html` | Workout logger (`v0.2`) — exercises, sets, progressive-overload defaults. State: `hill-climbing-train`. | If relevant |
+| `council.html` | **BYOK AI** (`v0.4`) — an LLM "board of directors" (4 directors + a Chair) for a decision. Sends situation text to Anthropic on the user's own key (off-device — L24). State: `hill-climbing-council`. | If relevant |
+| `companion.html` | **BYOK AI** (`v0.5`) — a companion that reads your current goals + recent journal + activity into each reply and can search/fetch the web. **Broadest personal-content egress** (L29/L30). State: `hill-climbing-companion`. | If relevant |
+| `anime.html` | **Experiment** (`v0.1`) — a webcam cel-shading/rotoscope toy (draws you as a cel-shaded character; snapshot/record). No persistent state; linked from the hub but not in the PWA precache/manifest. | If relevant |
+
+**Shared infra & config:**
+
+| File | Purpose | Read first? |
+|---|---|---|
+| `hc-sync.js` / `hc-sync-chip.js` | Shared opt-in **E2EE sync** engine (zero-knowledge, Supabase) + the floating status chip. Loaded by every app holding user data. | If touching sync |
+| `sw.js` / `manifest.webmanifest` | PWA service worker (`CACHE_VERSION` — currently `hc-v2.08`, **bump on every deploy**) + manifest. | If touching PWA |
+| `supabase-schema.sql` | Backend schema for sync (`sync_docs`, `sync_keybundle`, RLS). Founder provisions the Supabase project. | If touching sync |
+| `push/` + `.github/workflows/notify.yml` | Self-owned Web Push **sender** (Node + `web-push`, VAPID) run on cron via GitHub Actions. Receiving half is in `sw.js`. | If touching reminders |
+| `README.md` | User-facing repo readme. | Skim |
+
+**Governance docs:**
+
+| File | Purpose | Read first? |
+|---|---|---|
+| `CONSTRAINTS.md` | Founding principles: care, safety, balanced power distribution. `[DECISION]` markers for unresolved values. | Yes |
+| `REQUIREMENTS.md` | Auditable specifics: **data-practices standard (v0.2, standard-first)** + full inventory in Appendix A, adverse-event runbook, tier criteria, verification, decision register. | Yes |
+| `BACKLOG.md` | Work tracking: Inbox / Bugs / Features / Tuning / Experiments / Design Questions / Done. | Yes |
+| `KNOWN_RISKS.md` | Self-flagged uncertainties, ranked by user-safety severity (S = safety, L = low). | Yes |
+| `CLAUDE.md` | This file. | (You're here) |
 
 **Document precedence** in case of conflict: CONSTRAINTS > REQUIREMENTS > BACKLOG. KNOWN_RISKS doesn't bind — it captures uncertainty.
 
@@ -46,7 +69,7 @@ This is a working solo-developer project. The user is building a suite of contem
 3. `REQUIREMENTS.md` — what's auditable/binding
 4. `KNOWN_RISKS.md` — what's known-broken or suspect, ordered by user-safety
 5. `BACKLOG.md` — what's open
-6. `index.html` — skim CSS, skim JS state machine, deep-read whatever's relevant to the task
+6. The app you're working on (e.g. `meditate.html`) — skim CSS, skim the JS state machine, deep-read whatever's relevant to the task. Add `hc-sync.js` if the task touches persistence/sync.
 
 ---
 
@@ -60,28 +83,26 @@ These are how the user has consistently operated. Default to these unless told o
 - **User prefers concrete over theoretical.** When asked exploratory questions, give a recommendation and the main tradeoff (2–3 sentences for small questions, longer for substantive ones), not a survey of possibilities.
 - **Bias toward shipping but pause-for-inspection default.** After a substantive change, the default is to wait for user verification. The user overrides with "keep going" when they want continuation. Bigger refactors and aesthetic changes especially deserve a pause.
 - **One user-stated outcome per iteration when iteration is risky.** The user explicitly noted "you ideate and ship faster than I can inspect" — slow down for things touching state machine, persistence, audio engine, or safety mechanisms. Note: "one outcome" allows bundling multiple coordinated code changes that all address the same user complaint (e.g., three coordinated knob tweaks for a single "audio is harsh" fix). The rule is about the unit of verification, not the unit of code change.
-- **The version-label is `vX.Y · hill climbing · tier N`.** Bump version on user-visible changes. Update both the HTML literal and the JS dynamic line.
+- **Each app self-versions in-product; formats vary** (`v1.76 · t0` in meditate, `v0.7 · breathe`, `v0.5 · companion`). Bump on user-visible changes, and update **both** the `#version-label` HTML literal **and** the JS line that sets its `textContent`. There is no global suite version and no git tags (see the git-workflow bullet).
 - **localStorage keys keep the `hill-combing-*` prefix for v1 stability** even though the app was renamed. New keys may use `hill-climbing-*`. Do not rename existing keys without a migration shim — user state would be lost.
 - **The IDE / preview panel auto-publishes after each edit, with a hook reminder to mention it.** When you edit `index.html`, the system reminder says "is now visible in the preview panel" — your response should briefly acknowledge that.
 - **The `TodoWrite` tool reminder appears periodically.** It's a gentle nudge — ignore unless tracking work would actually help. Never mention the reminder itself to the user.
 - **No documentation files unless asked.** Markdown files like CONSTRAINTS.md, REQUIREMENTS.md, BACKLOG.md, KNOWN_RISKS.md, and this CLAUDE.md were each created at explicit user request. Don't proliferate docs unprompted.
 - **CONSTRAINTS.md and REQUIREMENTS.md amendments need explicit user confirmation.** These docs bind. BACKLOG.md, KNOWN_RISKS.md, and this CLAUDE.md can grow freely; the binding docs need a specific user ask before changes. The precedence ordering (CONSTRAINTS > REQUIREMENTS > BACKLOG > KNOWN_RISKS) is the trigger: anything in the top two requires confirmation, anything in the bottom two can be edited as work proceeds.
 - **Reuse existing infrastructure before building new.** When extending the app, ask *"can the existing code be extended to handle this?"* before writing new structure. Default to extension; build new only when conflation would actually hurt readability or correctness. The bias toward new is one of my consistent failure modes — example: when adding ambient bells in v1.32, I considered both a new scheduler and extending the milestone-bell code; the new scheduler happened to be the right call but the deliberation should be the default, not the exception.
-- **Git workflow — "shipped" means pushed.** The repo was initialised at v1.32 (baseline commit `4683660`) and is hosted at `github.com/cognitivemirrors/hill-climbing`, deploying to GitHub Pages at `https://cognitivemirrors.github.io/hill-climbing/` on every push to `main` (~1–2 minute redeploy). **A local edit is not a ship.** When you say "shipped vX.Y" in chat, that claim must be backed by a commit + tag + push, otherwise the user is testing one thing and your statement claims another. This drifted in the v1.50–v1.53 cycle (four version bumps, zero commits) and required a retroactive consolidated commit. Don't repeat it.
+- **Git workflow — PR-based; "shipped" means merged to `main`.** The repo is `github.com/cognitivemirrors/hill-climbing`, deploying to GitHub Pages at `https://cognitivemirrors.github.io/hill-climbing/` on every push to `main` (~1–2 min redeploy; the legacy Pages builder occasionally drops a trigger — KNOWN_RISKS L19). Work now happens on **`claude/<slug>` feature branches**, one change per branch, merged to `main` via **pull request** (see `git log` — PRs #13–#19). This replaced the old commit-tag-push-to-main flow. **A local edit is not a ship**; a "shipped" claim must be backed by a merged PR (or at least a pushed branch the user can review).
 
-  **Per-version checklist (run end-to-end before saying "shipped"):**
-  1. Bump both version locations in `meditate.html` (the `#version-label` HTML literal and the `document.getElementById(...).textContent` line). The hub (`index.html`) does not currently carry a version label.
-  2. Add a `Done` entry to BACKLOG.md (top of the list, terse).
-  3. `git add` the files; `git commit -m "vX.Y · brief summary"` with a HEREDOC body and `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` trailer.
-  4. `git tag -a vX.Y -m "..."` — annotated, not lightweight.
-  5. `git push --follow-tags origin main`.
-  6. In your reply to the user, say "Pushed v1.X to main, tagged. GitHub Pages will redeploy in ~1–2 min." — not "shipped" without that confirmation.
+  **Per-change checklist:**
+  1. Bump the touched app's in-product version (the `#version-label` HTML literal **and** the JS `textContent` line).
+  2. If any app shell (HTML/JS) changed, bump `CACHE_VERSION` in `sw.js` (e.g. `hc-v2.06` → `hc-v2.07`) so clients pull fresh HTML; add the file to the precache list if it's a new app.
+  3. Add a terse `Done` (or Inbox `[x]`) entry to `BACKLOG.md`.
+  4. If you touched a data practice, reflect it in `REQUIREMENTS.md` (binding — see the confirmation norm above) and `KNOWN_RISKS.md`.
+  5. **If the change alters the app roster, the tier, the versioning/workflow, or a data flow, update `CLAUDE.md` §§1–2 in the same commit.** The handoff rots fastest there — that's why §11 is a freshness *check*, not a snapshot to trust. (Run `./scripts/state.sh` to see the live state.)
+  6. Commit on a `claude/<slug>` branch; `git push -u origin <branch>`. Open a PR **only when the user asks** — do not open PRs unprompted.
 
-  **One commit per version is the cadence.** If you're iterating quickly and tempted to batch, resist; a paradigm-shift session that produces 3+ versions and one fat commit erases the per-version revert path the tagging convention was built to give. Pause to commit *between* versions, not at the end.
-
-  - **Tag push gotcha:** `git tag vX.Y` creates a *lightweight* tag, which `git push --follow-tags` does **not** push. Either use annotated tags (`git tag -a vX.Y -m "..."`) so `--follow-tags` works, or explicitly run `git push origin vX.Y` after each tag. Lightweight tags created locally without explicit push will not exist on the remote.
-  - Revert path: `git checkout vX.Y` for local; `git revert HEAD --no-edit && git push` for the deployed version (avoid force-push to main).
-  - Never run destructive operations (`reset --hard`, force push, branch deletion) without explicit user instruction.
+  **No git tags.** The old annotated-tag convention has lapsed — don't reintroduce tags without asking. Revert is `git revert` of the offending commit/PR (or `git checkout <commit>` locally); there are no version tags to check out.
+  - **Concurrent branches collide on version numbers.** Several in-flight `claude/*` branches have collided on `main` (Climb/Train, Council/Levity — see BACKLOG). On collision, renumber to the next free number at merge rather than rewriting history.
+  - Never run destructive operations (`reset --hard`, force-push to `main`, branch deletion) without explicit user instruction.
 
 ---
 
@@ -102,7 +123,7 @@ The user has been thoughtful and explicit about what matters. Carry these forwar
 
 Before making any change, ask:
 
-> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The current committed version is v1.77 — four apps (Meditate, Breathe, Reflect, Nourish) behind a hub; confirm with `git log`. Before I do anything, can you confirm: (a) are we still at TIER 0; (b) the open items I see are the meditation safety items S1/S2/S4/S5 and the binding-doc data-inventory gaps in REQUIREMENTS.md §1.1 flagged in the v1.77 audit (KNOWN_RISKS L22) — which, if any, is the priority; and (c) any context the prior session missed?"
+> "I've read CLAUDE.md, CONSTRAINTS.md, REQUIREMENTS.md, KNOWN_RISKS.md, and BACKLOG.md. The suite is now ten practice apps behind a hub (plus the `anime.html` experiment), all at TIER 0, versioned per-app with no git tags — confirmed via `git log` and the in-product labels. Before I do anything, can you confirm: (a) are we still at TIER 0; (b) which open item is the priority — the meditation safety items S1/S2/S4/S5 (they apply to the currently-hidden camera mode), the pre-Tier-1 watch-items on the off-device flows (KNOWN_RISKS L28–L31), or something new; and (c) any context the prior session missed?"
 
 Wait for the answer. Then proceed.
 
@@ -145,14 +166,15 @@ These shaped the project's direction. If a future user wants to revisit any of t
 
 ---
 
-## 9. Active open questions (live as of v1.77)
+## 9. Active open questions (live as of the REQUIREMENTS v0.2 reframe, 2026-07)
 
-- **Meditation safety items S1 (replay clears cooldown), S2 (mute during idle-pause), S4 (sticky reminder flags), S5 (no surfaced report-review path)** remain open in KNOWN_RISKS. User hasn't picked a priority.
-- **REQUIREMENTS.md §1.1 data inventory is materially incomplete after the multi-app + reminders growth** (found in the v1.77 doc audit, KNOWN_RISKS L22). Missing: `breathe-session-duration`, `hill-climbing-install-dismissed`, `hill-climbing-nourish`, `hill-climbing-timed-minutes`, the Reflect `journal` IndexedDB (free-text entries — the most sensitive store in the suite), and the v1.76 Web Push subscription. **Also: §1.3/§2.1's "zero outbound network at Tier 0–1 / nothing leaves the device" claim is now contradicted by the opt-in Web Push reminders.** REQUIREMENTS.md is binding — these need founder ratification to amend; proposed edits were surfaced in the v1.77 audit, not yet applied.
-- **Nourish gamification vs CONSTRAINTS §3.1/§5** — the cooking ladder's levels/progression sit near the anti-gamification line; flagged for review in KNOWN_RISKS L23.
+- **Pre-Tier-1 watch-items on the off-device flows** (KNOWN_RISKS L28–L31) are the live cluster now. BYOK egress disclosure (esp. Companion sending the journal by default on every reply), the *soft* prompt-level web-query privacy guardrail (model-obedience, not a hard filter), E2EE metadata leakage (email/sizes/counts/timestamps), whole-blob LWW concurrent-edit loss across six stores, and adding full **account deletion**. None are user-harm at Tier 0; all deserve a look before friends-and-family.
+- **The data policy was reframed standard-first in REQUIREMENTS v0.2** (value → consent-scaled-to-audience → controls-proportional-to-risk; exhaustive inventory demoted to Appendix A). CONSTRAINTS §1.2/§1.4/§3.2 P1/§3.4 were realigned to match. The recurring "nothing leaves the device" contradiction (old L22/L24/L27/L29/L30/L31) is resolved at the framing level (see KNOWN_RISKS L32).
+- **Meditation safety items S1/S2/S4/S5** (KNOWN_RISKS) remain open but describe the **currently-hidden** camera stillness mode — they matter again if/when that mode returns. User hasn't picked a priority.
+- **Gamification watch across the ladder apps** — Nourish / Levity / Climb / Train levels & progression sit near the CONSTRAINTS §3.1/§5 anti-gamification line (KNOWN_RISKS L23/L25). Kept honest by free skips, non-shaming copy, no points/badges, weekly-not-daily hub streak.
 - **The 12 [DECISION] markers in CONSTRAINTS.md** have proposed defaults in REQUIREMENTS.md §7 but await explicit founder ratification. Don't unilaterally treat them as resolved.
-- **The journal-vs-in-app-rating question** for measuring app value in user's life — user was leaning toward journal first; nothing built yet. The hub's Reflect dot-strip surfaces journal usage but doesn't add ratings.
-- **Audio tuning (temple-atmosphere paradigm from v1.32)** has been stable across many versions. Still watch for: ambient bell interval (6–14s), volume (35%), pentatonic scale, and anchor-layer fade-out range (0.85–1.0).
+- **`anime.html` is un-integrated** — linked from the hub but the only app not in the `sw.js` precache, no usage hook, no doc beyond §2 here. Decide whether it's a real practice or a scratch experiment. (Related: the manifest's install shortcuts still cover only 5 apps — BACKLOG Inbox. Run `./scripts/state.sh` to see current coverage.)
+- **The journal-vs-in-app-rating question** for measuring the app's value in the user's life — user was leaning toward journal first; nothing built. The hub's Reflect dot-strip surfaces usage but no ratings.
 
 ---
 
@@ -170,15 +192,18 @@ For the benefit of the next instance, knowing what to be cautious about:
 
 ## 11. How to verify this handoff is current
 
-Before relying on anything in this file, verify:
+Before relying on anything in this file, verify (these drift fastest):
 
-1. `meditate.html`'s in-product label reads `v1.75` and the latest `git tag` is `v1.77` (the global suite line). The hub `index.html` carries no version label.
-2. The files listed in §2 still exist with the same purposes — five HTML files: `index.html` (hub) + four practice apps.
-3. The TIER constant at the top of `meditate.html`'s JS is still `0`.
-4. None of the §9 open questions has been answered without this doc being updated.
-5. `git log` shows the v1.32 baseline commit (`4683660`) is still the earliest in the history.
+1. **App inventory (§2).** `ls *.html` still shows the hub + the ten practice apps + `anime.html`; in-product labels roughly match (`grep -h version-label *.html` / the `VERSION` constants).
+2. **Tier.** `grep 'const TIER' meditate.html` is still `0`.
+3. **Meditation mode.** Meditate's camera Stillness mode is still hidden (Timed-only) unless a later version re-enabled it.
+4. **Workflow.** `git tag` is still empty and history still shows PR merges (`git log --oneline | grep 'Merge pull request'`) — the PR-based, no-tag flow still holds.
+5. **Data policy.** `REQUIREMENTS.md` is still standard-first (§1 "Data practices — the standard, before the inventory"; inventory in Appendix A). If it reverted or moved on, re-sync this file.
+6. **Open questions (§9)** — none answered without this doc being updated.
 
-If any of those are out of date, treat this file as stale and ask the user to update or re-handoff.
+If any of those are out of date, treat this file as stale and update it (this file grows freely — no confirmation needed) or ask the user to re-handoff.
+
+**Automation (so this snapshot self-corrects):** a `SessionStart` hook (`.claude/settings.json` → `.claude/hooks/session-start.sh`) prints `scripts/state.sh` into context at the start of every session and arms an advisory doc-freshness pre-commit guard (`scripts/git-hooks/pre-commit`, warns when app code is committed without a doc/version touch — never blocks). The hook takes effect for all sessions once merged to the default branch; the guard is armed per-session via `git config core.hooksPath scripts/git-hooks` (run it once yourself for a local checkout).
 
 ---
 
