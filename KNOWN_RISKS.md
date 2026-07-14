@@ -236,6 +236,12 @@ The most likely future entries here would be: a code path that disables the idle
 - **Deliberate exclusions (allowlist held):** the shared Anthropic credential `hill-climbing-api-key` (device-local, never synced — see L29), meditate's adverse-event **reports** + trajectory recordings, and `hill-climbing-usage` (a per-day union log that blob LWW would corrupt across devices) are **not** registered and stay device-local.
 - **Watch-items:** keep the shared credential out of sync (allowlist); if `hill-climbing-usage` ever needs cross-device totals, it needs a union-merge store, not a blob; the L28 watch-items (confirm RLS after any Supabase change; add full account deletion before a tier advance) now apply across the whole suite.
 
+### L32. Data-privacy requirements reframed standard-first (REQUIREMENTS v0.2) — older items' §-references have moved
+- **Confidence:** confirmed (documentation change, not a code issue; founder-directed)
+- **What changed:** REQUIREMENTS §1–§2 were reorganised around three tests — **value → consent-scaled-to-audience → controls-proportional-to-risk**. The old "nothing leaves the device (except…)" claim in §1.3/§2.1 is **gone**, replaced by §1.1's honest four-flow egress table (BYOK AI apps, Companion web access, E2EE sync, Web Push — each with *who can read it* + *what bounds it*). The exhaustive per-key inventory + sync internals moved **intact** to **Appendix A** (A.1 localStorage, A.2 IndexedDB, A.3 transient, A.4 network, A.5 sync trust model) and are now labelled a **Tier-2 deliverable**. CONSTRAINTS §1.2 (new C6) / §1.4 / §3.2 P1 / §3.4 were realigned to the same standard.
+- **Impact on this file:** several earlier items (L22, L24, L27, L29, L30, L31) cite the *old* section numbers — "contradicts §1.3/§2.1 'nothing leaves the device'," "§1.1 omits key X." Those citations still describe real history, but the targets have moved: network detail is now **Appendix A.4**, the per-key inventory is **Appendix A.1–A.2**, and the "these are exceptions to nothing-leaves-the-device" tension each of them flagged is **resolved at the framing level** — §1.1 now states the off-device flows as first-class posture, not as exceptions to a rule that no longer holds. The underlying data flows are unchanged and their risk assessments still stand; only the doc framing moved.
+- **No new user risk.** Framing / audit-readiness only.
+
 ---
 
 ## How to use this list

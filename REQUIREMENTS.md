@@ -1,136 +1,101 @@
-# Hill Climbing — Auditable Requirements (Draft v0.1)
+# Hill Climbing — Auditable Requirements (Draft v0.2)
 
 **Purpose.** This document closes gaps in `CONSTRAINTS.md` that need to be specific and stable for an audit (privacy review, safety review, governance review, regulator engagement). It is deliberately narrower than `CONSTRAINTS.md` — it documents only what *must not be malleable*. Tuning constants, feature ideas, UI copy, and roadmap items remain in `BACKLOG.md` where iteration is healthy.
 
+The data sections (§1–§2) are organised **standard-first**: the test every data practice must pass comes before any inventory of what we happen to store. The exhaustive per-item inventory — the audit-grade artifact — lives in **Appendix A**, and by the standard in §1 it is a *Tier-2 deliverable*: owed in full to external users, not a documentation cost front-loaded onto a solo developer.
+
 This document binds. Amendments follow `CONSTRAINTS.md §6` (supermajority + 30-day public comment + clinical-advisor sign-off where safety-relevant + published rationale).
 
-Items marked **[FOUNDER-PENDING]** are proposed defaults awaiting explicit founder ratification at incorporation. Items marked **[TBD-TIER-N]** become required at the named tier and are gating prerequisites to advance into that tier (see §5).
+Items marked **[FOUNDER-PENDING]** are proposed defaults awaiting explicit founder ratification at incorporation. Items marked **[TBD-TIER-N]** become required at the named tier and are gating prerequisites to advance into that tier (see §4).
 
 ---
 
-## 1. Data Inventory and Retention
+## 1. Data practices — the standard, before the inventory
 
-Every item the app stores or transmits, where, for how long, and how it's deleted.
+Every data practice in the suite must pass three tests, in order. A practice that fails any of them is a defect, however convenient it is to us. The tests are the policy; the inventory (Appendix A) is only evidence that we pass them.
 
-### 1.1 On-device storage (persistent, on user device only)
+**Test 1 — It serves a value the user would choose.** Every byte stored or transmitted exists to give the user something they would recognise and want: their practice history, an LLM that can see their goals, the same data on a second device. Data kept "because it might be useful later" fails this test and does not ship. Usefulness *to the operator* is never sufficient on its own.
 
-**Browser localStorage:**
+**Test 2 — It carries informed consent, scaled to who is affected.** The user understands what is collected, why, where it goes, and can decline — and the *formality* of that consent matches the audience:
 
-| Key | Contents | Size | Retention | Deletion mechanism |
-|---|---|---|---|---|
-| `stillness-game` | Game state: `duration`, `threshold`, `wins`, `best`, `round`, `totalWins`, `todayKey`, `todaySecs`, `todayWins`. **Synced (E2EE) when sync is on** (§1.5). | < 1 KB | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-combing-acknowledged-v1` | Safety-modal acknowledgment flag (`'1'`) | ~10 B | Until user clears | Same as above |
-| `hill-combing-reports` | Adverse-event reports: list of `{timestamp, text (≤2000 chars), snapshot {round, duration, todaySecs, phase, tier}}`. Capped at 50 entries. | < 100 KB max | Until user clears or 50-cap rotation | Same as above |
-| `hill-combing-last-trajectory` | Most recent round's audio trajectory: `{timestamp, mode, duration, held, won, samples: [{t, s, m}]}` | < 50 KB | Overwritten by next round-end | Same as above |
-| `hill-climbing-introduced-v1` | Onboarding completion flag (`'1'`) | ~10 B | Until user clears | Same as above |
-| `hill-climbing-usage` | Per-app daily usage flags: `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { … }, "nourish": { … }, "levity": { … }, "climb": { … }, "train": { … } }`. Written by `meditate.html` (on entering settling phase), `breathe.html` (on session start), `nourish.html` (when the user commits to cook a challenge), `levity.html` (on first practice action), `climb.html` (on the first state-changing action of a page load, not page-open), and `train.html` (on committing a set); read by `index.html` hub dashboard. Reflect usage is derived separately from the journal IndexedDB. No session content, no user-identifiable data — only boolean day-flags. | < 10 KB (grows ~3 KB/yr) | Until user clears; no auto-pruning (streak requires full history) | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-timed-minutes` | Meditate timed-mode session length preference (minutes, integer) | ~10 B | Until user clears | Same as above |
-| `breathe-session-duration` | Breathe session length preference (minutes, integer). **Synced (E2EE) when sync is on** (§1.5). | ~10 B | Until user clears | Same as above |
-| `hill-climbing-install-dismissed` | Hub PWA install-banner dismissal timestamp (ms since epoch); re-prompts 5 days after dismissal | ~15 B | Until user clears | Same as above |
-| `hill-climbing-nourish` | Nourish cooking-ladder state: `{ v, level, streak, cleared {id→outcome}, history [{id, outcome, ts}], active, recent[] }`. Challenge ids and self-reported outcomes only; no free text, no identity. **Synced (E2EE) when sync is on** (§1.5). | < 20 KB (grows slowly) | Until user clears | Same as above |
-| `hill-climbing-climb` | Climb goals + tasks state: `{ v, rootId, goals {id → {title, parentId, order, status active/resting, created, updated, restedAt}}, tasks {id → {goalId, title, done, created, updated, doneAt}}, focusId }`. `rootId` names the single editable root goal every other goal hangs under. Goal and task titles are short user-authored text and may be personal (they name what the user is working toward). | grows with use; typically < 100 KB | Until user clears or uses Climb's in-app "Delete everything" | In-app Delete everything (present today); browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-levity` | Levity comedy-practice state: `{ v, level, streak, cleared {id→outcome}, history [{id, outcome, ts}], active, recent[], notebook [{text, landed, ts}] }`. `notebook[].text` is free-form user-written comedy material — personal creative prose. **Synced (E2EE) when sync is on** (§1.5). | grows slowly | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-train` | Train workout-logger state: `{ v, unit, exercises [{id, name, fields, createdAt}], workouts [{id, startedAt, finishedAt, entries[…]}], active }`. Exercise names (short user text) plus numeric reps/weight/time. Low sensitivity. **Synced (E2EE) when sync is on** (§1.5). | grows with use | Until user clears or in-app erase | In-app erase; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-council` | Council saved deliberations: array (cap 30) of `{ id, ts, situation, directors, chairOpening, thread [{role, text}], feedback }`. `situation`, `thread[].text`, and `feedback.note` are **free-form personal decisions** — among the most sensitive content in the suite (see L24). **Synced (E2EE) when sync is on** (§1.5). | < 100 KB (cap 30) | Until user clears or in-app erase | In-app erase; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-companion` | Companion saved conversations: `{ v, conversations: [ { id, ts, title, thread [{ role, text, hidden? }] } ] }` (cap 60). `thread[].text` is **free-form personal conversation** — the user's own words plus the companion's replies, which may paraphrase their goals or journal. Among the most sensitive content in the suite (see L29). The raw goals/journal/activity **digest** the companion is shown is *not* stored here — only the dialogue is. Synced (E2EE) if the user has enabled sync. | < 200 KB (cap 60) | Until user clears (in-app "Clear all conversations") or in-app erase | In-app Clear all conversations; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-nourish-chef` | Nourish Chef mode settings: `{ model, consented, history [{title, outcome, ts}] (cap 20) }`. Recipe titles + self-reported outcomes; no free-form pantry text is persisted. The API key is **no longer stored here** — it moved to the shared `hill-climbing-api-key` (below). | < 20 KB | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `hill-climbing-api-key` | The user's **Anthropic API key** — a single credential **shared across the hub's bring-your-own-key AI apps** (Council, Companion, and Nourish's chef): set it in any one and it works in all. A credential; browser localStorage is not a secure secret store. Legacy per-app keys (`hill-climbing-council-key`, `hill-climbing-companion-key`, and the `key` field formerly inside `hill-climbing-nourish-chef`) are migrated into this key once, then deleted, so nobody re-enters. Device-local; **never synced.** Removing it in any app clears it hub-wide. | ~100 B | Until user clears or in-app "Remove key" | In-app Remove key (clears it hub-wide); browser settings |
-
-The `hill-combing-*` keys retain the legacy prefix to preserve user state across the v1.19 rename. New keys may use `hill-climbing-*`.
-
-**Browser IndexedDB:**
-
-| Database / store | Contents | Size | Retention | Deletion mechanism |
-|---|---|---|---|---|
-| `journal` / `entries` (written by `reflect.html`) | Journal entries: `{ id, created, updated, text (free-form, user-written), mood (1–7 or null), satisfaction (1–7 or null), embedding (reserved, currently null), embModel (null), deleted? (tombstone flag) }`. **Synced (E2EE) when sync is on** (§1.5) — as a per-entry log, not a whole blob; a deleted entry becomes a `deleted:true` tombstone (hidden from UI/exports) so the deletion propagates rather than resurrecting on another device. | grows with use; `text` is user-authored prose | Until the user deletes an entry (in-app, per-entry) or clears browser data | In-app per-entry delete; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-| `climb` / `events` (written by `climb.html`) | Append-only event log of every Climb state change: `{ id, ts, type, …payload }` — 14 types covering goal add/rename/reorder/move/archive/restore, focus set/clear, task add/rename/complete/uncomplete/delete, plus baseline snapshots. Payloads include goal/task titles (before/after on renames), so the log carries the same short user-authored text as the state blob. For the user's own local analysis; exportable as JSON. **Synced (E2EE) when sync is on** (§1.5, since v1.99) — otherwise never transmitted. | grows with use (append-only) | Until Climb's in-app "Delete everything" or browser clear | In-app Delete everything (removes the whole database); browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
-
-The `journal` store is the only one holding **free-form personal prose** — the most sensitive data in the suite. Climb's goal/task titles (in both its localStorage blob and its event log) are short user-authored labels: personal, but bounded and not prose. The hub (`index.html`) opens the journal database **read-only and version-less** to derive Reflect's usage dots, and never writes to it (see the IndexedDB-gotcha note in `CLAUDE.md §7`).
-
-### 1.2 Browser memory (transient)
-
-- Live camera video stream — displayed on positioning and meditation screens; never persisted.
-- Analysis-canvas pixel data — overwritten every frame; never persisted.
-- Frame ring-buffer (10 × 80×60×4-byte frames ≈ 192 KB) — in-memory only.
-- Audio-context oscillator state — in-memory only.
-- Motion-window for smoothness scoring (60 floats) — in-memory only.
-
-### 1.3 Network transmission
-
-- **Tier 0–1: zero outbound network traffic** at any time (other than the initial HTML/JS load), **except the user-initiated, opt-in flows below** — Web Push reminders; the bring-your-own-key AI apps (Council, Nourish's chef, and Companion); and end-to-end-encrypted sync. No analytics, telemetry, ads, error reporting, or third-party scripts.
-- **Opt-in bring-your-own-key AI apps (all tiers; each sends only when the user acts, on the user's own Anthropic key).** Three apps call `https://api.anthropic.com/v1/messages` directly from the browser using a key the user supplies and stores locally — there is **no operator server between the user and Anthropic**. Council sends the situation text the user types plus the deliberation (L24). Nourish's chef sends the pantry list, preferences, and cooking level (L25). **Companion sends the widest slice: the user's current goals, recent journal entries, and recent activity, assembled fresh each reply and folded into the prompt (L29).** Common to all: the send is user-initiated, disclosed plainly before first use behind an explicit key gate, billed to the user's own account, and governed by Anthropic's commercial API terms — *not* by our operator policy, because we never receive the content. This **request** egress is TLS-encrypted in transit but **readable by Anthropic** (unlike E2EE sync).
-- **Companion additionally has live internet access (added v0.2; L30).** On the user's own key, each Companion reply may invoke Anthropic's server-side web-search and web-fetch tools (capped at 5 searches + 5 fetches per reply). Beyond the request egress above, this generates a **second class of outbound traffic**: model-written search queries and page fetches, executed on Anthropic's infrastructure and reaching **third-party search providers and the fetched sites**. These queries are written by the model, not the user, and the system prompt instructs it to use general, non-identifying queries only and never to place the user's private details, journal text, or situation specifics into a search — but this is a **prompt-level guardrail, not a hard code filter**, so a model slip could disclose a detail. Taken together with the personal-content sends above, these are the suite's operator-adjacent-but-not-operator-held disclosures of user-derived content; every other data flow is either on-device or end-to-end encrypted.
-- **Opt-in Web Push reminders (all tiers, off by default; added v1.76).** If — and only if — the user explicitly enables reminders on the hub, the browser registers a push subscription with its platform push service (Google / Apple / Mozilla) and receives pushes sent by the project's own GitHub Actions sender. This is user-initiated, revocable at any time ("Turn off"), and carries no analytics or behavioural data — the payload is a fixed practice prompt drawn from a hand-authored rotation. The subscription endpoint is the user's to copy into the sender's GitHub Actions secret. This was the *first* exception to "nothing leaves the device"; see also Council (L24) and end-to-end-encrypted sync below.
-- **Opt-in end-to-end-encrypted cross-device sync (all tiers, off by default; added v1.99).** If the user signs in and turns on sync, their data is encrypted on-device and stored as ciphertext on a backend (see §1.5). Only ciphertext plus metadata (doc keys, sizes, timestamps, and the account email) leave the device; **content never does — the operator cannot read it.** **Tier reconciliation:** §3.1 gates *operator-readable* server submission at Tier ≥ 2. E2EE sync is permitted from **Tier 0** on the principle that what that gate protects — operator power over user data — does not arise when the operator holds no key and cannot decrypt. The encryption guarantee, not the tier, is the safeguard. Founder-ratified (v1.99).
-- **Tier ≥ 2: adverse-event reports may POST to a backend** *with explicit per-report consent at submission time*. No silent transmission.
-- **All tiers: no microphone, no audio recording, no behavioral telemetry, no fingerprinting, no cookies for tracking.**
-
-### 1.4 Deletion
-
-- **Now (Tier 0):** user clears via browser DevTools → Application → Local Storage. Documented as a known gap.
-- **Tier ≥ 2 prerequisite:** in-app "delete all my data" button that removes all `hill-combing-*` and `hill-climbing-*` localStorage keys (including `hill-climbing-companion` and the shared API-key credential `hill-climbing-api-key`), the `stillness-game` and `breathe-session-duration` keys, and the Reflect `journal` and Climb `climb` IndexedDB databases, with confirmation and acknowledgment. (Reflect already offers per-entry delete today, and Climb already offers a full in-app "Delete everything" covering its own key + database; a future control should also unsubscribe any active Web Push reminder.)
-- **Tier ≥ 2:** server-side report-deletion endpoint with same SLA as data-export (24 h).
-- **Synced copy (Tier 0, present today):** for any app with sync enabled, an in-app "Delete my synced data" removes the user's `sync_docs` + `sync_keybundle` rows from the backend, and signing out drops the device's cached key. Full account deletion (removing the Supabase `auth.users` row) is a documented follow-up before any tier advance.
-
-### 1.5 Off-device storage (opt-in, end-to-end encrypted cross-device sync — added v1.99)
-
-Sync is **off by default** and opt-in. When a user turns it on, their data is encrypted **on the device** and stored on a backend (Supabase: Postgres + Auth) that holds only ciphertext. This is the third off-device flow in the suite (after opt-in Web Push and Council), and the first where the operator stores user *content* at all — which is precisely why it is designed so the operator **cannot read it**.
-
-**Trust model — zero-knowledge.** A random 256-bit Data Encryption Key (DEK) encrypts every document (AES-GCM). The DEK never leaves the device in usable form: it is wrapped twice — once by a key derived from the user's **passphrase**, once by a key derived from a one-time **recovery code** (PBKDF2-HMAC-SHA-256, 600,000 iterations, per-wrap random salt). The server stores only the two wrapped-DEK blobs and per-document ciphertext. The passphrase and recovery code never leave the device; the operator holds no key and cannot decrypt. The working DEK is imported non-extractable, so its raw bytes never re-enter JS after setup/unlock.
-
-| Backend store | Contents | Operator-readable? |
+| Scale | Consent standard | What that requires |
 |---|---|---|
-| `sync_docs` | Per-user rows `{ doc_key, ciphertext, iv, updated_at, device_id }`. Blob rows (whole-store snapshots, e.g. `ls:hill-climbing-climb`) and append-only log rows (e.g. `idb:climb:events/<id>`). Each document's `(user, doc_key, clock)` is bound as AES-GCM additional authenticated data, so ciphertext can't be replayed under a different key or slot. | **No** — ciphertext only. |
-| `sync_keybundle` | One row per user: the two wrapped-DEK blobs + salts/IVs + KDF descriptor. | **No** — unwrapping needs the passphrase or recovery code. |
-| Supabase Auth (`auth.users`) | Account email + password hash (identity/login only). | Email: yes. Password: hashed by Supabase. |
+| **Solo (Tier 0, today)** | Implicit | The user is the developer; they consent by building it. No consent artifacts required — but Tests 1 and 3 still bind. |
+| **Friends & family (Tier 1)** | Informal but explicit | A plain-language account — in person or in-product — of anything that leaves the device. A real explanation, not legalese, before first use. |
+| **External users (Tier 2+)** | Formal and documented | Written disclosures, the per-item inventory in Appendix A kept current, consent captured at the point of collection, and a verifiable deletion path. Tier-transition prerequisites (§4), not optional. |
 
-**Row isolation** is enforced by Postgres Row-Level Security (`user_id = auth.uid()`) on every table; the anon API key shipped in the client is public by design and grants nothing without a valid session.
+**Test 3 — Its controls are proportional to risk.** The rigor of the safeguards — verification, deletion SLAs, encryption, review cadence, clinical sign-off — scales with **sensitivity × reach**. A free-text journal is not a day-flag; a hundred strangers are not one developer. We do not run Tier-3 machinery at Tier 0, and we never ship Tier-0 informality to Tier 2.
 
-**Metadata that is NOT protected (documented honestly).** Even though content is unreadable, the operator can see, per account: the email, ciphertext **sizes**, row **counts** (≈ number of edits ≈ activity volume), **timestamps**, and `doc_key`s (which app, and that an event log exists). Content never leaves the device in the clear; this metadata does. Reducing it (padding, batching, key hashing) is a documented follow-up, not shipped in v1.99.
+### 1.1 The current posture (Tier 0, solo)
 
-**Device-local sync support (never synced):** `hill-climbing-sync-meta` (localStorage: a random device id, per-store logical clocks, and pull cursors), the `hc-sync` IndexedDB (holds the cached DEK as a non-extractable `CryptoKey`), and Supabase's own session token. None of these is a synced document.
+**On-device by default.** Everything the apps store lives in the user's own browser (localStorage + IndexedDB). Nothing is transmitted off the device except the opt-in, user-initiated flows below — each disclosed in-product, each with a named party who *can* read the content and a named mechanism that bounds the exposure:
 
-**Retention & deletion.** Server rows persist until deleted. The user can delete the entire server copy in-app ("Delete my synced data" removes their `sync_docs` + `sync_keybundle` rows), and signing out drops the device's cached key — satisfying CONSTRAINTS P1 (real deletion, no shadow copies) and C3 (stopping is honored) for the synced copy.
+| Opt-in flow | What leaves the device | Who can read the content | What bounds the exposure |
+|---|---|---|---|
+| **BYOK AI apps** — Council, Companion, Nourish chef | The text/decision the user submits, or the goals + journal + activity digest Companion assembles — sent on the **user's own Anthropic key** | **Anthropic**, under the user's own API terms — **never the operator** (there is no operator server in the path) | User owns the key and the account; explicit key gate; plain-language disclosure; Companion shows the verbatim digest before it sends (L24/L27/L29) |
+| **Companion web access** | Model-written search queries and page fetches, on the user's key | Anthropic **plus** the third-party search providers / fetched sites | Soft (prompt-level) "general, non-identifying queries only" guardrail; capped 5+5 per reply; user's own key (L30) |
+| **E2EE cross-device sync** | Ciphertext **plus metadata** (account email, ciphertext sizes, row counts, timestamps, doc keys) | Operator sees **metadata only** — content is cryptographically unreadable | Zero-knowledge encryption: the operator holds no key and cannot decrypt (Appendix A.5) |
+| **Web Push reminders** | A push-subscription endpoint | The platform push service (Google / Apple / Mozilla) | No content and no behavioural data — a fixed practice prompt; revocable at any time |
 
-**Scope in v2.0:** the sync foundation (`hc-sync.js`) now covers **every app that holds user data** — each opt-in, off by default, same encryption. Registered documents:
+This table is the canonical short statement of what leaves the device. It replaces the older "zero outbound traffic, except…" framing, which had accreted five separate exceptions (L22/L24/L27/L29/L30/L31) and no longer described the suite honestly.
 
-- **Blob (last-write-wins):** `ls:hill-climbing-climb` (Climb state, v1.99), `ls:hill-climbing-companion` (Companion conversations, v0.1), `ls:stillness-game` (Meditate staircase), `ls:breathe-session-duration` (Breathe session length), `ls:hill-climbing-nourish` (Nourish ladder), `ls:hill-climbing-levity` (Levity state), `ls:hill-climbing-train` (Train state), `ls:hill-climbing-council` (Council deliberations).
-- **Log (append-only, per-record):** `idb:climb:events/<id>` (Climb event log, v1.99) and `idb:reflect:entries/<id>@<updated>` (the **Reflect `journal`** — the single most sensitive store — synced per-entry, *not* as a whole blob, so two devices never clobber each other's writing; edits and deletes carry version-stamped keys, deletes as tombstones).
+### 1.2 Data by sensitivity
 
-**Never registered (device-local, never synced):** the shared Anthropic credential `hill-climbing-api-key` (§1.1), Meditate's `hill-combing-reports` + `hill-combing-last-trajectory`, all UI/onboarding flags, and `hill-climbing-usage` (a per-day union log that whole-blob LWW would corrupt across devices). What leaves the device for sync is always ciphertext + metadata only; content never does.
+What we hold, ranked by what a leak would cost the user:
+
+- **Free-form personal prose (highest).** Reflect journal entries; Council deliberations; Companion conversations; Levity notebook lines. On-device; end-to-end encrypted if sync is on. Council and Companion additionally send some of this to Anthropic on the user's own key when the user acts (Companion sends the journal digest by design on every reply — L29).
+- **Short personal labels.** Climb goal/task titles; Train exercise names; Nourish self-reported outcomes. Personal but bounded — not prose.
+- **Credential.** The single shared Anthropic API key (`hill-climbing-api-key`). Device-local, **never synced.** Browser localStorage is not a secure secret store — an accepted Tier-0 risk (L29).
+- **Non-identifying flags & preferences.** Per-day usage flags; session-length preferences; onboarding / UI dismissals. No content, no identity.
+
+Full per-item detail — every key, its shape, size, retention, and deletion path, plus the sync trust model — is **Appendix A**.
+
+### 1.3 Deletion
+
+- **Now (Tier 0):** on-device data is cleared through the browser (DevTools → Application → Storage), and several apps already offer their own in-app erase (Reflect per-entry delete; Climb "Delete everything"; Train and Council in-app erase). Any app with sync on offers "Delete my synced data," which removes the user's `sync_docs` + `sync_keybundle` rows; signing out drops the device's cached key.
+- **Tier ≥ 2 prerequisite:** a single in-app "delete all my data" control that removes every `hill-combing-*` / `hill-climbing-*` localStorage key (including the shared `hill-climbing-api-key` credential and `hill-climbing-companion`), the `stillness-game` and `breathe-session-duration` keys, and the Reflect `journal` and Climb `climb` IndexedDB databases — with confirmation, and unsubscribing any active Web Push reminder.
+- **Tier ≥ 2:** server-side report-deletion and full account deletion (removing the Supabase `auth.users` row) within the §3 / data-export SLA (24 h).
+
+Deletion is real — no retained shadow copies (CONSTRAINTS P1). The full per-store deletion mechanism is inventoried in Appendix A.
 
 ---
 
-## 2. Privacy and Consent
+## 2. Consent and privacy
 
-### 2.1 What we collect
+### 2.1 Consent, scaled to the audience
 
-Nothing leaves the device at Tier ≤ 1 **except at the user's explicit opt-in:** a Web Push subscription if they turn on reminders (§1.3); the content they send to Anthropic on their own key via the bring-your-own-key AI apps — Council's situation text (L24), Nourish's chef prompt (L25), and **Companion's goals + journal + activity digest (L29)** — **plus, from v0.2, the model-written web-search queries and page fetches Companion may emit** on the user's key, which reach Anthropic and, through it, third-party search providers and fetched sites (L30); and — if they sign in and enable sync — **end-to-end-encrypted ciphertext plus its metadata and their account email** (§1.5). Content synced this way is unreadable by the operator; content sent to Anthropic is readable by Anthropic under its API terms (but never by us), **and Companion's web queries are additionally visible to the search providers that serve them — which is why the model is instructed to keep them general and free of personal detail**. At Tier ≥ 2, additionally only adverse-event reports the user explicitly submits via the in-product form.
+This operationalises Test 2 of §1. At the **current** scale (Tier 0, solo) consent is **implicit** — the user builds the thing. The obligations below become live as the audience grows, and are gating prerequisites for the tier they name (§4):
+
+- **Tier 1 (friends & family):** before anyone else uses an app that can leave the device, they get a plain-language account of *what* leaves and *to whom* (the four flows in §1.1). Informal — a conversation or a short in-product note — but explicit and before first use.
+- **Tier 2+ (external users):** formal, documented consent — written disclosures, consent captured at the point of collection (not buried in a one-time modal), the Appendix A inventory kept current, and one-click withdrawal where the flow allows it.
+
+New data fields collected count as breaking and require re-consent at the next interaction (§6.2).
 
 ### 2.2 What we never collect
 
-- Identity — **no account is required**; the app is fully usable anonymously. An **optional** account (email + password) exists only to enable opt-in cross-device sync (§1.5), and no email is collected unless the user turns sync on. We still never collect name, phone, or any identity beyond that email.
+- Identity — **no account is required**; every app is fully usable anonymously. An **optional** account (email + password) exists only to enable opt-in cross-device sync (Appendix A.5), and no email is collected unless the user turns sync on. We never collect name, phone, or any identity beyond that email.
 - Location
 - Device fingerprints
 - Behavioral analytics
 - Cookies for cross-site or third-party tracking
 - Microphone audio
-- Camera images (only motion summary statistics inform the score)
+- Camera images (only motion summary statistics inform the meditation score)
 
 ### 2.3 Consent boundaries
 
-- **Camera access:** browser-level permission required before any capture. Re-prompted if revoked.
-- **localStorage usage:** standard browser storage; not transmitted.
+- **Camera access (Meditate):** browser-level permission required before any capture; re-prompted if revoked.
+- **localStorage / IndexedDB:** standard browser storage; not transmitted except via the opt-in flows in §1.1.
 - **Audio:** synthesised in-browser; no microphone access requested.
-- **Backend submission (Tier ≥ 2):** explicit opt-in at each report; never default-on.
-- **Cross-device sync (all tiers, opt-in):** signing in and enabling sync is explicit and per-device; data is end-to-end encrypted before upload; the passphrase and recovery code never leave the device; the user can delete the server copy at any time (§1.5).
-- **Outcome surveys (Tier ≥ 2 future):** explicit opt-in; one-click unsubscribe.
+- **BYOK AI apps (all tiers, opt-in):** each off-device send is user-initiated and gated behind an explicit key setup that names the data flow and Anthropic in plain language; billed to the user's own account; Nourish's chef adds its own first-run consent checkbox.
+- **Cross-device sync (all tiers, opt-in):** signing in and enabling sync is explicit and per-device; data is end-to-end encrypted before upload; the passphrase and recovery code never leave the device; the user can delete the server copy at any time (Appendix A.5).
+- **Web Push reminders (all tiers, off by default):** enabled only by explicit action; revocable with "Turn off."
+- **Backend adverse-event submission (Tier ≥ 2):** explicit opt-in at each report; never default-on.
 
 ### 2.4 Sharing
 
 The company does not, and structurally cannot, sell or share user data with third parties. Charter clauses required at Tier ≥ 2 prohibit data-sale and ad-targeted business models.
 
-*Honest note (v0.2): Companion's opt-in web access emits model-written, deliberately non-personal search queries to third-party search providers on the user's own key (§1.3, L30). This is neither a data sale nor an ad-targeted arrangement — no user data is handed to a provider for its own use — but it is a genuine third-party touchpoint, disclosed here for completeness. The safeguard is the prompt-level instruction to keep queries general and personal-detail-free; hardening it (a query-redaction step, or a per-conversation web toggle) is a documented follow-up, not shipped in v0.2.*
+*Honest note: Companion's opt-in web access emits model-written, deliberately non-personal search queries to third-party search providers on the user's own key (§1.1, L30). This is neither a data sale nor an ad-targeted arrangement — no user data is handed to a provider for its own use — but it is a genuine third-party touchpoint, disclosed here for completeness. The safeguard is the prompt-level instruction to keep queries general and personal-detail-free; hardening it (a query-redaction step, or a per-conversation web toggle) is a documented follow-up.*
 
 ---
 
@@ -205,6 +170,7 @@ Process prerequisites:
 
 - This document (REQUIREMENTS.md) ratified.
 - Operator commits to reviewing localStorage reports at least weekly.
+- **Informal consent given (§2.1):** anyone beyond the developer has had the off-device flows (§1.1) explained in plain language before first use.
 
 ### 4.2 TIER 1 → TIER 2 (friends & family → open beta)
 
@@ -215,6 +181,7 @@ Process prerequisites:
 - Responsibility-copy variant active in safety modal (already implemented; auto-activates at Tier 2).
 - Quarterly incident-rate publication mechanism live (publishes even if rate is 0).
 - In-app "delete all my data" button.
+- **Formal, documented consent (§2.1, Test 2):** written disclosures for every off-device flow, consent captured at the point of collection, and the Appendix A data inventory current and founder-ratified.
 - Public-benefit corporation (or charter clause progressing toward steward ownership) in place.
 - User pool ≤ 1,000 active monthly users.
 
@@ -253,8 +220,9 @@ For each binding constraint, how compliance is verified.
 | No engagement-metric tracking | Code review; grep for analytics/telemetry imports | Every release |
 | No advertising revenue | Code review + dependency audit + revenue-source attestation | Every release + quarterly |
 | No data sale or sharing | Operator written attestation | Quarterly |
+| Every data practice traces to a user value (§1 Test 1) | Review each new/changed store or transmission against the value test; a practice with no user-recognised benefit is rejected | Every release adding or changing a data practice |
 | Data export ≤ 24 h | Manual test (when implemented) | Every release |
-| Zero outbound network traffic at Tier 0–1 (except the opt-in flows in §1.3: Web Push, the BYOK AI apps Council / Nourish / Companion — incl. Companion's server-side web search/fetch, which keep the browser's own egress to `api.anthropic.com` only — and E2EE sync) | Network tab inspection during full session | Every release |
+| Off-device egress limited to the four opt-in flows in §1.1 (BYOK AI apps → `api.anthropic.com` only, incl. Companion's server-side web search/fetch; E2EE sync → ciphertext + metadata only; Web Push subscription) — no analytics, telemetry, error reporting, or third-party scripts (detail: Appendix A.4) | Network-tab inspection during a full session | Every release |
 | Companion web reply stores only dialogue, no tool blocks or raw digest (L30) | Send a Companion message that triggers a web search; inspect `hill-climbing-companion` + the synced blob — only `{role,text}` turns, no `server_tool_use` / `web_*` blocks and no digest text | Every release touching `companion.html` |
 | Adverse-event rate ≤ 5% / quarter | Aggregate count from reports / active users | Quarterly |
 | Investor concentration ≤ 20% | Cap-table review | Every funding event |
@@ -321,8 +289,11 @@ These defaults are *starting positions for ratification*, not unilateral commitm
 
 ## 8. Status
 
-- **Version:** 0.1 (draft)
+- **Version:** 0.2 (draft)
 - **Author:** First draft assembled by AI (Claude Sonnet 4.6) at founder request, October 2025.
+- **Revision history:**
+  - v0.1 — initial draft.
+  - v0.2 (founder-directed) — reframed §1–§2 around a standard-first data policy (value → consent-scaled-to-audience → controls-proportional-to-risk); the exhaustive per-item inventory and sync internals moved intact to **Appendix A** and marked a Tier-2 deliverable; §4.2 gains the formal-consent + inventory prerequisite and §4.1 the informal-consent prerequisite; §5 gains a value-test row and consolidates the network-egress row. `CONSTRAINTS.md §1.2/§1.4/§3.2 P1/§3.4` realigned to the same standard in the same change.
 - **Status:** Working draft. Becomes binding upon ratification by founding governing body at incorporation.
 - **Review cadence:**
   - Annual full review.
@@ -335,3 +306,87 @@ These defaults are *starting positions for ratification*, not unilateral commitm
   - In case of conflict: `CONSTRAINTS.md` > this document > `BACKLOG.md`.
 
 This document is intended to be slightly *uncomfortable* — every entry should commit the company to something it will sometimes find inconvenient. A document that is comfortable is decorative.
+
+---
+
+## Appendix A — Formal data inventory (Tier-2 deliverable)
+
+> **Why this is an appendix.** Under §1 Test 2, a *formal, documented* data inventory is what external users are owed; at Tier 0 (solo) it is evidence kept for rigor, not a live consent instrument. The content below is the complete, audit-grade record — every key, store, transient buffer, network flow, and the sync trust model. Keeping it current and founder-ratified is a **Tier-2 transition prerequisite** (§4.2). Nothing here was dropped in the §1 reframe; it was moved so the standard reads first.
+
+### A.1 On-device localStorage (persistent, on user device only)
+
+| Key | Contents | Size | Retention | Deletion mechanism |
+|---|---|---|---|---|
+| `stillness-game` | Game state: `duration`, `threshold`, `wins`, `best`, `round`, `totalWins`, `todayKey`, `todaySecs`, `todayWins`. **Synced (E2EE) when sync is on** (A.5). | < 1 KB | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-combing-acknowledged-v1` | Safety-modal acknowledgment flag (`'1'`) | ~10 B | Until user clears | Same as above |
+| `hill-combing-reports` | Adverse-event reports: list of `{timestamp, text (≤2000 chars), snapshot {round, duration, todaySecs, phase, tier}}`. Capped at 50 entries. | < 100 KB max | Until user clears or 50-cap rotation | Same as above |
+| `hill-combing-last-trajectory` | Most recent round's audio trajectory: `{timestamp, mode, duration, held, won, samples: [{t, s, m}]}` | < 50 KB | Overwritten by next round-end | Same as above |
+| `hill-climbing-introduced-v1` | Onboarding completion flag (`'1'`) | ~10 B | Until user clears | Same as above |
+| `hill-climbing-usage` | Per-app daily usage flags: `{ "v": 1, "meditate": { "YYYY-MM-DD": 1, … }, "breathe": { … }, "nourish": { … }, "levity": { … }, "climb": { … }, "train": { … } }`. Written by `meditate.html` (on entering settling phase), `breathe.html` (on session start), `nourish.html` (when the user commits to cook a challenge), `levity.html` (on first practice action), `climb.html` (on the first state-changing action of a page load, not page-open), and `train.html` (on committing a set); read by `index.html` hub dashboard. Reflect usage is derived separately from the journal IndexedDB. No session content, no user-identifiable data — only boolean day-flags. | < 10 KB (grows ~3 KB/yr) | Until user clears; no auto-pruning (streak requires full history) | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-timed-minutes` | Meditate timed-mode session length preference (minutes, integer) | ~10 B | Until user clears | Same as above |
+| `breathe-session-duration` | Breathe session length preference (minutes, integer). **Synced (E2EE) when sync is on** (A.5). | ~10 B | Until user clears | Same as above |
+| `hill-climbing-install-dismissed` | Hub PWA install-banner dismissal timestamp (ms since epoch); re-prompts 5 days after dismissal | ~15 B | Until user clears | Same as above |
+| `hill-climbing-nourish` | Nourish cooking-ladder state: `{ v, level, streak, cleared {id→outcome}, history [{id, outcome, ts}], active, recent[] }`. Challenge ids and self-reported outcomes only; no free text, no identity. **Synced (E2EE) when sync is on** (A.5). | < 20 KB (grows slowly) | Until user clears | Same as above |
+| `hill-climbing-climb` | Climb goals + tasks state: `{ v, rootId, goals {id → {title, parentId, order, status active/resting, created, updated, restedAt}}, tasks {id → {goalId, title, done, created, updated, doneAt}}, focusId }`. `rootId` names the single editable root goal every other goal hangs under. Goal and task titles are short user-authored text and may be personal (they name what the user is working toward). | grows with use; typically < 100 KB | Until user clears or uses Climb's in-app "Delete everything" | In-app Delete everything (present today); browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-levity` | Levity comedy-practice state: `{ v, level, streak, cleared {id→outcome}, history [{id, outcome, ts}], active, recent[], notebook [{text, landed, ts}] }`. `notebook[].text` is free-form user-written comedy material — personal creative prose. **Synced (E2EE) when sync is on** (A.5). | grows slowly | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-train` | Train workout-logger state: `{ v, unit, exercises [{id, name, fields, createdAt}], workouts [{id, startedAt, finishedAt, entries[…]}], active }`. Exercise names (short user text) plus numeric reps/weight/time. Low sensitivity. **Synced (E2EE) when sync is on** (A.5). | grows with use | Until user clears or in-app erase | In-app erase; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-council` | Council saved deliberations: array (cap 30) of `{ id, ts, situation, directors, chairOpening, thread [{role, text}], feedback }`. `situation`, `thread[].text`, and `feedback.note` are **free-form personal decisions** — among the most sensitive content in the suite (see L24). **Synced (E2EE) when sync is on** (A.5). | < 100 KB (cap 30) | Until user clears or in-app erase | In-app erase; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-companion` | Companion saved conversations: `{ v, conversations: [ { id, ts, title, thread [{ role, text, hidden? }] } ] }` (cap 60). `thread[].text` is **free-form personal conversation** — the user's own words plus the companion's replies, which may paraphrase their goals or journal. Among the most sensitive content in the suite (see L29). The raw goals/journal/activity **digest** the companion is shown is *not* stored here — only the dialogue is. Synced (E2EE) if the user has enabled sync. | < 200 KB (cap 60) | Until user clears (in-app "Clear all conversations") or in-app erase | In-app Clear all conversations; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-nourish-chef` | Nourish Chef mode settings: `{ model, consented, history [{title, outcome, ts}] (cap 20) }`. Recipe titles + self-reported outcomes; no free-form pantry text is persisted. The API key is **no longer stored here** — it moved to the shared `hill-climbing-api-key` (below). | < 20 KB | Until user clears | Browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `hill-climbing-api-key` | The user's **Anthropic API key** — a single credential **shared across the hub's bring-your-own-key AI apps** (Council, Companion, and Nourish's chef): set it in any one and it works in all. A credential; browser localStorage is not a secure secret store. Legacy per-app keys (`hill-climbing-council-key`, `hill-climbing-companion-key`, and the `key` field formerly inside `hill-climbing-nourish-chef`) are migrated into this key once, then deleted, so nobody re-enters. Device-local; **never synced.** Removing it in any app clears it hub-wide. | ~100 B | Until user clears or in-app "Remove key" | In-app Remove key (clears it hub-wide); browser settings |
+
+The `hill-combing-*` keys retain the legacy prefix to preserve user state across the v1.19 rename. New keys may use `hill-climbing-*`.
+
+### A.2 On-device IndexedDB
+
+| Database / store | Contents | Size | Retention | Deletion mechanism |
+|---|---|---|---|---|
+| `journal` / `entries` (written by `reflect.html`) | Journal entries: `{ id, created, updated, text (free-form, user-written), mood (1–7 or null), satisfaction (1–7 or null), embedding (reserved, currently null), embModel (null), deleted? (tombstone flag) }`. **Synced (E2EE) when sync is on** (A.5) — as a per-entry log, not a whole blob; a deleted entry becomes a `deleted:true` tombstone (hidden from UI/exports) so the deletion propagates rather than resurrecting on another device. | grows with use; `text` is user-authored prose | Until the user deletes an entry (in-app, per-entry) or clears browser data | In-app per-entry delete; browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+| `climb` / `events` (written by `climb.html`) | Append-only event log of every Climb state change: `{ id, ts, type, …payload }` — 14 types covering goal add/rename/reorder/move/archive/restore, focus set/clear, task add/rename/complete/uncomplete/delete, plus baseline snapshots. Payloads include goal/task titles (before/after on renames), so the log carries the same short user-authored text as the state blob. For the user's own local analysis; exportable as JSON. **Synced (E2EE) when sync is on** (A.5, since v1.99) — otherwise never transmitted. | grows with use (append-only) | Until Climb's in-app "Delete everything" or browser clear | In-app Delete everything (removes the whole database); browser settings; future "delete all my data" button (Tier ≥ 2 prerequisite) |
+
+The `journal` store is the only one holding **free-form personal prose** — the most sensitive data in the suite. Climb's goal/task titles (in both its localStorage blob and its event log) are short user-authored labels: personal, but bounded and not prose. The hub (`index.html`) opens the journal database **read-only and version-less** to derive Reflect's usage dots, and never writes to it (see the IndexedDB-gotcha note in `CLAUDE.md §7`).
+
+### A.3 Browser memory (transient)
+
+- Live camera video stream — displayed on positioning and meditation screens; never persisted.
+- Analysis-canvas pixel data — overwritten every frame; never persisted.
+- Frame ring-buffer (10 × 80×60×4-byte frames ≈ 192 KB) — in-memory only.
+- Audio-context oscillator state — in-memory only.
+- Motion-window for smoothness scoring (60 floats) — in-memory only.
+
+### A.4 Network transmission
+
+- **Tier 0–1: zero outbound network traffic** at any time (other than the initial HTML/JS load), **except the user-initiated, opt-in flows below** — Web Push reminders; the bring-your-own-key AI apps (Council, Nourish's chef, and Companion); and end-to-end-encrypted sync. No analytics, telemetry, ads, error reporting, or third-party scripts.
+- **Opt-in bring-your-own-key AI apps (all tiers; each sends only when the user acts, on the user's own Anthropic key).** Three apps call `https://api.anthropic.com/v1/messages` directly from the browser using a key the user supplies and stores locally — there is **no operator server between the user and Anthropic**. Council sends the situation text the user types plus the deliberation (L24). Nourish's chef sends the pantry list, preferences, and cooking level (L25). **Companion sends the widest slice: the user's current goals, recent journal entries, and recent activity, assembled fresh each reply and folded into the prompt (L29).** Common to all: the send is user-initiated, disclosed plainly before first use behind an explicit key gate, billed to the user's own account, and governed by Anthropic's commercial API terms — *not* by our operator policy, because we never receive the content. This **request** egress is TLS-encrypted in transit but **readable by Anthropic** (unlike E2EE sync).
+- **Companion additionally has live internet access (added v0.2; L30).** On the user's own key, each Companion reply may invoke Anthropic's server-side web-search and web-fetch tools (capped at 5 searches + 5 fetches per reply). Beyond the request egress above, this generates a **second class of outbound traffic**: model-written search queries and page fetches, executed on Anthropic's infrastructure and reaching **third-party search providers and the fetched sites**. These queries are written by the model, not the user, and the system prompt instructs it to use general, non-identifying queries only and never to place the user's private details, journal text, or situation specifics into a search — but this is a **prompt-level guardrail, not a hard code filter**, so a model slip could disclose a detail. Taken together with the personal-content sends above, these are the suite's operator-adjacent-but-not-operator-held disclosures of user-derived content; every other data flow is either on-device or end-to-end encrypted.
+- **Opt-in Web Push reminders (all tiers, off by default; added v1.76).** If — and only if — the user explicitly enables reminders on the hub, the browser registers a push subscription with its platform push service (Google / Apple / Mozilla) and receives pushes sent by the project's own GitHub Actions sender. This is user-initiated, revocable at any time ("Turn off"), and carries no analytics or behavioural data — the payload is a fixed practice prompt drawn from a hand-authored rotation. The subscription endpoint is the user's to copy into the sender's GitHub Actions secret. This was the *first* exception to "nothing leaves the device"; see also Council (L24) and end-to-end-encrypted sync below.
+- **Opt-in end-to-end-encrypted cross-device sync (all tiers, off by default; added v1.99).** If the user signs in and turns on sync, their data is encrypted on-device and stored as ciphertext on a backend (see A.5). Only ciphertext plus metadata (doc keys, sizes, timestamps, and the account email) leave the device; **content never does — the operator cannot read it.** **Tier reconciliation:** §3.1 gates *operator-readable* server submission at Tier ≥ 2. E2EE sync is permitted from **Tier 0** on the principle that what that gate protects — operator power over user data — does not arise when the operator holds no key and cannot decrypt. The encryption guarantee, not the tier, is the safeguard. Founder-ratified (v1.99).
+- **Tier ≥ 2: adverse-event reports may POST to a backend** *with explicit per-report consent at submission time*. No silent transmission.
+- **All tiers: no microphone, no audio recording, no behavioral telemetry, no fingerprinting, no cookies for tracking.**
+
+### A.5 Off-device storage (opt-in, end-to-end encrypted cross-device sync — added v1.99)
+
+Sync is **off by default** and opt-in. When a user turns it on, their data is encrypted **on the device** and stored on a backend (Supabase: Postgres + Auth) that holds only ciphertext. This is the third off-device flow in the suite (after opt-in Web Push and Council), and the first where the operator stores user *content* at all — which is precisely why it is designed so the operator **cannot read it**.
+
+**Trust model — zero-knowledge.** A random 256-bit Data Encryption Key (DEK) encrypts every document (AES-GCM). The DEK never leaves the device in usable form: it is wrapped twice — once by a key derived from the user's **passphrase**, once by a key derived from a one-time **recovery code** (PBKDF2-HMAC-SHA-256, 600,000 iterations, per-wrap random salt). The server stores only the two wrapped-DEK blobs and per-document ciphertext. The passphrase and recovery code never leave the device; the operator holds no key and cannot decrypt. The working DEK is imported non-extractable, so its raw bytes never re-enter JS after setup/unlock.
+
+| Backend store | Contents | Operator-readable? |
+|---|---|---|
+| `sync_docs` | Per-user rows `{ doc_key, ciphertext, iv, updated_at, device_id }`. Blob rows (whole-store snapshots, e.g. `ls:hill-climbing-climb`) and append-only log rows (e.g. `idb:climb:events/<id>`). Each document's `(user, doc_key, clock)` is bound as AES-GCM additional authenticated data, so ciphertext can't be replayed under a different key or slot. | **No** — ciphertext only. |
+| `sync_keybundle` | One row per user: the two wrapped-DEK blobs + salts/IVs + KDF descriptor. | **No** — unwrapping needs the passphrase or recovery code. |
+| Supabase Auth (`auth.users`) | Account email + password hash (identity/login only). | Email: yes. Password: hashed by Supabase. |
+
+**Row isolation** is enforced by Postgres Row-Level Security (`user_id = auth.uid()`) on every table; the anon API key shipped in the client is public by design and grants nothing without a valid session.
+
+**Metadata that is NOT protected (documented honestly).** Even though content is unreadable, the operator can see, per account: the email, ciphertext **sizes**, row **counts** (≈ number of edits ≈ activity volume), **timestamps**, and `doc_key`s (which app, and that an event log exists). Content never leaves the device in the clear; this metadata does. Reducing it (padding, batching, key hashing) is a documented follow-up, not shipped in v1.99.
+
+**Device-local sync support (never synced):** `hill-climbing-sync-meta` (localStorage: a random device id, per-store logical clocks, and pull cursors), the `hc-sync` IndexedDB (holds the cached DEK as a non-extractable `CryptoKey`), and Supabase's own session token. None of these is a synced document.
+
+**Retention & deletion.** Server rows persist until deleted. The user can delete the entire server copy in-app ("Delete my synced data" removes their `sync_docs` + `sync_keybundle` rows), and signing out drops the device's cached key — satisfying CONSTRAINTS P1 (real deletion, no shadow copies) and C3 (stopping is honored) for the synced copy.
+
+**Scope in v2.0:** the sync foundation (`hc-sync.js`) now covers **every app that holds user data** — each opt-in, off by default, same encryption. Registered documents:
+
+- **Blob (last-write-wins):** `ls:hill-climbing-climb` (Climb state, v1.99), `ls:hill-climbing-companion` (Companion conversations, v0.1), `ls:stillness-game` (Meditate staircase), `ls:breathe-session-duration` (Breathe session length), `ls:hill-climbing-nourish` (Nourish ladder), `ls:hill-climbing-levity` (Levity state), `ls:hill-climbing-train` (Train state), `ls:hill-climbing-council` (Council deliberations).
+- **Log (append-only, per-record):** `idb:climb:events/<id>` (Climb event log, v1.99) and `idb:reflect:entries/<id>@<updated>` (the **Reflect `journal`** — the single most sensitive store — synced per-entry, *not* as a whole blob, so two devices never clobber each other's writing; edits and deletes carry version-stamped keys, deletes as tombstones).
+
+**Never registered (device-local, never synced):** the shared Anthropic credential `hill-climbing-api-key` (A.1), Meditate's `hill-combing-reports` + `hill-combing-last-trajectory`, all UI/onboarding flags, and `hill-climbing-usage` (a per-day union log that whole-blob LWW would corrupt across devices). What leaves the device for sync is always ciphertext + metadata only; content never does.
