@@ -1,0 +1,26 @@
+#!/bin/bash
+# Advisory doc-freshness guard — NEVER blocks (always exits 0).
+#
+# Warns when app code (root *.html / *.js) is committed without a touch to
+# BACKLOG.md / CLAUDE.md / README.md, which usually means a version label or a
+# Done entry was forgotten. Advisory on purpose: typo fixes legitimately need no
+# doc change, and a hard block just trains people to pass --no-verify.
+#
+# Armed per-session via `git config core.hooksPath scripts/git-hooks` in the
+# SessionStart hook. To arm it in your own local checkout, run that once.
+
+staged=$(git diff --cached --name-only)
+app=$(printf '%s\n' "$staged"  | grep -E '\.(html|js)$' | grep -vE '^(scripts|push)/' || true)
+docs=$(printf '%s\n' "$staged" | grep -E '(^|/)(BACKLOG|CLAUDE|README)\.md$' || true)
+
+if [ -n "$app" ] && [ -z "$docs" ]; then
+  echo "----------------------------------------------------------------------" >&2
+  echo "doc-freshness (advisory): app files staged with no BACKLOG/CLAUDE/README touch:" >&2
+  printf '%s\n' "$app" | sed 's/^/    /' >&2
+  echo "  If user-visible: bump the app's in-product version label + add a BACKLOG entry." >&2
+  echo "  If the roster/tier/workflow/data-flow changed: update CLAUDE.md §§1-2 (see §4)." >&2
+  echo "  Advisory only — this commit proceeds." >&2
+  echo "----------------------------------------------------------------------" >&2
+fi
+
+exit 0
