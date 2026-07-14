@@ -297,7 +297,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · companion</div>
+<div class="corner" id="version-label">v0.6 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="talk">Talk</button>
   <button class="mode-btn"         data-view="history">History</button>
@@ -407,7 +407,7 @@
 // (hc-sync.js): ciphertext only, keyed by a passphrase the server never sees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION   = 'v0.5 · companion';
+const VERSION   = 'v0.6 · companion';
 const MODEL     = 'claude-opus-4-8';
 const API_URL   = 'https://api.anthropic.com/v1/messages';
 const LS_STORE  = 'hill-climbing-companion';        // saved conversations (synced)
@@ -774,6 +774,16 @@ function renderThread() {
   const turns = active ? active.thread.filter(t => !t.hidden) : [];
   threadEl.innerHTML = turns.map(t => turnHTML(t.role, t.text)).join('');
   refreshTail();
+  refreshBegin();
+}
+// Once a conversation is underway, the "Let it open" seed is spent — the button
+// becomes a plain "Continue" that just returns focus to the composer.
+function refreshBegin() {
+  const started = !!(active && active.thread.length);
+  beginBtn.textContent = started ? 'Continue' : 'Let it open';
+  beginBtn.title = started
+    ? 'Pick the conversation back up'
+    : 'Let the companion open with a brief check-in on where you are';
 }
 function turnHTML(role, text, isErr) {
   const who = role === 'user' ? 'You' : 'Companion';
@@ -848,7 +858,7 @@ async function respond() {
     if (pend) pend.remove();
     if (err && err.kind === 'key') showSetup(true);
   } finally {
-    setBusy(false); refreshTail(); refreshSees(); scrollEnd();
+    setBusy(false); refreshTail(); refreshBegin(); refreshSees(); scrollEnd();
   }
 }
 
