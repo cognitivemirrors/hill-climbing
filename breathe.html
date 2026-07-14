@@ -221,7 +221,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.6 · breathe</div>
+<div class="corner" id="version-label">v0.9 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 
@@ -281,6 +281,11 @@
 
 <div id="proto-info"></div>
 <div id="safety-note">if dizzy, stop and breathe normally</div>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
+<script src="/hc-sync-chip.js"></script>
 
 <script>
 'use strict';
@@ -365,17 +370,27 @@ const s = {
 };
 
 // ── Usage logging for the hub dashboard ──────────────────────────────────────
-// Records one flag per app per day in a shared localStorage log the hub reads.
+// The usage log (per-app day-flags + per-session durations) lives in the shared
+// hc-usage.js module now, so all apps write one consistent, cross-device-syncable
+// store. markUsage marks the day active; addUsageDuration records a completed
+// session's seconds. Both delegate to HCUsage; wrappers keep the call sites below
+// unchanged. hcDayKey stays for any local use.
 function hcDayKey(d = new Date()) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-function markUsage(app) {
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log[app] ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-  } catch (e) { /* private mode / quota — never break the session */ }
+function markUsage(app) { if (window.HCUsage) HCUsage.mark(app); }
+function addUsageDuration(app, secs) { if (window.HCUsage) HCUsage.addDuration(app, secs); }
+// One timestamp for the session in flight (breathwork OR training), 0 when
+// none. Set at each real start; the single record-and-clear helper below makes
+// double-counting impossible regardless of which of the many stop/switch paths
+// fires. Kept independent of s.sessionStart so recovery's mid-session reset of
+// that field never truncates the training duration.
+let breatheSessionStart = 0;
+function endBreatheSession() {
+  if (breatheSessionStart > 0) {
+    addUsageDuration('breathe', (performance.now() - breatheSessionStart) / 1000);
+    breatheSessionStart = 0;
+  }
 }
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
@@ -550,6 +565,7 @@ function hide(...els) { els.forEach(e => e.classList.add('hidden')); }
 
 function startBreathwork() {
   markUsage('breathe');
+  breatheSessionStart = performance.now();
   initAudio(); acquireWakeLock();
   s.running = true; s.cycles = 0; s.sessionStart = performance.now();
   startBtn.textContent = 'STOP'; startBtn.classList.add('active');
@@ -561,6 +577,7 @@ function startBreathwork() {
 }
 
 function stopBreathwork() {
+  endBreatheSession();   // records elapsed; covers both the STOP button and the natural time-limit stop
   s.running = false; cancelAnimationFrame(s.raf); releaseWakeLock();
   startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
   document.querySelectorAll('.proto-btn, .dur-btn').forEach(b => b.disabled = false);
@@ -590,6 +607,7 @@ function advancePrimeCard() {
 // ── Training: exercise ────────────────────────────────────────────────────────
 
 function startExercise() {
+  breatheSessionStart = performance.now();   // training session begins here (spans exercise→recover)
   s.trainingStage = 'exercise'; s.exerciseStart = performance.now();
   hide(primeView, ringView, breathworkCtrl, recoverCtrl); show(exerciseView);
   sessionEl.textContent = '0:00';
@@ -620,6 +638,7 @@ function startRecovery() {
 }
 
 function stopTraining() {
+  endBreatheSession();   // records the training session (exercise + recover)
   s.running = false; releaseWakeLock();
   cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
   resetRing(); sessionEl.textContent = '0:00'; cycleEl.textContent = '';
@@ -630,6 +649,7 @@ function stopTraining() {
 // ── Mode switch ───────────────────────────────────────────────────────────────
 
 function switchMode(newMode) {
+  endBreatheSession();   // switching away mid-session still counts the time practised
   s.running = false; releaseWakeLock();
   cancelAnimationFrame(s.raf); cancelAnimationFrame(s.exerciseRaf);
   resetRing(); startBtn.textContent = 'BEGIN'; startBtn.classList.remove('active');
@@ -665,6 +685,7 @@ document.querySelectorAll('.proto-btn').forEach(btn => {
 
 // ── Session length (v0.5) — breathwork only ──
 const DURATION_KEY = 'breathe-session-duration';
+const SYNC_BLOB_KEY = 'ls:breathe-session-duration';   // this app's registered E2E-sync doc (see hc-sync.js)
 let durationMinutes = 5;
 try { const v = parseInt(localStorage.getItem(DURATION_KEY), 10); if (v > 0) durationMinutes = v; } catch {}
 function syncDurationPills() {
@@ -678,6 +699,7 @@ document.querySelectorAll('.dur-btn').forEach(btn => {
     if (s.running) return;
     durationMinutes = parseInt(btn.dataset.minutes, 10);
     try { localStorage.setItem(DURATION_KEY, String(durationMinutes)); } catch {}
+    if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
     syncDurationPills();
   });
 });
@@ -696,6 +718,26 @@ document.addEventListener('keydown', e => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 protoInfo.textContent = proto().info;
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// Breathe's only persisted user choice is the session length. Sign-in / unlock
+// live at the hub; this app registers that one preference, shows status, and
+// pushes on change. Nothing transmits until sync is unlocked and armed.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(DURATION_KEY) || String(durationMinutes),
+    write: (str) => {                      // remote-apply path
+      try { localStorage.setItem(DURATION_KEY, str); } catch (e) { /* quota */ }
+      const v = parseInt(str, 10); if (v > 0) durationMinutes = v;
+      syncDurationPills();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-right' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'breathe' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

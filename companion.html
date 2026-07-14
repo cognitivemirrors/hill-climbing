@@ -163,7 +163,6 @@
     .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
     .menu-note a { color: var(--dim); text-decoration: none; border-bottom: 1px solid var(--faint); }
     .menu-note a:hover { color: var(--accent); }
-    #sync-note { color: var(--dim); }
 
     .hidden { display: none !important; }
 
@@ -447,7 +446,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · companion</div>
+<div class="corner" id="version-label">v0.7 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -534,6 +533,7 @@
 </div>
 
 <script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
 <script>
 'use strict';
 
@@ -559,12 +559,13 @@
 // stored only in this browser; calls go browser → Anthropic directly on the
 // user's key — no operator server in between. This sends data off-device and so
 // contradicts REQUIREMENTS §1.3/§2.1's "nothing leaves the device" — flagged for
-// founder ratification, not silently amended. Companion conversations are stored
-// locally and, if the user enabled sync at the hub, synced end-to-end-encrypted
-// (hc-sync.js: ciphertext only). Council deliberations remain device-local.
+// founder ratification, not silently amended. Both a Companion conversation and
+// a Council deliberation are stored locally and, if the user enabled sync at the
+// hub, synced end-to-end-encrypted as two separate blobs (hc-sync.js: ciphertext
+// only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.5';
+const VERSION_NUM = 'v0.7';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -608,7 +609,8 @@ const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
 
 // ── Council storage ──────────────────────────────────────────────────────────
-const LS_HIST  = 'hill-climbing-council';           // saved deliberations (device-local)
+const LS_HIST  = 'hill-climbing-council';           // saved deliberations
+const SYNC_BLOB_KEY_COUNCIL = 'ls:hill-climbing-council'; // Council's registered E2E-sync doc (see hc-sync.js)
 const HIST_CAP = 30;
 
 // ── The companion's charge ───────────────────────────────────────────────────
@@ -841,9 +843,10 @@ let mode   = (document.documentElement.dataset.mode === 'council') ? 'council' :
 let currentView = 'home';
 
 // Companion state
-let store  = loadStore();   // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
-let active = null;          // the open conversation (a reference into store.conversations)
-let busy   = false;
+let store   = loadStore();  // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
+let active  = null;         // the open conversation (a reference into store.conversations)
+let busy    = false;
+let retryMsg = {};          // convId → last failure message; drives the persistent "Try again". Page-local, never persisted.
 
 // Council state
 let running   = false;
@@ -1040,7 +1043,17 @@ function apiMessages(conv) {
 function renderThread() {
   const turns = active ? active.thread.filter(t => !t.hidden) : [];
   threadEl.innerHTML = turns.map(t => cTurnHTML(t.role, t.text)).join('');
-  refreshRegenerate();
+  refreshTail();
+  refreshBegin();
+}
+// Once a conversation is underway, the "Let it open" seed is spent — the button
+// becomes a plain "Continue" that just returns focus to the composer.
+function refreshBegin() {
+  const started = !!(active && active.thread.length);
+  beginBtn.textContent = started ? 'Continue' : 'Let it open';
+  beginBtn.title = started
+    ? 'Pick the conversation back up'
+    : 'Let the companion open with a brief check-in on where you are';
 }
 function cTurnHTML(role, text, isErr) {
   const who = role === 'user' ? 'You' : 'Companion';
@@ -1075,45 +1088,36 @@ async function send(text, opts) {
 }
 
 // Answer whatever user turn currently sits at the end of the open thread. Split
-// out of send() so a failed reply can be retried in place: the trailing user
-// turn is already in active.thread (and persisted), so retry never re-appends it.
+// out of send() so a reply that fails can be retried in place: the trailing user
+// turn is already in active.thread (and persisted), so retry never re-appends it
+// — it just re-runs the call. On failure we record the reason in retryMsg and
+// let refreshTail() render a PERSISTENT "Try again" derived from the trailing
+// user turn, so the affordance survives reloads, view switches, and sync (a
+// stranded, unanswerable message was the whole bug).
 async function respond() {
   if (busy || !active || !active.thread.length) return;
-  const stale = el('err-turn');
-  if (stale) stale.remove();
+  document.querySelectorAll('.tail-ctl').forEach(el => el.remove());   // drop retry/regenerate while a reply is in flight
   threadEl.insertAdjacentHTML('beforeend',
     '<div class="turn them" id="pending"><div class="turn-who">Companion</div><div class="turn-body">' + deliberating() + '</div></div>');
-  setBusy(true); refreshRegenerate(); scrollEnd();   // drop the regenerate control while a reply is in flight
+  setBusy(true); scrollEnd();
 
   try {
     const ctx = await gatherContext();
     const reply = await callClaudeRaw(ctx.system, apiMessages(active), 1200, WEB_TOOLS);
     if (!reply) throw new ApiError('empty', 'That reply came back empty.');
     active.thread.push({ role: 'assistant', text: reply });
+    delete retryMsg[active.id];
     persist();
     const pend = el('pending');
     if (pend) pend.outerHTML = cTurnHTML('assistant', reply);
   } catch (err) {
+    retryMsg[active.id] = (err && err.message) || 'The companion didn’t reply.';
     const pend = el('pending');
     if (pend) pend.remove();
-    showErrorTurn((err && err.message) || 'I couldn’t respond just now.');
     if (err && err.kind === 'key') setView('setup');
   } finally {
-    setBusy(false); refreshRegenerate(); refreshSees(); scrollEnd();
+    setBusy(false); refreshTail(); refreshBegin(); refreshSees(); scrollEnd();
   }
-}
-
-// A failed reply, shown with a "Try again" that re-answers the same user turn.
-function showErrorTurn(message) {
-  threadEl.insertAdjacentHTML('beforeend',
-    '<div class="turn them error" id="err-turn">' +
-      '<div class="turn-who">Companion</div>' +
-      '<div class="turn-body"><p>' + esc(message) + '</p>' +
-        '<div class="err-actions"><button class="ghost retry-btn" id="retry-btn" type="button">Try again</button></div>' +
-      '</div>' +
-    '</div>');
-  const rb = el('retry-btn');
-  if (rb) rb.addEventListener('click', respond);
 }
 
 // Regenerate — discard the last companion reply and ask again from the same
@@ -1131,18 +1135,41 @@ function regenerate() {
   respond();        // re-answer it
 }
 
-// Attach a quiet "Regenerate" control to the last companion reply, and nowhere else.
-function refreshRegenerate() {
-  document.querySelectorAll('.regen-wrap').forEach(el => el.remove());
-  if (busy || !active) return;
-  const visible = active.thread.filter(t => !t.hidden);
-  const last = visible[visible.length - 1];
-  if (!last || last.role !== 'assistant') return;
+// The single "tail control" under the thread, recomputed from state on every
+// render so it survives reloads, view switches, and sync. Three states:
+//   • busy / no conversation → nothing (the pending indicator covers in-flight)
+//   • thread ends with an unanswered USER turn → a persistent "Try again"
+//   • thread ends with a companion reply → a quiet "↻ Regenerate"
+// Both controls are DOM-only (class `tail-ctl`) — never written into
+// active.thread — so neither enters the saved or synced conversation.
+function refreshTail() {
+  document.querySelectorAll('.tail-ctl').forEach(el => el.remove());
+  if (busy || !active || !active.thread.length) return;
+  const lastRaw = active.thread[active.thread.length - 1];
+
+  if (lastRaw.role === 'user') {
+    // The reply never landed — a fresh failure, or a stranded turn from a prior
+    // session/reload. Offer to get one. Also covers a failed hidden "Let it
+    // open" seed, where there's no visible turn to hang a control off.
+    const msg = retryMsg[active.id] || 'The companion didn’t reply — the connection may have dropped.';
+    threadEl.insertAdjacentHTML('beforeend',
+      '<div class="turn them error tail-ctl" id="tail-retry">' +
+        '<div class="turn-who">Companion</div>' +
+        '<div class="turn-body"><p>' + esc(msg) + '</p>' +
+          '<div class="err-actions"><button class="ghost retry-btn" type="button">Try again</button></div>' +
+        '</div>' +
+      '</div>');
+    const rb = document.querySelector('#tail-retry .retry-btn');
+    if (rb) rb.addEventListener('click', respond);
+    return;
+  }
+
+  // Last turn is a companion reply → quiet regenerate control on it.
   const els = threadEl.querySelectorAll('.turn.them:not(#pending):not(.error)');
   const body = els.length && els[els.length - 1].querySelector('.turn-body');
   if (!body) return;
   body.insertAdjacentHTML('beforeend',
-    '<div class="regen-wrap"><button class="regen-btn" type="button" title="Ask the companion for a different reply">↻ Regenerate</button></div>');
+    '<div class="regen-wrap tail-ctl"><button class="regen-btn" type="button" title="Ask the companion for a different reply">↻ Regenerate</button></div>');
   const b = body.querySelector('.regen-btn');
   if (b) b.addEventListener('click', regenerate);
 }
@@ -1375,7 +1402,7 @@ function updateFeedback(id, fb) {
   const s = all.find(x => x.id === id || x.ts === id);
   if (!s) return;
   s.feedback = fb;
-  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  persistHist(all);
 }
 
 function resetConvene() {
@@ -1418,7 +1445,7 @@ function persistThread() {
   if (!current) return;
   const all = loadHist();
   const s = all.find(x => x.id === current.id || x.ts === current.id);
-  if (s) { s.thread = current.thread; try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {} }
+  if (s) { s.thread = current.thread; persistHist(all); }
 }
 function scrollToEnd() {
   const box = el('reply-box');
@@ -1498,15 +1525,19 @@ function chairShell() {
     '</div>';
 }
 
-// ── History (Council, localStorage) ──────────────────────────────────────────
+// ── History (Council; localStorage blob → hc-sync) ───────────────────────────
 function loadHist() {
   try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]'); } catch (_) { return []; }
+}
+function persistHist(all) {           // save locally + push to sync (no-op until sync is unlocked + armed)
+  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY_COUNCIL);
 }
 function saveSession(sess) {
   const all = loadHist();
   all.unshift(sess);
   if (all.length > HIST_CAP) all.length = HIST_CAP;
-  try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  persistHist(all);
 }
 function renderCouncilHistory() {
   const all = loadHist();
@@ -1704,8 +1735,7 @@ function renderMenu() {
       menuItem('key-btn', 'API key', 'Change or remove your key') +
       menuItem('about-btn', 'About the companion', "How it works, what it isn't") +
       menuItem('clear-btn', 'Clear all conversations', 'Delete every saved thread') +
-      '<div class="menu-note" id="sync-note">Saved on this device.</div>' +
-      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details.</div>';
+      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are sent to Anthropic on your key — for that reply only — and are never written into the saved conversation. It can also search the web on your key when a question needs it — with general queries only, never your private details. Conversations save on this device; sync status is shown in the corner chip.</div>';
     el('sees-btn').addEventListener('click', () => { setMenu(false); setView('sees'); });
     el('new-btn').addEventListener('click', () => {
       setMenu(false);
@@ -1723,7 +1753,6 @@ function renderMenu() {
         setView('home');
       }
     });
-    updateSyncNote(window.HCSync ? HCSync.getStatus() : null);
   } else {
     panel.innerHTML =
       '<div class="menu-head">Your data</div>' +
@@ -1749,16 +1778,15 @@ function setMenu(open) {
   menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
-// ── Sync (opt-in, end-to-end encrypted). Companion only. ─────────────────────
-function updateSyncNote(status) {
-  const eln = el('sync-note');
-  if (!eln) return;   // council menu has no sync note
-  if (!status || status.error === 'not_configured') { eln.textContent = 'Saved on this device.'; return; }
-  if (status.state === 'unlocked') eln.innerHTML = 'Synced to your account, end-to-end encrypted.';
-  else if (status.state === 'locked') eln.innerHTML = 'Locked — enter your passphrase at the <a href="index.html">hub</a> to sync.';
-  else eln.innerHTML = 'Saved on this device. <a href="index.html">Sign in at the hub</a> to sync across devices.';
-}
+// ── Sync (opt-in, end-to-end encrypted). Both modes register a store. ────────
+// Two independent blobs — Companion conversations (ls:hill-climbing-companion)
+// and Council deliberations (ls:hill-climbing-council). The sync engine keys
+// documents by store key + user, not by appId, so one page can carry both and
+// init once. The shared status chip (hc-sync-chip.js) shows one consistent
+// "This device only / Syncing… / Synced" pill for the whole app. The Anthropic
+// API key is a separate, unregistered device-local secret — never synced.
 if (window.HCSync) {
+  // Companion conversations.
   HCSync.registerStore({
     key: SYNC_BLOB_KEY, kind: 'blob',
     read:  () => localStorage.getItem(LS_STORE) || JSON.stringify(store),
@@ -1772,8 +1800,17 @@ if (window.HCSync) {
       }
     },
   });
-  HCSync.subscribe(updateSyncNote);
-  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'companion' });
+  // Council deliberations.
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY_COUNCIL, kind: 'blob',
+    read:  () => localStorage.getItem(LS_HIST) || '[]',
+    write: (str) => {                      // remote-apply path — deliberately NOT through persistHist()
+      try { localStorage.setItem(LS_HIST, str); } catch (e) { /* quota */ }
+      if (mode === 'council' && currentView === 'history') renderHistory();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'companion-council' });
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -193,6 +193,16 @@
       font-family: var(--font-display); font-weight: 400; font-size: 1.55rem;
       line-height: 1.25; color: var(--text); margin-bottom: 18px;
     }
+    /* cross-link to Savor — "the taste behind this challenge" */
+    .taste-link {
+      display: inline-block; margin: 2px 0 16px; text-decoration: none;
+      font-size: 12px; letter-spacing: 0.02em; color: var(--accent); line-height: 1.5;
+    }
+    .taste-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .taste-link .ts-lead {
+      color: var(--dim); text-transform: uppercase; letter-spacing: 0.14em;
+      font-size: 10px; margin-right: 8px;
+    }
     .block-label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
     .challenge-brief { font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 20px; }
     .info-block { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
@@ -489,7 +499,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.13 · nourish</div>
+<div class="corner" id="version-label">v0.15 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="chef">Chef</button>
@@ -544,6 +554,7 @@
           <span class="skill-tag" id="ch-skill">skill</span>
           <span class="time-chip" id="ch-time">~ min</span>
         </div>
+        <a id="ch-taste-link" class="taste-link hidden" href="savor.html"></a>
         <div class="card-title" id="ch-title">title</div>
         <div class="block-label">The challenge</div>
         <div class="challenge-brief" id="ch-brief">brief</div>
@@ -722,12 +733,18 @@
   </section>
 </main>
 
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.13 · nourish';
+const VERSION  = 'v0.15 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef settings blob (hill-climbing-nourish-chef) and the shared Anthropic key (hill-climbing-api-key) are deliberately NOT registered — they stay on-device.
 const LVL_MIN = 1;
 const UPCOMING_COUNT = 3;   // how many uncleared challenges (current rung up) the shopping list looks ahead to
 
@@ -750,6 +767,32 @@ const SKILL_LABELS = {
   // sushi track
   shari: 'Sushi rice',  roll: 'Rolling',         nigiri: 'Nigiri',  aburi: 'Aburi (torch)',
 };
+
+// ── Savor bridge ───────────────────────────────────────────────────────────────
+// Each cooking skill rests on a way of tasting. This maps a challenge's skill to
+// the Savor episode behind it, so every challenge can deep-link to "the taste
+// behind this" (savor.html#<id>). Pure-technique skills (knife, rest, plate) fall
+// back to the finale, "What does this need?", which applies to any dish.
+const SKILL_TO_EPISODE = {
+  season: { id: 'c1',  name: 'Salt — how it makes food taste like itself' },
+  fat:    { id: 'c4',  name: 'Fat — how it carries flavour' },
+  heat:   { id: 'c9',  name: 'Aroma — why browning matters' },
+  sear:   { id: 'c9',  name: 'Aroma — why browning matters' },
+  roast:  { id: 'c9',  name: 'Aroma — why browning matters' },
+  sauce:  { id: 'c8',  name: 'Umami — building savoury depth' },
+  braise: { id: 'c8',  name: 'Umami — building savoury depth' },
+  eggs:   { id: 'c5',  name: 'The five tastes' },
+  dough:  { id: 'c10', name: 'What does this need?' },
+  knife:  { id: 'c10', name: 'What does this need?' },
+  rest:   { id: 'c10', name: 'What does this need?' },
+  plate:  { id: 'c10', name: 'What does this need?' },
+  // sushi track
+  shari:  { id: 'c6',  name: 'Sweetness — balancing sour and salt' },
+  roll:   { id: 'c10', name: 'What does this need?' },
+  nigiri: { id: 'c1',  name: 'Salt — how it makes food taste like itself' },
+  aburi:  { id: 'c9',  name: 'Aroma — why browning matters' },
+};
+function episodeForSkill(skill) { return SKILL_TO_EPISODE[skill] || { id: 'c10', name: 'What does this need?' }; }
 
 // One-line theme shown under the big level number on the home screen, per track.
 const LEVEL_THEMES = {
@@ -1800,6 +1843,7 @@ function save() {
   };
   try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
   catch (e) { /* quota / private mode — never break the flow */ }
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
 }
 function switchTrack(id) {
   if (!TRACKS[id] || id === state.track) return;
@@ -1821,13 +1865,8 @@ function hcDayKey(d = new Date()) {
 let loggedThisLoad = false;   // one "cooked today" flag per page-load; markUsage is idempotent anyway
 function markUsage() {
   if (loggedThisLoad) return;
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log.nourish ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-    loggedThisLoad = true;
-  } catch (e) { /* private mode / quota — never break the session */ }
+  if (window.HCUsage) HCUsage.mark('nourish');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
 }
 
 // ── Derived helpers ──────────────────────────────────────────────────────────
@@ -1964,6 +2003,12 @@ function showChallenge(ch) {
   served = ch;
   document.getElementById('ch-skill').textContent = SKILL_LABELS[ch.skill] || ch.skill;
   document.getElementById('ch-time').textContent  = ch.time === '—' ? 'any dish' : '~ ' + ch.time;
+  // cross-link to the Savor episode behind this challenge's skill
+  const pair = episodeForSkill(ch.skill);
+  const tasteLink = document.getElementById('ch-taste-link');
+  tasteLink.href = 'savor.html#' + pair.id;
+  tasteLink.innerHTML = '<span class="ts-lead">Taste behind this</span>' + pair.name + ' →';
+  tasteLink.classList.remove('hidden');
   document.getElementById('ch-title').textContent = ch.title;
   document.getElementById('ch-brief').textContent = ch.brief;
   const steps = CHALLENGE_STEPS[ch.id] || [];
@@ -2797,6 +2842,28 @@ document.getElementById('version-label').textContent = VERSION;
 load();
 loadChef();
 switchView('cook');   // lands on home, or resumes a mid-cook challenge
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (the cooking ladder, cleared dishes, pantry). Sign-in /
+// unlock live at the hub; this app only registers its store, shows status, and
+// pushes on save. The shared Anthropic key (hill-climbing-api-key) and the chef
+// settings blob are separate, unregistered, on-device only.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                      // remote-apply path — deliberately NOT through save()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'cook');
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'nourish' });
+}
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

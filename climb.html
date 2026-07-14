@@ -471,6 +471,7 @@
 </main>
 
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script>
 'use strict';
 
@@ -759,13 +760,8 @@ function hcDayKey(d = new Date()) {
 let loggedThisLoad = false;   // one flag per page-load; markUsage is idempotent anyway
 function markUsage() {
   if (loggedThisLoad) return;
-  try {
-    const KEY = 'hill-climbing-usage';
-    const log = JSON.parse(localStorage.getItem(KEY) || '{}');
-    log.v = 1; (log.climb ||= {})[hcDayKey()] = 1;
-    localStorage.setItem(KEY, JSON.stringify(log));
-    loggedThisLoad = true;
-  } catch (e) { /* private mode / quota — never break the session */ }
+  if (window.HCUsage) HCUsage.mark('climb');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
 }
 
 // ── The choke point ─────────────────────────────────────────────────────────
