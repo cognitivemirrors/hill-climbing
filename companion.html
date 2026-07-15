@@ -417,27 +417,29 @@
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .empty { text-align: center; color: var(--dim); font-size: 14px; padding: 50px 20px; line-height: 1.7; }
 
-    /* ── backlog inbox (Companion) ──────────────────────────────── */
-    .backlog-intro { font-size: 13px; color: var(--mid); line-height: 1.6; margin-bottom: 16px; max-width: 620px; }
-    .backlog-actions { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-    .backlog-item {
+    /* ── requests to the builder (Companion) ────────────────────── */
+    .req-intro { font-size: 13px; color: var(--mid); line-height: 1.6; margin-bottom: 16px; max-width: 620px; }
+    .req-actions { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .req-item {
       background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-      padding: 13px 15px; margin-bottom: 11px;
+      padding: 14px 16px; margin-bottom: 12px;
     }
-    .backlog-item-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
-    .backlog-cat {
-      font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 999px;
-      padding: 1px 8px; white-space: nowrap;
+    .req-head-row { display: flex; align-items: flex-start; gap: 10px; }
+    .req-heading { font-family: var(--font-display); font-size: 16px; color: var(--text); line-height: 1.35; flex: 1; }
+    .req-date { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; margin: 3px 0 8px; }
+    .req-del {
+      border: none; background: transparent; color: var(--dim);
+      font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; border-radius: 6px; flex: none;
     }
-    .backlog-date { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
-    .backlog-del {
-      margin-left: auto; border: none; background: transparent; color: var(--dim);
-      font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; border-radius: 6px;
+    .req-del:hover { color: var(--text); }
+    .req-copy-one {
+      border: 1px solid var(--line); background: transparent; color: var(--dim);
+      font-family: var(--font-ui); font-size: 11px; padding: 3px 9px; border-radius: 999px;
+      cursor: pointer; flex: none; white-space: nowrap;
     }
-    .backlog-del:hover { color: var(--text); }
-    .backlog-title { font-size: 14.5px; color: var(--text); line-height: 1.45; }
-    .backlog-note { font-size: 13px; color: var(--mid); line-height: 1.55; margin-top: 4px; }
+    .req-copy-one:hover:not(:disabled) { color: var(--text); border-color: var(--line-strong); }
+    .req-copy-one:disabled { opacity: 0.5; cursor: default; }
+    .req-prompt { font-size: 13.5px; color: var(--mid); line-height: 1.6; white-space: pre-wrap; }
 
     /* ── crisis footer (always present) ─────────────────────────── */
     #crisis {
@@ -549,8 +551,8 @@
   <!-- Companion "what it sees" view -->
   <div id="sees-view" class="hidden"></div>
 
-  <!-- Companion backlog inbox (feature requests saved from a conversation) -->
-  <div id="backlog-view" class="hidden"></div>
+  <!-- Companion requests-to-the-builder (feature requests saved from a conversation) -->
+  <div id="requests-view" class="hidden"></div>
 </main>
 
 <div id="crisis">
@@ -633,15 +635,14 @@ const ENTRY_CHARS   = 700;    // per-entry truncation
 const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
 
-// ── Backlog inbox (Companion) ────────────────────────────────────────────────
-// Feature requests / bugs / ideas about the SUITE ITSELF, captured from a
-// conversation via the add_to_backlog tool, kept on-device (and E2EE-synced) for
-// the user to review and export into the project BACKLOG.md. This is not the
-// user's personal goals or to-dos — those live in Climb.
-const LS_BACKLOG            = 'hill-climbing-backlog';
-const SYNC_BLOB_KEY_BACKLOG = 'ls:hill-climbing-backlog';
-const BACKLOG_CAP           = 100;   // most-recent items kept (newest first)
-const BACKLOG_CATS          = ['feature', 'bug', 'tuning', 'idea', 'question'];
+// ── Requests to the builder (Companion) ──────────────────────────────────────
+// Requests about the SUITE ITSELF, captured from a conversation via the
+// add_request tool as a { heading, prompt } brief the person building this (or a
+// coding agent) can act on directly. Kept on-device (and E2EE-synced) for the
+// user to review and copy over. Not the user's personal goals or to-dos.
+const LS_REQUESTS            = 'hill-climbing-requests';
+const SYNC_BLOB_KEY_REQUESTS = 'ls:hill-climbing-requests';
+const REQUESTS_CAP           = 100;   // most-recent kept (newest first)
 
 // Cross-conversation memory caps (Companion only). The last RECENT_VERBATIM past
 // conversations ride along in full (bounded by VERBATIM_CHARS total); everything
@@ -677,9 +678,10 @@ const COMPANION_SYSTEM =
 "- Search with plain, general queries. Never put their private details into a search — not their name, not lines from their journal, not the specifics of their situation. Abstract the question, look up the general version, then bring what you find back to their particular case yourself.\n" +
 "- What you find online isn't automatically true. Weigh the source, name uncertainty when it's there, and don't turn a shaky result into false confidence.\n\n" +
 "Helping shape this suite:\n" +
-"- Hill Climbing is a small, still-growing set of practice apps, and the person you're talking with is also the one building it (or close to them). When they voice a wish, a frustration, or an idea about the apps themselves — something that should work differently, a feature that's missing, a rough edge, a number that feels off, a design question worth deciding — you can save it to their backlog so the idea isn't lost. You have a tool for exactly this: add_to_backlog.\n" +
-"- Only ever for the suite itself. Their own goals, tasks, and to-dos are their life, not app feedback — those belong in Climb and their own tools, never in the backlog.\n" +
-"- Don't log by reflex or silently. When you hear a real suggestion, reflect it back in your own words, and ask if they'd like you to add it to the backlog. Save it only once they say yes, then tell them plainly it's saved and that they can review or export everything from the menu → Backlog. Everything you log is theirs to see and remove there at any time.\n\n" +
+"- Hill Climbing is a small, still-growing set of practice apps, and the person you're talking with is also the one building it (or close to them). When they voice a wish, a frustration, or an idea about the apps themselves — a feature that's missing, something that should work differently, a rough edge, a number that feels off, a design question worth deciding — you can pass it to the person building this so it isn't lost. You have a tool for exactly that: add_request.\n" +
+"- Write each request as two parts: a short HEADING that names it, and a PROMPT — a clear brief the builder (or a coding agent) can act on directly. The prompt should spell out what to build and why, or lay out the specific questions that need answering. Capture their intent faithfully; sharpen the wording, but don't invent scope they didn't ask for.\n" +
+"- Only ever for the suite itself. Their own goals, tasks, and to-dos are their life, not app feedback — those belong in Climb and their own tools, never here.\n" +
+"- Don't send by reflex or silently. When you hear a real request, reflect it back in your own words, and ask if they'd like you to pass it along. Save it only once they say yes, then tell them plainly it's saved and that they can review or copy everything from the menu → Requests. Everything you save is theirs to see and remove there at any time.\n\n" +
 "Hard limits, every turn:\n" +
 "- You are not therapy, medical, legal, or crisis care, and you never pretend to be.\n" +
 "- If what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set everything else aside: tell them plainly this is beyond what a companion can hold, that they deserve a real person right now, and point them to a crisis line (in the US, call or text 988), a doctor, or emergency services.\n" +
@@ -776,36 +778,31 @@ const WEB_TOOLS = [
   { type: 'web_fetch_20260209',  name: 'web_fetch',  max_uses: 5 }
 ];
 
-// ── Backlog tool (Companion only; CLIENT-side, runs in this browser) ─────────
+// ── Request tool (Companion only; CLIENT-side, runs in this browser) ─────────
 // Unlike the web tools above (Anthropic runs those server-side), this is a
 // custom tool WE fulfil: the model calls it, the API pauses with
-// stop_reason "tool_use", and callClaudeRaw writes the item to the on-device
-// backlog and hands a confirmation back so the model can finish its reply.
-// Nothing new leaves the device — the item is stored locally (and E2EE-synced
+// stop_reason "tool_use", and callClaudeRaw writes the request to the on-device
+// store and hands a confirmation back so the model can finish its reply.
+// Nothing new leaves the device — the request is stored locally (and E2EE-synced
 // like the conversation). The confirm-first behaviour is instructed in the
-// system prompt; the visible, deletable inbox is the backstop.
-const BACKLOG_TOOL = {
-  name: 'add_to_backlog',
+// system prompt; the visible, deletable list is the backstop.
+const REQUEST_TOOL = {
+  name: 'add_request',
   description:
-    "Save a feature request, bug report, tuning tweak, or design question about the Hill Climbing app SUITE ITSELF to the user's on-device backlog, so it isn't lost. " +
-    "Use only for suggestions about the apps/practices in this suite — never for the user's personal goals, tasks, or to-dos. " +
-    "Confirm with the user before calling this, and only call it once they've agreed. After it succeeds, tell them it's saved and reviewable from the menu → Backlog.",
+    "Save a request to the person building the Hill Climbing app SUITE ITSELF — a heading plus a prompt describing what to build (and why) or the questions that need answering — so it isn't lost. " +
+    "Use only for the apps/practices in this suite — never for the user's personal goals, tasks, or to-dos. " +
+    "Confirm with the user before calling this, and only call it once they've agreed. After it succeeds, tell them it's saved and reviewable from the menu → Requests.",
   input_schema: {
     type: 'object',
     properties: {
-      title: { type: 'string', description: 'A short one-line summary, phrased as a request (e.g. "Add a dark theme to Breathe").' },
-      note:  { type: 'string', description: 'A sentence or two of detail: what they want and why. Keep their own framing where you can.' },
-      category: {
-        type: 'string',
-        enum: BACKLOG_CATS,
-        description: 'Best-fit bucket: feature (new capability), bug (something broken), tuning (adjust an existing number/behaviour), idea (open-ended), question (a design decision to make).'
-      }
+      heading: { type: 'string', description: 'A short title naming the request, a few words (e.g. "Dark theme for Breathe").' },
+      prompt:  { type: 'string', description: 'The brief the builder or a coding agent can act on directly: what to build and why, or the specific questions to answer. A short paragraph or a few; write it clearly enough to act on without the surrounding conversation.' }
     },
-    required: ['title']
+    required: ['heading', 'prompt']
   }
 };
-// Companion sends the web tools plus the backlog tool; Council sends none.
-const COMPANION_TOOLS = WEB_TOOLS.concat([BACKLOG_TOOL]);
+// Companion sends the web tools plus the request tool; Council sends none.
+const COMPANION_TOOLS = WEB_TOOLS.concat([REQUEST_TOOL]);
 
 const MAX_TOOL_HOPS = 6;   // server-tool pauses + client-tool rounds before we stop resuming a turn
 const MAX_RETRIES   = 3;   // extra attempts on a transient failure (network / rate-limit / 5xx)
@@ -825,7 +822,7 @@ async function callClaudeRaw(system, messages, maxTokens, tools, clientTools) {
   // the actual answer.
   //
   // clientTools (optional) is a map name→async(input)→string for CUSTOM tools we
-  // fulfil in-browser (e.g. add_to_backlog). When the model calls one, the API
+  // fulfil in-browser (e.g. add_request). When the model calls one, the API
   // returns stop_reason "tool_use"; we run the handler, append its tool_result,
   // and let the model finish. Server tools never surface here — only custom ones.
   let convo = messages.slice();
@@ -961,7 +958,7 @@ let currentView = 'home';
 
 // Companion state
 let store   = loadStore();  // { v, conversations: [ {id, ts, title, thread:[{role,text,hidden?}]} ] }
-let backlog = loadBacklog();// { v, items: [ {id, ts, title, note, category} ] } — suite feature requests
+let requests = loadRequests();// { v, items: [ {id, ts, heading, prompt} ] } — requests to the builder
 let active  = null;         // the open conversation (a reference into store.conversations)
 let busy    = false;
 let retryMsg = {};          // convId → last failure message; drives the persistent "Try again". Page-local, never persisted.
@@ -1491,7 +1488,7 @@ function companionAboutHTML() {
       '<p>The companion is one steady presence you can talk with about your own life. Unlike the Council — a board you bring a single decision to — this is a continuing conversation, and it arrives already knowing what you keep in the suite: your goals from <strong>Climb</strong>, your entries from <strong>Reflect</strong>, and the shape of your recent <strong>practice</strong>.</p>' +
       '<p>It reads that suite data <strong>transiently</strong>: fresh from your own device each time it replies, folded into that one request, then forgotten — never written into a saved conversation. Your <strong>conversations</strong>, though, it does keep, so context about you isn’t lost between them: the last few ride along in full, and the older ones are distilled into a running summary it re-reads and quietly updates. That memory lives on your device (and syncs if you’ve signed in), goes nowhere but back to the model on your key, and clears completely when you choose <em>Clear all conversations</em>. You can see the exact text it’s given any time, from the menu → <em>What the companion sees</em>.</p>' +
       '<p>It can also <strong>look things up on the web</strong> — a live search, or reading a specific page — when a question needs something current or beyond what it knows. Searches run on your key; it’s instructed to use plain, general queries and to keep your private details out of them, and to treat what it finds as worth weighing rather than automatically true.</p>' +
-      '<p>Because this suite is still being built, the companion can also help shape it: when you voice an idea or a frustration about the apps themselves, it can — with your okay — save it to your <strong>Backlog</strong>. That’s an on-device list you own; review it, export it as Markdown for the project’s BACKLOG, or clear it, all from the menu → <em>Backlog</em>. It’s only ever for the apps, never your personal to-dos.</p>' +
+      '<p>Because this suite is still being built, the companion can also help shape it: when you voice an idea or a frustration about the apps themselves, it can — with your okay — write it up as a <strong>request</strong> to the person building this: a heading and a prompt on what to build or the questions to answer. That’s an on-device list you own; review it, copy it as Markdown to hand over, or clear it, all from the menu → <em>Requests</em>. It’s only ever for the apps, never your personal to-dos.</p>' +
       '<p>It’s built on one belief: <strong>a good companion makes your own judgment sharper, not your dependence deeper.</strong> So it’s instructed never to decide for you, never to flatter, and to tell you the true thing with care — including when your journal and your goals disagree.</p>' +
       '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
     '</div>' +
@@ -1908,53 +1905,47 @@ function renderAbout() {
   if (back) back.addEventListener('click', () => setView('home'));
 }
 
-// ── Backlog inbox (Companion) ────────────────────────────────────────────────
-// The store the add_to_backlog tool writes to, its render, and the client-tool
+// ── Requests to the builder (Companion) ──────────────────────────────────────
+// The store the add_request tool writes to, its render, and the client-tool
 // handler callClaudeRaw invokes. On-device + E2EE-synced like the conversation.
-function loadBacklog() {
+function loadRequests() {
   try {
-    const b = JSON.parse(localStorage.getItem(LS_BACKLOG) || 'null');
-    if (b && Array.isArray(b.items)) return { v: 1, items: b.items };
+    const r = JSON.parse(localStorage.getItem(LS_REQUESTS) || 'null');
+    if (r && Array.isArray(r.items)) return { v: 1, items: r.items };
   } catch (_) {}
   return { v: 1, items: [] };
 }
-function saveBacklog() {
-  if (backlog.items.length > BACKLOG_CAP) backlog.items.length = BACKLOG_CAP;
-  try { localStorage.setItem(LS_BACKLOG, JSON.stringify(backlog)); } catch (_) {}
-  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY_BACKLOG);
+function saveRequests() {
+  if (requests.items.length > REQUESTS_CAP) requests.items.length = REQUESTS_CAP;
+  try { localStorage.setItem(LS_REQUESTS, JSON.stringify(requests)); } catch (_) {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY_REQUESTS);
 }
-// Add one item (from the tool). Defensive about the model's input; returns the
-// stored item so the handler can confirm back what landed.
-function addBacklogItem(input) {
-  const title = String((input && input.title) || '').trim();
-  if (!title) throw new Error('a title is required');
-  let cat = String((input && input.category) || '').trim().toLowerCase();
-  if (BACKLOG_CATS.indexOf(cat) === -1) cat = 'idea';
-  const note = String((input && input.note) || '').trim();
-  const item = { id: uid(), ts: Date.now(), title: title.slice(0, 200), note: note.slice(0, 1200), category: cat };
-  backlog.items.unshift(item);
-  saveBacklog();
-  if (mode === 'companion' && currentView === 'backlog') renderBacklog();
+// Add one request (from the tool). Defensive about the model's input; returns
+// the stored request so the handler can confirm back what landed.
+function addRequest(input) {
+  const heading = String((input && input.heading) || '').trim();
+  const prompt  = String((input && input.prompt) || '').trim();
+  if (!heading) throw new Error('a heading is required');
+  if (!prompt)  throw new Error('a prompt is required');
+  const item = { id: uid(), ts: Date.now(), heading: heading.slice(0, 200), prompt: prompt.slice(0, 4000) };
+  requests.items.unshift(item);
+  saveRequests();
+  if (mode === 'companion' && currentView === 'requests') renderRequests();
   return item;
 }
 // The one custom (client-side) tool the Companion carries. Its return string is
 // handed back to the model as the tool_result so it can tell the user naturally.
 const COMPANION_CLIENT_TOOLS = {
-  add_to_backlog: async (input) => {
-    const item = addBacklogItem(input);
-    return 'Saved to the backlog inbox as a "' + item.category + '" item: "' + item.title +
-      '". The user can review or export everything from the menu → Backlog.';
+  add_request: async (input) => {
+    const item = addRequest(input);
+    return 'Saved to the builder as a request titled "' + item.heading +
+      '". The user can review or copy everything from the menu → Requests.';
   }
 };
 
-// Render each item as a BACKLOG.md-ready line for export into the repo.
-function backlogMarkdown() {
-  return backlog.items.map(it => {
-    let line = '- [ ] **' + it.title + '**';
-    if (it.note) line += ' — ' + it.note;
-    line += ' _(via companion · ' + it.category + ' · ' + niceDate(it.ts) + ')_';
-    return line;
-  }).join('\n');
+// Render each request as a Markdown heading + prompt, ready to hand to us.
+function requestsMarkdown() {
+  return requests.items.map(it => '## ' + it.heading + '\n\n' + it.prompt).join('\n\n');
 }
 // Copy helper — clipboard API where available, textarea+execCommand fallback for
 // insecure contexts / older engines. Returns a promise.
@@ -1979,65 +1970,73 @@ function flashBtn(id, label) {
   setTimeout(() => { b.textContent = prev; b.disabled = false; }, 1400);
 }
 
-function renderBacklog() {
-  const v = el('backlog-view');
-  const items = backlog.items;
+function renderRequests() {
+  const v = el('requests-view');
+  const items = requests.items;
   let html =
-    '<div class="lede" style="margin-bottom:6px;">Backlog</div>' +
-    '<p class="backlog-intro">Feature ideas, bugs, and questions about the suite that you’ve saved from a conversation. ' +
-      'They stay on this device (and sync if you’ve signed in). Export them as Markdown to fold into the project’s BACKLOG.</p>';
+    '<div class="lede" style="margin-bottom:6px;">Requests</div>' +
+    '<p class="req-intro">Requests to the person building this suite — each a heading and a prompt on what to build or the questions to answer, ' +
+      'saved from a conversation. They stay on this device (and sync if you’ve signed in). Copy them to hand over.</p>';
 
   if (!items.length) {
     html +=
       '<div class="empty">Nothing saved yet.<br>When something about these apps could be better, tell the companion — ' +
-        'it can save the idea here, once you okay it.</div>' +
-      '<div class="actions"><button class="ghost" id="backlog-back" type="button">Back</button></div>';
+        'it can write it up as a request here, once you okay it.</div>' +
+      '<div class="actions"><button class="ghost" id="req-back" type="button">Back</button></div>';
     v.innerHTML = html;
-    el('backlog-back').addEventListener('click', () => setView('home'));
+    el('req-back').addEventListener('click', () => setView('home'));
     return;
   }
 
   html +=
-    '<div class="backlog-actions">' +
-      '<button class="ghost" id="backlog-copy" type="button">Copy as Markdown</button>' +
-      '<button class="ghost" id="backlog-clear" type="button">Clear all</button>' +
+    '<div class="req-actions">' +
+      '<button class="ghost" id="req-copy" type="button">Copy all as Markdown</button>' +
+      '<button class="ghost" id="req-clear" type="button">Clear all</button>' +
     '</div>' +
-    '<div class="backlog-list">' +
+    '<div class="req-list">' +
       items.map(it =>
-        '<div class="backlog-item" data-id="' + esc(it.id) + '">' +
-          '<div class="backlog-item-head">' +
-            '<span class="backlog-cat">' + esc(it.category) + '</span>' +
-            '<span class="backlog-date">' + esc(niceDate(it.ts)) + '</span>' +
-            '<button class="backlog-del" type="button" title="Remove this item" aria-label="Remove">×</button>' +
+        '<div class="req-item" data-id="' + esc(it.id) + '">' +
+          '<div class="req-head-row">' +
+            '<div class="req-heading">' + esc(it.heading) + '</div>' +
+            '<button class="req-copy-one" type="button" title="Copy this one">Copy</button>' +
+            '<button class="req-del" type="button" title="Remove this request" aria-label="Remove">×</button>' +
           '</div>' +
-          '<div class="backlog-title">' + esc(it.title) + '</div>' +
-          (it.note ? '<div class="backlog-note">' + esc(it.note) + '</div>' : '') +
+          '<div class="req-date">' + esc(niceDate(it.ts)) + '</div>' +
+          '<div class="req-prompt">' + esc(it.prompt) + '</div>' +
         '</div>').join('') +
     '</div>' +
-    '<div class="actions"><button class="ghost" id="backlog-back" type="button">Back</button></div>';
+    '<div class="actions"><button class="ghost" id="req-back" type="button">Back</button></div>';
   v.innerHTML = html;
 
-  el('backlog-copy').addEventListener('click', () => {
-    copyText(backlogMarkdown()).then(() => flashBtn('backlog-copy', 'Copied ✓'))
-      .catch(() => flashBtn('backlog-copy', 'Press ⌘/Ctrl-C'));
+  el('req-copy').addEventListener('click', () => {
+    copyText(requestsMarkdown()).then(() => flashBtn('req-copy', 'Copied ✓'))
+      .catch(() => flashBtn('req-copy', 'Press ⌘/Ctrl-C'));
   });
-  el('backlog-clear').addEventListener('click', () => {
-    if (confirm('Remove every saved backlog item from this device? Export first if you want to keep them — this can’t be undone.')) {
-      backlog.items = []; saveBacklog(); renderBacklog();
+  el('req-clear').addEventListener('click', () => {
+    if (confirm('Remove every saved request from this device? Copy them first if you want to keep them — this can’t be undone.')) {
+      requests.items = []; saveRequests(); renderRequests();
     }
   });
-  el('backlog-back').addEventListener('click', () => setView('home'));
-  v.querySelectorAll('.backlog-del').forEach(btn => btn.addEventListener('click', e => {
-    const wrap = e.target.closest('.backlog-item');
-    if (!wrap) return;
-    const id = wrap.dataset.id;
-    backlog.items = backlog.items.filter(it => it.id !== id);
-    saveBacklog(); renderBacklog();
-  }));
+  el('req-back').addEventListener('click', () => setView('home'));
+  v.querySelectorAll('.req-item').forEach(wrap => {
+    const it = items.find(r => r.id === wrap.dataset.id);
+    const copyBtn = wrap.querySelector('.req-copy-one');
+    if (copyBtn && it) copyBtn.addEventListener('click', () => {
+      copyText('## ' + it.heading + '\n\n' + it.prompt)
+        .then(() => { copyBtn.textContent = 'Copied ✓'; copyBtn.disabled = true;
+          setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.disabled = false; }, 1400); })
+        .catch(() => { copyBtn.textContent = '⌘/Ctrl-C'; });
+    });
+    const delBtn = wrap.querySelector('.req-del');
+    if (delBtn) delBtn.addEventListener('click', () => {
+      requests.items = requests.items.filter(r => r.id !== wrap.dataset.id);
+      saveRequests(); renderRequests();
+    });
+  });
 }
 
 // ── Views ────────────────────────────────────────────────────────────────────
-const PANELS = ['setup', 'companion-home', 'council-home', 'history-view', 'about-view', 'sees-view', 'backlog-view'];
+const PANELS = ['setup', 'companion-home', 'council-home', 'history-view', 'about-view', 'sees-view', 'requests-view'];
 function hideAllPanels() { PANELS.forEach(id => el(id).classList.add('hidden')); }
 
 function setView(view) {
@@ -2060,9 +2059,9 @@ function setView(view) {
   } else if (view === 'sees') {
     renderSees();
     el('sees-view').classList.remove('hidden');
-  } else if (view === 'backlog') {
-    renderBacklog();
-    el('backlog-view').classList.remove('hidden');
+  } else if (view === 'requests') {
+    renderRequests();
+    el('requests-view').classList.remove('hidden');
   }
 
   // Sub-nav only rides along on the two everyday views.
@@ -2111,14 +2110,14 @@ function renderMenu() {
     panel.innerHTML =
       '<div class="menu-head">Your data</div>' +
       menuItem('sees-btn', 'What the companion sees', "The exact text it's shown") +
-      menuItem('backlog-btn', 'Backlog', 'App ideas you’ve saved — review & export') +
+      menuItem('requests-btn', 'Requests', 'Notes for the builder — review & copy') +
       menuItem('new-btn', 'New conversation', 'Start a fresh thread') +
       menuItem('key-btn', 'API key', 'Change or remove your key') +
       menuItem('about-btn', 'About the companion', "How it works, what it isn't") +
       menuItem('clear-btn', 'Clear all conversations', 'Delete every thread, and what it remembers') +
-      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn’t lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you’ve signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details. If you ask it to, it can save a feature idea about these apps to your on-device <em>Backlog</em> — yours to review, export, or delete.</div>';
+      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn’t lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you’ve signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details. If you ask it to, it can write up a request about these apps — a heading and a prompt on what to build or decide — to your on-device <em>Requests</em> list, yours to review, copy, or delete.</div>';
     el('sees-btn').addEventListener('click', () => { setMenu(false); setView('sees'); });
-    el('backlog-btn').addEventListener('click', () => { setMenu(false); setView('backlog'); });
+    el('requests-btn').addEventListener('click', () => { setMenu(false); setView('requests'); });
     el('new-btn').addEventListener('click', () => {
       setMenu(false);
       active = null; msgBox.value = '';
@@ -2192,14 +2191,14 @@ if (window.HCSync) {
       if (mode === 'council' && currentView === 'history') renderHistory();
     },
   });
-  // Companion backlog inbox (feature requests saved from a conversation).
+  // Companion requests-to-the-builder (feature requests saved from a conversation).
   HCSync.registerStore({
-    key: SYNC_BLOB_KEY_BACKLOG, kind: 'blob',
-    read:  () => localStorage.getItem(LS_BACKLOG) || JSON.stringify(backlog),
+    key: SYNC_BLOB_KEY_REQUESTS, kind: 'blob',
+    read:  () => localStorage.getItem(LS_REQUESTS) || JSON.stringify(requests),
     write: (str) => {                      // remote-apply path — replace local, re-render if open
-      try { localStorage.setItem(LS_BACKLOG, str); } catch (e) { /* quota */ }
-      backlog = loadBacklog();
-      if (mode === 'companion' && currentView === 'backlog') renderBacklog();
+      try { localStorage.setItem(LS_REQUESTS, str); } catch (e) { /* quota */ }
+      requests = loadRequests();
+      if (mode === 'companion' && currentView === 'requests') renderRequests();
     },
   });
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
