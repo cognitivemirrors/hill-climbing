@@ -122,6 +122,7 @@
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
+    .card.erp      { --accent: hsl(120,30%,56%); --accent-soft: hsla(120,28%,54%,0.45); --accent-glow: hsla(120,34%,42%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
@@ -164,6 +165,7 @@
     .dash-row.levity   { --accent: hsl(348,78%,72%); }
     .dash-row.climb    { --accent: hsl(230,65%,72%); }
     .dash-row.train    { --accent: hsl(20,72%,66%); }
+    .dash-row.erp      { --accent: hsl(120,30%,56%); }
     .dash-streak {
       margin-top: 9px; display: flex; align-items: baseline;
       justify-content: center; gap: 9px;
@@ -423,6 +425,16 @@
       <p>Train your nervous system to recover faster.</p>
     </a>
 
+    <a class="card erp" href="erp.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 41h9v-9h9v-9h9v-9h8"/>
+        </svg>
+      </span>
+      <h2>ERP</h2>
+      <p>Face the fear, a step at a time.</p>
+    </a>
+
     <a class="card reflect" href="reflect.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
@@ -540,6 +552,11 @@
       <span class="dash-label">Breathe</span>
       <span class="dash-strip" data-strip="breathe" aria-hidden="true"></span>
       <span class="dash-count" data-count="breathe">·</span>
+    </div>
+    <div class="dash-row erp">
+      <span class="dash-label">ERP</span>
+      <span class="dash-strip" data-strip="erp" aria-hidden="true"></span>
+      <span class="dash-count" data-count="erp">·</span>
     </div>
     <div class="dash-row reflect">
       <span class="dash-label">Reflect</span>
@@ -768,7 +785,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train'];
+    const APPS = ['meditate', 'breathe', 'erp', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -864,7 +881,7 @@
     function weekIsActive(weekKeys, sets) {
       let n = 0;
       for (const k of weekKeys) {
-        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.savor.has(k) || sets.levity.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.erp.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.savor.has(k) || sets.levity.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
       }
       return n >= STREAK_MIN_DAYS;
     }
@@ -919,6 +936,7 @@
       render({
         meditate: logDaySet(log, 'meditate'),
         breathe:  logDaySet(log, 'breathe'),
+        erp:      logDaySet(log, 'erp'),
         reflect:  reflectSet,
         nourish:  logDaySet(log, 'nourish'),
         savor:    logDaySet(log, 'savor'),
