@@ -17,7 +17,7 @@ A landing **hub** (`index.html`) links to the practices:
 | **Companion** | `companion.html` | A conversational companion that can see your current goals, recent journal, and activity, and can look things up on the web. Uses your own Anthropic API key. |
 | **Anime** | `anime.html` | An experiment: your webcam, drawn as a cel-shaded character in real time. Snapshot or record a clip. |
 
-The hub also shows a quiet weekly-usage dashboard (which practices you touched each day), an optional PWA install prompt, and an optional daily-reminder toggle.
+The hub also shows a quiet weekly-usage dashboard (which practices you touched each day), an optional PWA install prompt, and an optional daily-reminder toggle. A quiet **Writing** link near the footer opens `blog.html` — occasional field notes, essays, and release notes about building the suite. It's a fully static reading page: no account, no data collected, and it works offline.
 
 ## Use
 

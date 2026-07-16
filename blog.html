@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0e14">
+  <title>Writing · Hill Climbing</title>
+  <!-- ── PWA: part of the installable app shell ───────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Hill Climbing">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --text:  rgba(255,255,255,0.86);
+      --read:  rgba(255,255,255,0.80);   /* body copy — a touch brighter for long reading */
+      --mid:   rgba(255,255,255,0.52);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --line:  rgba(255,255,255,0.10);
+      --panel: rgba(255,255,255,0.04);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      /* app accent — a quiet steel-ink, paper-and-pen rather than vivid */
+      --accent: hsl(216, 36%, 72%);
+      --accent-soft: hsla(216, 32%, 66%, 0.45);
+      --accent-glow: hsla(216, 40%, 58%, 0.16);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 30%, rgba(40,44,72,0.26), transparent 70%),
+        var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 56px 20px 84px;
+    }
+
+    /* ── Home link + version label (suite convention) ─────────────── */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--dim); border: 1px solid var(--line); border-radius: 9px;
+      background: rgba(0,0,0,0.2); text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+    #version-label {
+      position: fixed; top: 22px; left: 62px; z-index: 11;
+      font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    main { width: 100%; max-width: 660px; animation: fadeUp 0.6s ease; }
+
+    /* ── Masthead ─────────────────────────────────────────────────── */
+    header.mast { text-align: center; margin-bottom: 30px; }
+    header.mast h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.9rem; letter-spacing: 0.32em; text-indent: 0.32em;
+      text-transform: uppercase; color: var(--text);
+      text-shadow: 0 0 48px var(--accent-glow);
+    }
+    header.mast p {
+      font-family: var(--font-display); font-style: italic;
+      margin-top: 13px; font-size: 0.92rem; color: var(--dim); letter-spacing: 0.03em;
+    }
+
+    /* ── Filter row ───────────────────────────────────────────────── */
+    .filters {
+      display: flex; gap: 7px; flex-wrap: wrap; justify-content: center;
+      margin-bottom: 34px;
+    }
+    .filters button {
+      font-family: var(--font-ui); font-size: 0.68rem; letter-spacing: 0.12em;
+      text-transform: uppercase; cursor: pointer;
+      color: var(--dim); background: transparent;
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 7px 15px; transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .filters button:hover { color: var(--mid); border-color: rgba(255,255,255,0.2); }
+    .filters button[aria-pressed="true"] {
+      color: var(--text); border-color: var(--accent-soft);
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* ── Index list ───────────────────────────────────────────────── */
+    .post-list { display: flex; flex-direction: column; gap: 2px; }
+    .post-row {
+      display: block; text-decoration: none; color: var(--text);
+      padding: 22px 4px; border-top: 1px solid var(--line);
+      transition: padding-left 0.22s ease;
+    }
+    .post-list .post-row:last-child { border-bottom: 1px solid var(--line); }
+    .post-row:hover, .post-row:focus-visible { padding-left: 12px; outline: none; }
+    .post-row:focus-visible { padding-left: 12px; }
+    .post-meta {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 9px;
+    }
+    .post-date {
+      font-size: 0.7rem; letter-spacing: 0.08em; color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .post-row h2 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.28rem; line-height: 1.3; color: var(--text);
+      letter-spacing: 0.01em; transition: color 0.2s;
+    }
+    .post-row:hover h2, .post-row:focus-visible h2 { color: var(--accent); }
+    .post-dek {
+      margin-top: 7px; font-size: 0.86rem; line-height: 1.55;
+      color: var(--mid); max-width: 52ch;
+    }
+    .post-empty {
+      text-align: center; color: var(--dim); font-style: italic;
+      font-family: var(--font-display); padding: 40px 0;
+    }
+
+    /* ── Kind chip ────────────────────────────────────────────────── */
+    .chip {
+      font-family: var(--font-ui); font-size: 0.6rem; letter-spacing: 0.16em;
+      text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+      border: 1px solid var(--faint); color: var(--dim); white-space: nowrap;
+    }
+    .chip.devlog { color: hsl(216,42%,76%); border-color: hsla(216,42%,66%,0.4); }
+    .chip.essay  { color: hsl(266,46%,78%); border-color: hsla(266,42%,68%,0.4); }
+    .chip.notes  { color: hsl(150,42%,66%); border-color: hsla(150,40%,56%,0.4); }
+
+    /* ── Article (reading view) ───────────────────────────────────── */
+    #article { display: none; }
+    #article.show { display: block; animation: fadeUp 0.4s ease; }
+    .back {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: none; border: none; cursor: pointer;
+      color: var(--dim); font-family: var(--font-ui); font-size: 0.8rem;
+      padding: 4px 0; margin-bottom: 26px; text-decoration: none;
+    }
+    .back:hover { color: var(--text); }
+    .art-head { margin-bottom: 30px; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
+    .art-head .post-meta { justify-content: flex-start; margin-bottom: 15px; }
+    .art-head h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 2rem; line-height: 1.22; letter-spacing: 0.01em; color: var(--text);
+    }
+    .art-head .art-dek {
+      margin-top: 14px; font-family: var(--font-display); font-style: italic;
+      font-size: 1.02rem; line-height: 1.55; color: var(--mid);
+    }
+
+    .prose { font-size: 1rem; line-height: 1.78; color: var(--read); }
+    .prose p { margin: 0 0 1.15em; }
+    .prose h2 {
+      font-family: var(--font-display); font-weight: 400; letter-spacing: 0.01em;
+      font-size: 1.28rem; color: var(--text); margin: 1.9em 0 0.6em;
+    }
+    .prose ul { margin: 0 0 1.15em; padding-left: 1.3em; }
+    .prose li { margin: 0 0 0.5em; }
+    .prose strong { color: var(--text); font-weight: 600; }
+    .prose em { font-style: italic; }
+    .prose a {
+      color: var(--accent); text-decoration: underline; text-underline-offset: 3px;
+      text-decoration-color: var(--accent-soft);
+    }
+    .prose a:hover { text-decoration-color: var(--accent); }
+    .prose blockquote {
+      margin: 1.5em 0; padding: 2px 0 2px 20px;
+      border-left: 2px solid var(--accent-soft);
+      font-family: var(--font-display); font-style: italic;
+      color: var(--mid); font-size: 1.05rem; line-height: 1.6;
+    }
+    .prose hr {
+      border: none; border-top: 1px solid var(--line); margin: 2.2em auto;
+      width: 60px;
+    }
+    .art-foot {
+      margin-top: 46px; padding-top: 26px; border-top: 1px solid var(--line);
+      font-size: 0.82rem; color: var(--dim); line-height: 1.6;
+    }
+    .art-foot a { color: var(--accent); text-decoration: none; }
+    .art-foot a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer {
+      margin-top: 60px; font-size: 0.62rem; color: var(--faint);
+      letter-spacing: 0.2em; text-transform: uppercase; text-align: center;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 52px 18px 72px; }
+      #version-label { display: none; }
+      header.mast h1 { font-size: 1.55rem; letter-spacing: 0.28em; text-indent: 0.28em; }
+      .art-head h1 { font-size: 1.7rem; }
+      .post-row h2 { font-size: 1.16rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      main, #article.show { animation: none; }
+      .post-row { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div id="version-label">v0.1 · blog</div>
+
+<main>
+  <!-- Index view -->
+  <header class="mast" id="mast">
+    <h1>Writing</h1>
+    <p>field notes, essays, and what's new</p>
+  </header>
+
+  <div class="filters" id="filters" role="group" aria-label="Filter posts by kind">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="devlog" aria-pressed="false">Devlog</button>
+    <button type="button" data-filter="essay" aria-pressed="false">Essays</button>
+    <button type="button" data-filter="notes" aria-pressed="false">Notes</button>
+  </div>
+
+  <section id="index" class="post-list" aria-label="Posts"></section>
+
+  <!-- Reading view -->
+  <article id="article" aria-live="polite"></article>
+
+  <footer>hill climbing · written in the open</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Content ───────────────────────────────────────────────────────────────
+  // Posts live inline — no build step, no backend. Each post is authored HTML;
+  // it is trusted (it ships in this file), so it's injected directly. `kind` is
+  // one of: 'devlog' (building it), 'essay' (thinking out loud), 'notes' (what
+  // shipped). `date` is an ISO YYYY-MM-DD string, formatted timezone-proof below.
+  const POSTS = [
+    {
+      slug: 'whats-new-sync-companion-erp',
+      kind: 'notes',
+      date: '2026-07-15',
+      title: "What's new: sync, a companion, and a way to face fears",
+      dek: "A few larger pieces have landed since the suite was just a stillness timer. Here's the short version.",
+      html: `
+        <p>Hill Climbing started as one app — a quiet timer for sitting still. It's now a small suite of practices behind a single hub, and a handful of the additions are big enough to write down.</p>
+
+        <h2>ERP — facing a fear a step at a time</h2>
+        <p>The newest practice is a companion to <em>exposure &amp; response prevention</em>, the frontline therapy for OCD and a lot of anxiety. You build a ladder of situations ranked by how much distress they bring, then log exposures: what you expected, what actually happened, whether you resisted the ritual. Over time the record shows you something the moment can't — that the distress crests and falls on its own.</p>
+        <p>It is deliberately <strong>a companion to therapist-guided ERP, not a replacement</strong>, and there is nothing to win. No points, no levels, no streaks. Distress is never a score to push up. Some things shouldn't be gamified, and this is one of them.</p>
+
+        <h2>Cross-device sync — encrypted so we can't read it</h2>
+        <p>You can now carry your data between devices. It's off by default, and when you turn it on it's <strong>end-to-end encrypted</strong>: your passphrase never leaves your device, and the server stores only ciphertext it can't open. Sync is a convenience we offer without buying ourselves a window into your journal. If we could read it, someday someone would ask us to.</p>
+
+        <h2>A companion you can talk to</h2>
+        <p>There's now an optional AI companion — and a "board of directors" mode for talking through a decision. It runs on <em>your own</em> API key, calling the model directly, so we're not sitting in the middle of those conversations either. It's the most powerful thing in the suite and the one we're most careful about; that combination is the whole point.</p>
+
+        <hr>
+        <p>The throughline hasn't changed: these are practices, not products, and your data stays yours. More on what that means in the older posts below.</p>
+      `,
+    },
+    {
+      slug: 'aiming-for-71-percent',
+      kind: 'essay',
+      date: '2026-05-02',
+      title: 'Why we aim for a 71% success rate',
+      dek: "A result from 1971 psychophysics quietly shapes the meditation timer, the cooking ladder, and the comedy practice.",
+      html: `
+        <p>Most of the practices in this suite share a hidden spine: a rule for deciding whether the next challenge should get harder or easier. When you succeed twice, it steps up. When you struggle once, it steps down. Two up, one down.</p>
+        <p>That specific ratio isn't arbitrary. It comes from a 1971 paper by Levitt on adaptive methods in psychophysics, and it has a lovely property: a two-up/one-down staircase converges, over time, on the difficulty where you succeed about <strong>71% of the time</strong>.</p>
+
+        <blockquote>Not so easy that nothing is asked of you. Not so hard that you mostly fail. The edge where you're stretched but still standing.</blockquote>
+
+        <p>Seventy-one percent is roughly the place learning likes to happen. It's frequent enough success to stay willing, frequent enough failure to keep growing. So we let the practice find that edge and sit you on it — in the meditation timer, in the cooking ladder that walks you up from scrambled eggs, in the comedy practice that nudges you from a one-liner toward a set.</p>
+
+        <p>Here's the part that matters to us, though. A staircase like this could easily become a treadmill — an engine for keeping you engaged, climbing, coming back for the next hit. We've said plainly, in the constraints this project is built on, that we don't optimize for time spent or streak length or daily return. So the ladder has escape hatches: skipping is free and unpunished, the language never shames a hard day, and the only streak we keep is <em>weekly</em>, not daily — because a daily streak is mostly a machine for manufacturing guilt.</p>
+
+        <p>The goal isn't to hold you at 71% forever. It's to find the edge that helps, keep you company there for a while, and then get out of your way.</p>
+      `,
+    },
+    {
+      slug: 'the-sound-of-stillness',
+      kind: 'devlog',
+      date: '2026-03-08',
+      title: 'The sound of stillness',
+      dek: "How the meditation app's audio went from a sustained drone to occasional bells — and why that took a paradigm shift, not more tuning.",
+      html: `
+        <p>For a while, the meditation app had a camera-guided mode: it watched how still you were sitting and turned that stillness into sound. The stiller you got, the richer the tone. It was a nice idea, and the sound was wrong.</p>
+        <p>The complaint from the person testing it was consistent — the high-stillness sound was unpleasant. So I did what you do: I turned knobs. Lowered the peak volume. Softened the curves. Adjusted the plateau, the fade-out window. Shipped it. Same complaint. Adjusted again. Same complaint.</p>
+
+        <blockquote>If the same complaint survives two rounds of incremental fixes, the problem isn't the parameters. It's the paradigm.</blockquote>
+
+        <p>The mistake was assuming a sustained tone was the right <em>kind</em> of thing, and that I just hadn't tuned it well enough. Once I stopped defending that assumption, the fix was obvious: at peak stillness, there should be no sustained drone at all. Just the occasional pentatonic bell, struck now and then, with a long natural decay. The sub-bass and the fundamental fade <em>out</em> as you settle, leaving room.</p>
+        <p>That reframed the whole aesthetic. The reward at peak stillness isn't a bigger sound — it's <strong>space</strong>. The rich, layered zone lives a little below the top; arriving all the way is meant to be sparse and quiet. Approaching is rewarded; arriving is gentle.</p>
+        <p>(The camera mode is resting for now — the app currently offers a simpler timed sit, a quiet countdown bookended by a bell. But the lesson outlived the feature.)</p>
+
+        <hr>
+        <p>The general version, which I keep having to relearn: when someone reports the same thing twice, believe them the second time. They're not asking for a better version of what you built. They're telling you it's the wrong thing.</p>
+      `,
+    },
+    {
+      slug: 'practices-not-products',
+      kind: 'essay',
+      date: '2026-02-18',
+      title: 'Practices, not products',
+      dek: "What this whole thing is for, and the three constraints it's built on: care, safety, and not concentrating power.",
+      html: `
+        <p>This is a suite of small tools for coming back to yourself — sitting still, breathing, writing things down, learning to cook, facing a fear. They're built on three constraints, chosen on purpose and meant to bind even when they're inconvenient.</p>
+        <p><strong>Care.</strong> Not "do no harm" — that's the floor. Active good: the tools should leave you better off, and we take responsibility for the ways a practice might hurt someone. "It's not therapy or medical care" is true, but on its own it's a cop-out. If we build something that reaches toward pain, we own what it does there.</p>
+        <p><strong>Safety.</strong> Harm prevention, treated as a real engineering constraint rather than a disclaimer. It escalates as the audience grows, and we'd rather move slowly than ship a comforting mechanism that quietly fails.</p>
+        <p><strong>Not concentrating power.</strong> Over your attention, your data, your behavior. This is the one the industry gets wrong most reliably, so we wrote it down first.</p>
+
+        <h2>What that rules out</h2>
+        <p>We don't optimize for engagement. No time-spent metric, no daily-active-user target, no streak engineered to make you feel bad for missing a day. Those are the standard levers, and they're incompatible with a tool that's supposed to help you and then let you go. The one streak we keep is weekly, and it never breaks — it can only add.</p>
+
+        <h2>What that rules in</h2>
+        <p>Private by default. Everything runs on your device; nothing leaves it unless you turn something on. Each app is a single file that works offline, so it keeps working with no network, no account, and no one watching. When we do offer something that crosses the network — syncing your data between devices, an AI companion — it's opt-in, and it's built so that we can't read what passes through. Sync is end-to-end encrypted; the AI runs on your own key.</p>
+
+        <blockquote>A good tool asks for as little of you as it can, does its work, and gets out of the way.</blockquote>
+
+        <p>That's the standard we're trying to hold. These posts are partly a way to keep ourselves honest about it — written in the open, so the gap between what we say and what we ship is visible to anyone who cares to look.</p>
+      `,
+    },
+  ];
+
+  // ── Rendering ──────────────────────────────────────────────────────────────
+  const KIND_LABEL = { devlog: 'Devlog', essay: 'Essay', notes: 'Notes' };
+  const MONTHS = ['January','February','March','April','May','June','July',
+                  'August','September','October','November','December'];
+
+  // Timezone-proof: format from the string parts, never via Date(str) (which
+  // parses ISO dates as UTC midnight and can slip a day in negative offsets).
+  function fmtDate(iso) {
+    const p = iso.split('-');
+    return MONTHS[parseInt(p[1], 10) - 1] + ' ' + parseInt(p[2], 10) + ', ' + p[0];
+  }
+
+  const byNewest = POSTS.slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  const bySlug = {};
+  POSTS.forEach(function (p) { bySlug[p.slug] = p; });
+
+  const mast    = document.getElementById('mast');
+  const filters = document.getElementById('filters');
+  const indexEl = document.getElementById('index');
+  const article = document.getElementById('article');
+
+  let currentFilter = 'all';
+
+  function chip(kind) {
+    return '<span class="chip ' + kind + '">' + KIND_LABEL[kind] + '</span>';
+  }
+
+  function renderIndex() {
+    const list = byNewest.filter(function (p) {
+      return currentFilter === 'all' || p.kind === currentFilter;
+    });
+    if (!list.length) {
+      indexEl.innerHTML = '<p class="post-empty">Nothing here yet.</p>';
+      return;
+    }
+    indexEl.innerHTML = list.map(function (p) {
+      return '<a class="post-row" href="#' + p.slug + '">' +
+        '<div class="post-meta">' + chip(p.kind) +
+          '<span class="post-date">' + fmtDate(p.date) + '</span></div>' +
+        '<h2>' + p.title + '</h2>' +
+        '<p class="post-dek">' + p.dek + '</p>' +
+      '</a>';
+    }).join('');
+  }
+
+  function showIndex() {
+    article.classList.remove('show');
+    article.innerHTML = '';
+    mast.style.display = '';
+    filters.style.display = '';
+    indexEl.style.display = '';
+    renderIndex();
+  }
+
+  function showArticle(post) {
+    mast.style.display = 'none';
+    filters.style.display = 'none';
+    indexEl.style.display = 'none';
+    article.innerHTML =
+      '<a class="back" href="#" id="back">' +
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>' +
+        'All writing</a>' +
+      '<div class="art-head">' +
+        '<div class="post-meta">' + chip(post.kind) +
+          '<span class="post-date">' + fmtDate(post.date) + '</span></div>' +
+        '<h1>' + post.title + '</h1>' +
+        '<p class="art-dek">' + post.dek + '</p>' +
+      '</div>' +
+      '<div class="prose">' + post.html + '</div>' +
+      '<div class="art-foot">Written in the open as part of <a href="index.html">Hill Climbing</a> — practices for coming back to yourself.</div>';
+    article.classList.add('show');
+    document.title = post.title + ' · Hill Climbing';
+    document.getElementById('back').addEventListener('click', function (e) {
+      e.preventDefault();
+      // Clear the hash without a reload, then re-render the index.
+      history.replaceState(null, '', location.pathname + location.search);
+      route();
+    });
+    window.scrollTo(0, 0);
+  }
+
+  function route() {
+    const slug = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+    const post = slug && bySlug[slug];
+    if (post) {
+      showArticle(post);
+    } else {
+      document.title = 'Writing · Hill Climbing';
+      showIndex();
+    }
+  }
+
+  // Filter buttons (only meaningful in the index view).
+  filters.addEventListener('click', function (e) {
+    const btn = e.target.closest('button[data-filter]');
+    if (!btn) return;
+    currentFilter = btn.dataset.filter;
+    Array.prototype.forEach.call(filters.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+    });
+    renderIndex();
+  });
+
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+
+</body>
+</html>

@@ -125,8 +125,15 @@
     .card.erp      { --accent: hsl(120,30%,56%); --accent-soft: hsla(120,28%,54%,0.45); --accent-glow: hsla(120,34%,42%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
+    .footer-link {
+      margin-top: 48px; font-family: var(--font-ui); font-size: 0.64rem;
+      letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim);
+      text-decoration: none; padding: 6px 10px; border-radius: 8px;
+      transition: color 0.2s;
+    }
+    .footer-link:hover, .footer-link:focus-visible { color: var(--text); outline: none; }
     footer {
-      margin-top: 52px; font-size: 0.62rem; color: var(--faint);
+      margin-top: 18px; font-size: 0.62rem; color: var(--faint);
       letter-spacing: 0.2em; text-transform: uppercase;
     }
 
@@ -607,6 +614,7 @@
     </div>
   </section>
 
+  <a class="footer-link" href="blog.html">Writing</a>
   <footer>hill climbing · private by default</footer>
 
   <!-- ── Account & sync page (full-screen; opened by the chip or #account) ──── -->
