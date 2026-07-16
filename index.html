@@ -178,6 +178,56 @@
       font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint);
     }
 
+    /* ── Next step (a quiet, deterministic suggestion) ────────────
+       Answers "what now?" on arrival. Read-only over data the apps
+       already keep; never a streak, a count of missed days, or a
+       nag — rest is a first-class suggestion. */
+    #next-step {
+      width: 100%; max-width: 460px; margin-bottom: 34px;
+      text-align: center; display: none;
+      animation: fadeUp 0.7s ease backwards; animation-delay: 0.04s;
+    }
+    #next-step.ready { display: block; }
+    .ns-kicker {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 0.72rem; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 10px;
+    }
+    .ns-text {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 0.95rem; line-height: 1.6; color: var(--mid);
+      letter-spacing: 0.02em; max-width: 400px; margin: 0 auto;
+    }
+    .ns-row {
+      margin-top: 11px; display: flex; align-items: center;
+      justify-content: center; gap: 18px;
+    }
+    .ns-go {
+      display: none; font-family: var(--font-ui); font-size: 0.68rem;
+      letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent, var(--text)); text-decoration: none;
+      border-bottom: 1px solid transparent; padding-bottom: 1px;
+      transition: border-color 0.2s ease;
+    }
+    .ns-go.show { display: inline-block; }
+    .ns-go:hover, .ns-go:focus-visible { border-color: currentColor; outline: none; }
+    .ns-go.meditate { --accent: #b9a8f0; }
+    .ns-go.breathe  { --accent: hsl(200,76%,68%); }
+    .ns-go.reflect  { --accent: hsl(38,80%,66%); }
+    .ns-go.nourish  { --accent: hsl(150,45%,60%); }
+    .ns-go.savor    { --accent: hsl(322,64%,68%); }
+    .ns-go.levity   { --accent: hsl(348,78%,72%); }
+    .ns-go.climb    { --accent: hsl(230,65%,72%); }
+    .ns-go.train    { --accent: hsl(20,72%,66%); }
+    .ns-alt {
+      display: none; font-family: var(--font-ui); font-size: 0.62rem;
+      letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint);
+      background: transparent; border: none; cursor: pointer; padding: 2px 4px;
+      transition: color 0.2s ease;
+    }
+    .ns-alt.show { display: inline-block; }
+    .ns-alt:hover, .ns-alt:focus-visible { color: var(--mid); outline: none; }
+
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -193,9 +243,10 @@
       .card { max-width: none; flex-basis: auto; flex-direction: row; gap: 18px; text-align: left; padding: 20px 22px; align-items: center; }
       .glyph { width: 34px; height: 34px; margin-bottom: 0; flex: none; }
       .dashboard { max-width: 340px; }
+      #next-step { max-width: 340px; margin-bottom: 30px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      header, .card, .dashboard { animation: none; }
+      header, .card, .dashboard, #next-step { animation: none; }
       .card:hover, .card:focus-visible { transform: none; }
       .dash-strip .dot { transition: none; }
       #install-banner { animation: none; }
@@ -401,6 +452,17 @@
     <h1>Hill Climbing</h1>
     <p>practices for coming back to yourself</p>
   </header>
+
+  <!-- A quiet answer to "what now?". Filled by JS; stays hidden if it has
+       nothing worth saying. Rest is a suggestion here, not a failure state. -->
+  <section id="next-step" aria-label="A next step">
+    <div class="ns-kicker">A next step</div>
+    <p class="ns-text" id="ns-text"></p>
+    <div class="ns-row">
+      <a class="ns-go" id="ns-go" href="#"></a>
+      <button class="ns-alt" id="ns-alt" type="button">another idea</button>
+    </div>
+  </section>
 
   <nav>
     <a class="card meditate" href="meditate.html">
@@ -933,7 +995,7 @@
     }
     let reflectSet = new Set();       // filled async from the journal IndexedDB
     function paint(log) {
-      render({
+      const sets = {
         meditate: logDaySet(log, 'meditate'),
         breathe:  logDaySet(log, 'breathe'),
         erp:      logDaySet(log, 'erp'),
@@ -943,9 +1005,118 @@
         levity:   logDaySet(log, 'levity'),
         climb:    logDaySet(log, 'climb'),
         train:    logDaySet(log, 'train'),
-      }, log);
+      };
+      render(sets, log);
+      renderNextStep(sets);
     }
     function refresh() { loadUsage().then(paint); }
+
+    // ── Next step — a quiet, deterministic suggestion ────────────────────────
+    // Answers "what should I do right now?" so eleven cards don't become a
+    // choice problem. Design constraints (CONSTRAINTS C2/C6/§5):
+    //   · read-only over data the apps already keep on this device — nothing
+    //     new is stored, nothing leaves the device;
+    //   · deterministic given (state, clock) — no variable-reward randomness;
+    //   · rest is a first-class suggestion (late at night, or when today
+    //     already held practice) — never a streak, a shame count, or a nag;
+    //   · ERP is deliberately never auto-suggested: exposure work is paced by
+    //     the person and their plan/therapist, not nudged from a dashboard.
+    const NS_INVITE = {
+      breathe:  'A few slow breaths would change the next hour.',
+      meditate: 'A few quiet minutes of sitting.',
+      reflect:  'A line or two about today, before it blurs.',
+      nourish:  'Cook one real thing tonight.',
+      savor:    'A small tasting at your own counter.',
+      levity:   'Notice one funny thing and write it down.',
+      climb:    'Pick up a hill and take one small step.',
+      train:    'Move your body, even briefly.',
+    };
+    // Which invitations fit the hour, in order. Same hour → same order.
+    function nsInviteOrder(h) {
+      if (h < 5)  return ['reflect', 'meditate'];
+      if (h < 11) return ['breathe', 'meditate', 'reflect', 'train'];
+      if (h < 14) return ['climb', 'train', 'savor', 'meditate', 'reflect'];
+      if (h < 17) return ['climb', 'train', 'meditate', 'levity', 'savor'];
+      if (h < 21) return ['nourish', 'savor', 'reflect', 'breathe', 'levity'];
+      return ['reflect', 'meditate', 'breathe'];
+    }
+    function nsReadJSON(key) {
+      try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+    }
+    // Build the full ordered candidate list. Items: { text, app?, href?, go? }.
+    // All text is rendered via textContent (user-authored goal/step titles are
+    // concatenated in — never innerHTML).
+    function nsSuggestions(sets) {
+      const out = [];
+      const now = new Date(), hour = now.getHours(), today = hcDayKey(now);
+      const late = hour >= 22 || hour < 5;
+      const activeToday = Object.keys(NS_INVITE).filter(function (a) { return sets[a] && sets[a].has(today); })
+        .concat(sets.erp && sets.erp.has(today) ? ['erp'] : []);
+
+      if (late) out.push({ text: 'It’s late. The kindest next step might be rest.' });
+
+      // 1 — finish what you started (the user's own open intents).
+      const nourish = nsReadJSON('hill-climbing-nourish');
+      if (nourish) {
+        const p = nourish.tracks ? (nourish.tracks[nourish.track] || nourish.tracks.general) : nourish;
+        if (p && p.active) out.push({ text: 'A cook is still underway in Nourish — the kitchen is waiting on your verdict.', app: 'nourish', href: 'nourish.html', go: 'Back to the kitchen' });
+      }
+      const savor = nsReadJSON('hill-climbing-savor');
+      if (savor && savor.current) out.push({ text: 'You’re mid-tasting in Savor — the counter is still set.', app: 'savor', href: 'savor.html', go: 'Continue tasting' });
+      const train = nsReadJSON('hill-climbing-train');
+      if (train && train.active) out.push({ text: 'A workout is still open in Train.', app: 'train', href: 'train.html', go: 'Back to it' });
+
+      // 2 — enough is allowed to be enough.
+      if (!late && activeToday.length >= 2) out.push({ text: 'You’ve already come back to yourself twice today. Enough is allowed to be enough.' });
+
+      // 3 — one small step on the hill you chose to focus on.
+      const climb = nsReadJSON('hill-climbing-climb');
+      if (climb && climb.focusId && climb.goals && climb.goals[climb.focusId]) {
+        const step = Object.values(climb.tasks || {}).find(function (t) {
+          return t && t.goalId === climb.focusId && !t.done && typeof t.title === 'string' && t.title;
+        });
+        const goal = climb.goals[climb.focusId].title;
+        if (step && typeof goal === 'string') {
+          out.push({ text: 'One small step on “' + goal + '”: ' + step.title, app: 'climb', href: 'climb.html', go: 'Open Climb' });
+        }
+      }
+
+      // 4 — a time-of-day invitation to a practice today hasn't touched.
+      nsInviteOrder(hour).forEach(function (app) {
+        if (activeToday.indexOf(app) !== -1) return;   // never re-invite a practice done today
+        out.push({ text: NS_INVITE[app], app: app, href: app + '.html', go: 'Open ' + app.charAt(0).toUpperCase() + app.slice(1) });
+      });
+
+      if (!out.length) out.push({ text: 'Nothing is asking for you right now. That’s a fine place to be.' });
+      return out;
+    }
+    let nsList = [], nsIdx = 0;
+    function nsShow() {
+      const s = nsList[nsIdx];
+      if (!s) return;
+      const section = document.getElementById('next-step');
+      const text = document.getElementById('ns-text');
+      const go = document.getElementById('ns-go');
+      const alt = document.getElementById('ns-alt');
+      if (!section || !text || !go || !alt) return;
+      text.textContent = s.text;
+      go.className = 'ns-go' + (s.app ? ' show ' + s.app : '');
+      if (s.href) { go.href = s.href; go.textContent = s.go || 'Open'; }
+      else { go.removeAttribute('href'); go.textContent = ''; }
+      alt.classList.toggle('show', nsList.length > 1);
+      section.classList.add('ready');
+    }
+    function renderNextStep(sets) {
+      nsList = nsSuggestions(sets);
+      if (nsIdx >= nsList.length) nsIdx = 0;
+      nsShow();
+    }
+    const nsAltBtn = document.getElementById('ns-alt');
+    if (nsAltBtn) nsAltBtn.addEventListener('click', function () {
+      if (!nsList.length) return;
+      nsIdx = (nsIdx + 1) % nsList.length;
+      nsShow();
+    });
 
     paint(readUsageLog());   // instant first paint from this device's localStorage, no async wait
     refresh();               // then the full cross-device aggregate
