@@ -454,13 +454,30 @@
   </header>
 
   <!-- A quiet answer to "what now?". Filled by JS; stays hidden if it has
-       nothing worth saying. Rest is a suggestion here, not a failure state. -->
+       nothing worth saying. Rest is a suggestion here, not a failure state.
+       With companion suggestions enabled (opt-in, BYOK), the sentence comes
+       from the companion via the user's own Anthropic key and refreshes on
+       each return to the hub; the deterministic engine is the instant first
+       paint and the fallback. -->
   <section id="next-step" aria-label="A next step">
-    <div class="ns-kicker">A next step</div>
+    <div class="ns-kicker" id="ns-kicker">A next step</div>
     <p class="ns-text" id="ns-text"></p>
     <div class="ns-row">
       <a class="ns-go" id="ns-go" href="#"></a>
       <button class="ns-alt" id="ns-alt" type="button">another idea</button>
+      <button class="ns-alt show" id="ns-cmp-toggle" type="button" aria-expanded="false">companion: off</button>
+    </div>
+    <div class="rem-panel" id="ns-cmp-panel">
+      <div class="rem-msg" id="ns-cmp-msg">
+        Let your <b>companion</b> write this suggestion. Each time you open the hub,
+        a summary of your recent practice, anything you left mid-way, your focused
+        Climb goal, and the companion's memory note are sent to Anthropic on
+        <b>your own API key</b> — the same key the Companion app uses. Your journal
+        entries are not sent. Nothing is stored anywhere new.
+      </div>
+      <div class="rem-actions">
+        <button class="rem-btn" id="ns-cmp-enable" type="button">Let the companion suggest</button>
+      </div>
     </div>
   </section>
 
@@ -1095,10 +1112,12 @@
       const s = nsList[nsIdx];
       if (!s) return;
       const section = document.getElementById('next-step');
+      const kicker = document.getElementById('ns-kicker');
       const text = document.getElementById('ns-text');
       const go = document.getElementById('ns-go');
       const alt = document.getElementById('ns-alt');
       if (!section || !text || !go || !alt) return;
+      if (kicker) kicker.textContent = s.from === 'companion' ? 'A next step · from your companion' : 'A next step';
       text.textContent = s.text;
       go.className = 'ns-go' + (s.app ? ' show ' + s.app : '');
       if (s.href) { go.href = s.href; go.textContent = s.go || 'Open'; }
@@ -1106,8 +1125,11 @@
       alt.classList.toggle('show', nsList.length > 1);
       section.classList.add('ready');
     }
+    let nsSets = null;                 // last-painted day-sets, reused for digests/re-renders
     function renderNextStep(sets) {
+      nsSets = sets;
       nsList = nsSuggestions(sets);
+      if (nsCompanion) nsList.unshift(nsCompanion);   // companion suggestion leads; deterministic list follows on "another idea"
       if (nsIdx >= nsList.length) nsIdx = 0;
       nsShow();
     }
@@ -1118,8 +1140,183 @@
       nsShow();
     });
 
+    // ── Companion suggestion — opt-in, BYOK, refreshed on each return ─────────
+    // The companion (the suite's BYOK AI) writes the suggestion instead of the
+    // deterministic engine. Opt-in and honest about the flow (the toggle's
+    // consent note names exactly what is sent): this is the hub's only egress,
+    // it rides the user's own Anthropic key (`hill-climbing-api-key`, shared
+    // with Companion/Council/Chef), and it fires on arrival rather than on a
+    // per-send user action — which is why it is gated OFF by default behind an
+    // explicit enable. The digest sent is NARROWER than the Companion app's:
+    // activity day-counts/durations, open intents, Climb focus goal + steps,
+    // and the companion's existing memory summary — never journal prose.
+    // The deterministic engine stays as instant first paint + offline/error
+    // fallback, and grounds the model as candidate context.
+    const NS_SUGGEST_LS = 'hill-climbing-hub-suggest';   // '1' = enabled (device-local UI pref, never synced)
+    const NS_API_KEY_LS = 'hill-climbing-api-key';       // shared BYOK credential (see REQUIREMENTS A.1)
+    const NS_MODEL = 'claude-opus-4-8';                  // the companion's model; flip to 'claude-haiku-4-5' for cheaper hub calls
+    const NS_MIN_REFRESH_MS = 60 * 1000;                 // refresh on return, but a tab-flip storm shouldn't bill the user's key
+    const NS_SCHEMA = {
+      type: 'object',
+      properties: {
+        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train', 'rest'] },
+        text: { type: 'string' },
+      },
+      required: ['app', 'text'],
+      additionalProperties: false,
+    };
+    const NS_SYSTEM = [
+      'You are the companion from Hill Climbing — a small suite of contemplative practice apps',
+      '(Meditate, Breathe, Reflect journal, Nourish cooking, Savor tasting, Levity comedy, Climb goals, Train workouts).',
+      'The person has just arrived at the hub. Suggest exactly ONE next step, in 1–2 short, warm sentences.',
+      'Rules, which reflect the suite’s binding constraints:',
+      '- Rest is a first-class answer. Late at night, or when today already held practice, "enough is enough" or rest (app: "rest") is often the best suggestion.',
+      '- Never use streaks, missed-day counts, guilt, urgency, or pressure. No exclamation marks. Invitational, like a friend who knows them — never a coach chasing engagement.',
+      '- Never suggest ERP or exposure exercises: that work is paced by the person and their therapist, not a landing page.',
+      '- Ground the suggestion in what you were given: something they left mid-way, their focused goal, the hour, the shape of their week, their memory note.',
+      'Answer with the app to open ("rest" when the suggestion is not to practice) and the sentence(s).',
+    ].join('\n');
+
+    function nsReadKey() {
+      try { return (localStorage.getItem(NS_API_KEY_LS) || '').trim(); } catch (e) { return ''; }
+    }
+    function nsSuggestOn() {
+      try { return localStorage.getItem(NS_SUGGEST_LS) === '1'; } catch (e) { return false; }
+    }
+    // Compact context digest — built from the same on-device reads as the
+    // deterministic engine. Deliberately NO journal text (day-counts only).
+    function nsDigest(sets) {
+      const now = new Date();
+      const lines = ['Local time: ' + now.toDateString() + ', ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0')];
+      const today = hcDayKey(now);
+      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish', savor: 'Savor', levity: 'Levity', climb: 'Climb', train: 'Train' };
+      const last14 = [];
+      for (let i = 0; i < 14; i++) { const d = new Date(now); d.setDate(now.getDate() - i); last14.push(hcDayKey(d)); }
+      lines.push('Practice in the last 14 days (day counts; "today" marked):');
+      Object.keys(names).forEach(function (app) {
+        const set = sets[app] || new Set();
+        const n = last14.filter(function (k) { return set.has(k); }).length;
+        lines.push('- ' + names[app] + ': ' + n + ' day' + (n === 1 ? '' : 's') + (set.has(today) ? ' (incl. today)' : ''));
+      });
+      const open = [];
+      const nourish = nsReadJSON('hill-climbing-nourish');
+      if (nourish) {
+        const p = nourish.tracks ? (nourish.tracks[nourish.track] || nourish.tracks.general) : nourish;
+        if (p && p.active) open.push('a cook in progress in Nourish');
+      }
+      const savor = nsReadJSON('hill-climbing-savor');
+      if (savor && savor.current) open.push('a tasting mid-way in Savor');
+      const train = nsReadJSON('hill-climbing-train');
+      if (train && train.active) open.push('an open workout in Train');
+      if (open.length) lines.push('Left mid-way: ' + open.join('; ') + '.');
+      const climb = nsReadJSON('hill-climbing-climb');
+      if (climb && climb.focusId && climb.goals && climb.goals[climb.focusId] && typeof climb.goals[climb.focusId].title === 'string') {
+        const steps = Object.values(climb.tasks || {})
+          .filter(function (t) { return t && t.goalId === climb.focusId && !t.done && typeof t.title === 'string'; })
+          .slice(0, 3).map(function (t) { return t.title; });
+        lines.push('Focused Climb goal: “' + climb.goals[climb.focusId].title + '”' + (steps.length ? ' — open steps: ' + steps.join('; ') : ''));
+      }
+      const comp = nsReadJSON('hill-climbing-companion');
+      const memory = comp && comp.memory && typeof comp.memory.summary === 'string' ? comp.memory.summary.trim() : '';
+      if (memory) lines.push('Your memory note about them:\n' + memory.slice(0, 1200));
+      lines.push('Simple candidate ideas (for grounding; feel free to do better):\n' +
+        nsSuggestions(sets).map(function (s) { return '- ' + s.text; }).join('\n'));
+      return lines.join('\n');
+    }
+    let nsCompanion = null, nsBusy = false, nsLastFetch = 0;
+    async function nsFetchCompanion() {
+      if (nsBusy || !nsSuggestOn() || !nsSets) return;
+      const key = nsReadKey();
+      if (!key) return;
+      const now = Date.now();
+      if (now - nsLastFetch < NS_MIN_REFRESH_MS) return;
+      nsLastFetch = now; nsBusy = true;
+      try {
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            // Required for direct browser access to the Anthropic API (BYOK — the user's own key).
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: NS_MODEL,
+            max_tokens: 300,
+            system: NS_SYSTEM,
+            output_config: { format: { type: 'json_schema', schema: NS_SCHEMA } },
+            messages: [{ role: 'user', content: nsDigest(nsSets) }],
+          }),
+        });
+        if (!r.ok) return;                              // quiet fallback — the deterministic suggestion is already up
+        const data = await r.json();
+        const block = ((data && data.content) || []).find(function (b) { return b && b.type === 'text' && b.text; });
+        if (!block) return;
+        const out = JSON.parse(block.text);
+        if (!out || typeof out.text !== 'string' || !out.text.trim()) return;
+        const app = (out.app !== 'rest' && NS_INVITE[out.app]) ? out.app : null;   // 'rest'/unknown → no link; ERP can't pass (not in NS_INVITE)
+        nsCompanion = {
+          from: 'companion',
+          text: out.text.trim().slice(0, 300),
+          app: app,
+          href: app ? app + '.html' : undefined,
+          go: app ? 'Open ' + app.charAt(0).toUpperCase() + app.slice(1) : undefined,
+        };
+        nsIdx = 0;                                      // a fresh arrival shows the fresh suggestion
+        renderNextStep(nsSets);
+      } catch (e) { /* offline / bad key / parse — keep the deterministic suggestion */ }
+      finally { nsBusy = false; }
+    }
+
+    // Toggle + consent UI. Off by default; enabling requires the shared BYOK
+    // key to exist (set up in Companion/Council/Chef) and shows the data-flow
+    // note first. Turning off is instant and drops the fetched suggestion.
+    const nsCmpToggle = document.getElementById('ns-cmp-toggle');
+    const nsCmpPanel = document.getElementById('ns-cmp-panel');
+    const nsCmpMsg = document.getElementById('ns-cmp-msg');
+    const nsCmpEnable = document.getElementById('ns-cmp-enable');
+    function nsCmpRefreshToggle() {
+      if (nsCmpToggle) nsCmpToggle.textContent = 'companion: ' + (nsSuggestOn() ? 'on' : 'off');
+    }
+    if (nsCmpToggle) nsCmpToggle.addEventListener('click', function () {
+      if (nsSuggestOn()) {                              // turn off immediately — no dialog to leave
+        try { localStorage.setItem(NS_SUGGEST_LS, '0'); } catch (e) {}
+        nsCompanion = null; nsIdx = 0;
+        if (nsSets) renderNextStep(nsSets);
+        nsCmpRefreshToggle();
+        nsCmpPanel.classList.remove('show');
+        nsCmpToggle.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      const open = nsCmpPanel.classList.toggle('show');
+      nsCmpToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open && !nsReadKey()) {
+        nsCmpMsg.innerHTML = 'This uses <b>your own Anthropic API key</b> — add one in the Companion app first, then come back here.';
+        nsCmpEnable.style.display = 'none';
+      }
+    });
+    if (nsCmpEnable) nsCmpEnable.addEventListener('click', function () {
+      if (!nsReadKey()) return;
+      try { localStorage.setItem(NS_SUGGEST_LS, '1'); } catch (e) {}
+      nsCmpRefreshToggle();
+      nsCmpPanel.classList.remove('show');
+      nsCmpToggle.setAttribute('aria-expanded', 'false');
+      nsLastFetch = 0;
+      nsFetchCompanion();
+    });
+    nsCmpRefreshToggle();
+
+    // "Updates every time I return to the hub": fetch after the first paint,
+    // and again whenever the tab becomes visible (coming back from a practice).
+    // The dashboard's day-sets refresh alongside so the digest is current.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') { refresh(); nsFetchCompanion(); }
+    });
+
     paint(readUsageLog());   // instant first paint from this device's localStorage, no async wait
     refresh();               // then the full cross-device aggregate
+    nsFetchCompanion();      // opt-in companion suggestion for this arrival (no-op unless enabled + keyed)
     journalDaySet().then(function (js) { reflectSet = js; refresh(); });
     // A remote sync pull that merges new usage records re-renders the dashboard.
     if (window.HCUsage) HCUsage.onMerge = refresh;
