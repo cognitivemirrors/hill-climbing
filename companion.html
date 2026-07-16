@@ -470,7 +470,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.10 · companion</div>
+<div class="corner" id="version-label">v0.11 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -560,6 +560,7 @@
 </div>
 
 <script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
 <script>
 'use strict';
@@ -592,7 +593,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.10';
+const VERSION_NUM = 'v0.11';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -1081,8 +1082,20 @@ function formatJournal(journal) {
 }
 
 // ACTIVITY — from the shared usage log, plus a couple of app-specific signals.
-function readActivity() {
-  let log = {}; try { log = JSON.parse(localStorage.getItem('hill-climbing-usage') || '{}') || {}; } catch (_) {}
+// Prefer HCUsage.aggregate() — the IndexedDB record store summed ACROSS DEVICES
+// (the same source the hub reads) — so a sit logged on another device counts
+// here too. The legacy localStorage `hill-climbing-usage` aggregate is
+// device-local and never synced, so reading it alone hid cross-device practice;
+// it stays as an offline/no-HCUsage fallback. Same { app: { day: {s,n} } } shape.
+async function readActivity() {
+  let log = null;
+  if (window.HCUsage && typeof HCUsage.aggregate === 'function') {
+    try {
+      if (HCUsage.ready && typeof HCUsage.ready.then === 'function') { try { await HCUsage.ready; } catch (_) {} }
+      log = await HCUsage.aggregate();   // { app: { 'YYYY-MM-DD': { s, n } } }, summed over every device's records
+    } catch (_) { log = null; }
+  }
+  if (!log) { try { log = JSON.parse(localStorage.getItem('hill-climbing-usage') || '{}') || {}; } catch (_) { log = {}; } }
   const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', levity:'Levity', climb:'Climb', train:'Train', anime:'Anime' };
   const today = new Date();
   const windowKeys = new Set();
@@ -1136,7 +1149,7 @@ function readActivity() {
 async function gatherContext() {
   const goals    = readGoals();
   const journal  = formatJournal(await readJournal());
-  const activity = readActivity();
+  const activity = await readActivity();
   const memory   = (store.memory && store.memory.summary || '').trim();
   const recent   = recentVerbatimText();
 
