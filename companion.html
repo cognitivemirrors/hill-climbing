@@ -470,7 +470,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.9 · companion</div>
+<div class="corner" id="version-label">v0.10 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -592,7 +592,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.9';
+const VERSION_NUM = 'v0.10';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -948,6 +948,15 @@ function niceDay(k) {
 function niceDate(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// Approximate practice time from summed seconds: minutes under ~1.5 h (reads
+// cleaner), hours above (one decimal, trailing .0 dropped, "hrs" for ≥10 h).
+function fmtPracticeTime(secs) {
+  const mins = Math.round(secs / 60);
+  if (mins < 90) return mins + ' min';
+  const h = secs / 3600;
+  const disp = h >= 10 ? String(Math.round(h)) : h.toFixed(1).replace(/\.0$/, '');
+  return disp + ' hrs';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -1079,6 +1088,11 @@ function readActivity() {
   const windowKeys = new Set();
   for (let i = 0; i < ACTIVITY_DAYS; i++) { const d = new Date(today); d.setDate(today.getDate() - i); windowKeys.add(hcDayKey(d)); }
 
+  // Apps that record real elapsed time (meditate, breathe) store each day as
+  // { s: seconds, n: sessions }; day-flag-only apps store 1. Summing s/n over
+  // the window turns "5 days" into "5 days · ~4.5 hrs across 12 sits" — the
+  // duration signal was always in the log, just never surfaced here.
+  const NOUNS = { meditate: 'sit', breathe: 'session' };
   const lines = [], appsActive = [], activeDays = new Set();
   Object.keys(log).forEach(app => {
     if (app === 'v' || !log[app] || typeof log[app] !== 'object') return;
@@ -1087,9 +1101,17 @@ function readActivity() {
     appsActive.push(app);
     const inWin = days.filter(k => windowKeys.has(k));
     inWin.forEach(k => activeDays.add(k));
+    let secs = 0, sessions = 0;
+    inWin.forEach(k => { const v = log[app][k]; if (v && typeof v === 'object') { secs += v.s || 0; sessions += v.n || 0; } });
     const last = days.slice().sort().pop();
-    lines.push('  ' + (NAMES[app] || app) + ' — ' + inWin.length + ' day' + (inWin.length === 1 ? '' : 's') +
-      ' in the last 4 weeks' + (last ? (' (last: ' + niceDay(last) + ')') : ''));
+    let line = '  ' + (NAMES[app] || app) + ' — ' + inWin.length + ' day' + (inWin.length === 1 ? '' : 's') +
+      ' in the last 4 weeks' + (last ? (' (last: ' + niceDay(last) + ')') : '');
+    if (secs > 0) {
+      const noun = NOUNS[app] || 'session';
+      line += ' · ~' + fmtPracticeTime(secs) +
+        (sessions ? (' across ' + sessions + ' ' + noun + (sessions === 1 ? '' : 's')) : '');
+    }
+    lines.push(line);
   });
 
   // Nourish ladder — an extra signal the usage day-flags don't carry.
