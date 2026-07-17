@@ -470,7 +470,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.11 · companion</div>
+<div class="corner" id="version-label">v0.12 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -593,7 +593,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.11';
+const VERSION_NUM = 'v0.12';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -1425,6 +1425,12 @@ function refreshTail() {
   document.querySelectorAll('.tail-ctl').forEach(el => el.remove());
   if (busy || !active || !active.thread.length) return;
   const lastRaw = active.thread[active.thread.length - 1];
+
+  // A hub hand-off seed is a trailing user turn that is deliberately
+  // unanswered — it waits for the person's own first question. Not a failure;
+  // no retry control. (Every other trailing user turn means a reply failed,
+  // because send() always calls respond() right after.)
+  if (lastRaw.role === 'user' && lastRaw.awaiting) return;
 
   if (lastRaw.role === 'user') {
     // The reply never landed — a fresh failure, or a stranded turn from a prior
@@ -2273,6 +2279,38 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(fals
 
 // Go.
 setMode(mode);
+
+// ── Hub hand-off: "ask about this" on the hub's next-step suggestion ─────────
+// The hub stashes the shown suggestion + the digest that produced it in a
+// consumed-on-read seed key, then links here with ?ask=suggestion. We open a
+// NEW conversation whose first turn is that context, hidden (same mechanism as
+// the "Let it open" seed), so follow-up questions carry the full context
+// without it cluttering the visible thread. Nothing is sent to Anthropic until
+// the person actually asks something — the seed itself is a local write only.
+const HUB_SEED_LS = 'hill-climbing-hub-suggest-seed';
+(function consumeHubSeed() {
+  try {
+    if (new URLSearchParams(location.search).get('ask') !== 'suggestion') return;
+    history.replaceState(null, '', location.pathname + location.hash);   // never re-consume on reload
+    const raw = localStorage.getItem(HUB_SEED_LS);
+    localStorage.removeItem(HUB_SEED_LS);                                // consumed on read, used or not
+    if (!raw) return;
+    const seed = JSON.parse(raw);
+    if (!seed || typeof seed.text !== 'string' || !seed.text.trim()) return;
+    if (typeof seed.ts === 'number' && Date.now() - seed.ts > 10 * 60 * 1000) return;   // stale hand-off — ignore
+    if (mode !== 'companion') setMode('companion');
+    active = newConversation();
+    // hidden: not rendered in the thread; awaiting: deliberately unanswered
+    // until the person asks their own question (refreshTail skips the retry).
+    active.thread.push({ role: 'user', text: seed.text.trim().slice(0, 6000), hidden: true, awaiting: true });
+    active.title = 'About a hub suggestion · ' + niceDate(active.ts);
+    persist();
+    setView('home');
+    renderThread();
+    msgBox.focus();
+  } catch (e) { /* a failed hand-off must never break the app */ }
+})();
+
 maybeUpdateMemory();   // catch up any older conversations left un-distilled last visit
 </script>
 
