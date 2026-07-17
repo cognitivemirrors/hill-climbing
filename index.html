@@ -223,10 +223,17 @@
       display: none; font-family: var(--font-ui); font-size: 0.62rem;
       letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint);
       background: transparent; border: none; cursor: pointer; padding: 2px 4px;
-      transition: color 0.2s ease;
+      transition: color 0.2s ease; text-decoration: none;
     }
     .ns-alt.show { display: inline-block; }
     .ns-alt:hover, .ns-alt:focus-visible { color: var(--mid); outline: none; }
+    .ns-note {
+      display: block; width: 100%; min-height: 54px; margin-top: 12px; padding: 9px 11px;
+      font-family: var(--font-ui); font-size: 0.82rem; line-height: 1.5;
+      color: var(--text); background: rgba(0,0,0,0.28); user-select: text;
+      border: 1px solid var(--line); border-radius: 8px; resize: vertical; outline: none;
+    }
+    .ns-note:focus { border-color: rgba(160,140,220,0.6); }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(12px); }
@@ -465,7 +472,21 @@
     <div class="ns-row">
       <a class="ns-go" id="ns-go" href="#"></a>
       <button class="ns-alt" id="ns-alt" type="button">another idea</button>
+      <a class="ns-alt" id="ns-ask" href="companion.html?ask=suggestion">ask about this</a>
+      <button class="ns-alt" id="ns-flag" type="button" aria-expanded="false">didn’t fit?</button>
       <button class="ns-alt show" id="ns-cmp-toggle" type="button" aria-expanded="false">companion: off</button>
+    </div>
+    <div class="rem-panel" id="ns-flag-panel">
+      <div class="rem-msg" id="ns-flag-msg">
+        Save this suggestion — with the exact context that produced it — for review.
+        A note about why it felt off helps, but is optional. It lands in
+        <b>Companion → menu → Requests</b>, on this device (and your synced ones);
+        nothing is sent anywhere.
+      </div>
+      <textarea class="ns-note" id="ns-flag-note" maxlength="500" placeholder="Why it didn’t fit (optional)"></textarea>
+      <div class="rem-actions">
+        <button class="rem-btn" id="ns-flag-save" type="button">Save for review</button>
+      </div>
     </div>
     <div class="rem-panel" id="ns-cmp-panel">
       <div class="rem-msg" id="ns-cmp-msg">
@@ -1123,6 +1144,15 @@
       if (s.href) { go.href = s.href; go.textContent = s.go || 'Open'; }
       else { go.removeAttribute('href'); go.textContent = ''; }
       alt.classList.toggle('show', nsList.length > 1);
+      // "ask about this" / "didn't fit?" apply to the companion's suggestion only
+      // (they carry the snapshot of what produced it).
+      const isCmp = s.from === 'companion';
+      const ask = document.getElementById('ns-ask');
+      const flag = document.getElementById('ns-flag');
+      const flagPanel = document.getElementById('ns-flag-panel');
+      if (ask) ask.classList.toggle('show', isCmp);
+      if (flag) flag.classList.toggle('show', isCmp);
+      if (!isCmp && flagPanel) { flagPanel.classList.remove('show'); if (flag) flag.setAttribute('aria-expanded', 'false'); }
       section.classList.add('ready');
     }
     let nsSets = null;                 // last-painted day-sets, reused for digests/re-renders
@@ -1232,6 +1262,7 @@
       if (now - nsLastFetch < NS_MIN_REFRESH_MS) return;
       nsLastFetch = now; nsBusy = true;
       try {
+        const digest = nsDigest(nsSets);
         const r = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -1246,7 +1277,7 @@
             max_tokens: 300,
             system: NS_SYSTEM,
             output_config: { format: { type: 'json_schema', schema: NS_SCHEMA } },
-            messages: [{ role: 'user', content: nsDigest(nsSets) }],
+            messages: [{ role: 'user', content: digest }],
           }),
         });
         if (!r.ok) return;                              // quiet fallback — the deterministic suggestion is already up
@@ -1262,6 +1293,9 @@
           app: app,
           href: app ? app + '.html' : undefined,
           go: app ? 'Open ' + app.charAt(0).toUpperCase() + app.slice(1) : undefined,
+          // Snapshot of exactly what produced this suggestion — the review
+          // evidence for "didn't fit?" and the context for "ask about this".
+          snap: nsLogSnapshot({ ts: Date.now(), model: NS_MODEL, reply: { app: out.app, text: out.text.trim().slice(0, 300) }, digest: digest }),
         };
         nsIdx = 0;                                      // a fresh arrival shows the fresh suggestion
         renderNextStep(nsSets);
@@ -1306,6 +1340,90 @@
       nsFetchCompanion();
     });
     nsCmpRefreshToggle();
+
+    // ── Review + follow-up for companion suggestions ──────────────────────────
+    // Every fetched suggestion is snapshotted (digest sent, model, raw reply)
+    // into a small device-local rolling log, so "that felt off" is reviewable
+    // after the fact. Two affordances act on the CURRENT suggestion:
+    //   · "didn't fit?" — saves the snapshot + an optional note into the
+    //     existing requests-to-the-builder store (`hill-climbing-requests`,
+    //     the same one Companion's add_request tool writes; reviewable and
+    //     copyable from Companion → menu → Requests, E2EE-synced). This is the
+    //     suite's established feedback path — capture on-device + copy-out;
+    //     an operator feedback server was considered and declined (L38).
+    //   · "ask about this" — hands the snapshot to the Companion app as a
+    //     hidden opening turn of a NEW conversation (via a consumed-on-read
+    //     seed key), so follow-up questions carry the full context.
+    const NS_LOG_LS = 'hill-climbing-hub-suggest-log';    // rolling last-10 snapshots; device-local, NEVER synced
+    const NS_SEED_LS = 'hill-climbing-hub-suggest-seed';  // one pending "ask about this" hand-off; consumed on read
+    const NS_REQ_LS = 'hill-climbing-requests';           // Companion's requests store (shape: { v, items:[{id,ts,heading,prompt}] }, cap 100)
+    const NS_LOG_CAP = 10, NS_REQ_CAP = 100;
+    function nsUid() {
+      return (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + Math.random().toString(36).slice(2));
+    }
+    function nsLogSnapshot(snap) {
+      try {
+        const log = nsReadJSON(NS_LOG_LS);
+        const items = (log && Array.isArray(log.items)) ? log.items : [];
+        items.unshift(snap);
+        if (items.length > NS_LOG_CAP) items.length = NS_LOG_CAP;
+        localStorage.setItem(NS_LOG_LS, JSON.stringify({ v: 1, items: items }));
+      } catch (e) { /* quota / private mode — the snapshot still rides on nsCompanion */ }
+      return snap;
+    }
+    function nsSnapText(snap) {
+      return 'Suggestion shown: "' + snap.reply.text + '" (app: ' + snap.reply.app + ')\n' +
+        'Model: ' + snap.model + ' · ' + new Date(snap.ts).toString().slice(0, 24) + '\n\n' +
+        'Digest that produced it:\n' + snap.digest;
+    }
+    // "didn't fit?" → the requests-to-the-builder store (mirrors Companion's addRequest bounds).
+    const nsFlagBtn = document.getElementById('ns-flag');
+    const nsFlagPanel = document.getElementById('ns-flag-panel');
+    const nsFlagNote = document.getElementById('ns-flag-note');
+    const nsFlagSave = document.getElementById('ns-flag-save');
+    if (nsFlagBtn) nsFlagBtn.addEventListener('click', function () {
+      const open = nsFlagPanel.classList.toggle('show');
+      nsFlagBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) nsFlagNote.focus();
+    });
+    if (nsFlagSave) nsFlagSave.addEventListener('click', function () {
+      const s = nsList[nsIdx];
+      if (!s || s.from !== 'companion' || !s.snap) return;
+      const note = (nsFlagNote.value || '').trim();
+      const d = new Date(s.snap.ts);
+      const item = {
+        id: nsUid(), ts: Date.now(),
+        heading: ('Hub suggestion review · ' + d.toDateString() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')).slice(0, 200),
+        prompt: ((note ? 'Why it didn’t fit: ' + note + '\n\n' : '') + nsSnapText(s.snap) +
+          '\n\nPlease review whether the next-step system prompt or digest should change.').slice(0, 4000),
+      };
+      try {
+        const req = nsReadJSON(NS_REQ_LS);
+        const items = (req && Array.isArray(req.items)) ? req.items : [];
+        items.unshift(item);
+        if (items.length > NS_REQ_CAP) items.length = NS_REQ_CAP;
+        localStorage.setItem(NS_REQ_LS, JSON.stringify({ v: 1, items: items }));
+        if (window.HCSync) HCSync.queueBlobPush('ls:' + NS_REQ_LS);   // no-op until sync is unlocked + armed
+      } catch (e) { return; }
+      nsFlagNote.value = '';
+      nsFlagPanel.classList.remove('show');
+      nsFlagBtn.setAttribute('aria-expanded', 'false');
+      nsFlagBtn.textContent = 'saved ✓';
+      setTimeout(function () { nsFlagBtn.textContent = 'didn’t fit?'; }, 1800);
+    });
+    // "ask about this" → seed a new Companion conversation with the snapshot as
+    // hidden context, then follow the link. Plain <a>, so the navigation itself
+    // is untouched — we only stash the hand-off first.
+    const nsAskLink = document.getElementById('ns-ask');
+    if (nsAskLink) nsAskLink.addEventListener('click', function () {
+      const s = nsList[nsIdx];
+      if (!s || s.from !== 'companion' || !s.snap) return;
+      const text = 'Context handed over from the hub (not typed by the person): the hub’s next-step ' +
+        'suggestion just shown to them was:\n\n' + nsSnapText(s.snap) +
+        '\n\nThey opened this conversation to ask about that suggestion — help them dig into it, ' +
+        'and update your view honestly if it didn’t fit.';
+      try { localStorage.setItem(NS_SEED_LS, JSON.stringify({ v: 1, ts: Date.now(), text: text.slice(0, 6000) })); } catch (e) {}
+    });
 
     // "Updates every time I return to the hub": fetch after the first paint,
     // and again whenever the tab becomes visible (coming back from a practice).
@@ -1639,6 +1757,16 @@
     chip.classList.add('ready');
 
     if (location.hash === '#account') openAccount();
+    // The hub can write one synced store: `hill-climbing-requests` (the
+    // "didn't fit?" review flow appends to Companion's requests-to-the-builder
+    // blob). Registering it here lets that write push, and remote merges land
+    // locally. Same blob-LWW caveat as everywhere else (KNOWN_RISKS L28/L31):
+    // hub and Companion writing within one sync window keep the later push.
+    HCSync.registerStore({
+      key: 'ls:hill-climbing-requests', kind: 'blob',
+      read:  () => localStorage.getItem('hill-climbing-requests') || '{"v":1,"items":[]}',
+      write: (str) => { try { localStorage.setItem('hill-climbing-requests', str); } catch (e) { /* quota */ } },
+    });
     HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'hub' })
       .then(() => { renderChip(HCSync.getStatus()); if (view.classList.contains('show')) routePanel(); });
   })();
