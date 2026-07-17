@@ -470,7 +470,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.11 · companion</div>
+<div class="corner" id="version-label">v0.12 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -593,7 +593,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.11';
+const VERSION_NUM = 'v0.12';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -663,7 +663,7 @@ const HIST_CAP = 30;
 
 // ── The companion's charge ───────────────────────────────────────────────────
 const COMPANION_SYSTEM =
-"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite — their current goals, their private journal, and their recent practice activity — and, so nothing about them is lost between conversations, what you've come to know of them from your earlier conversations: a running summary of the older ones and the last few in full. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
+"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite — their current goals, their private journal, their recent practice activity, and (if they've connected WHOOP in Recover) their body's recent signals: recovery, sleep, strain — and, so nothing about them is lost between conversations, what you've come to know of them from your earlier conversations: a running summary of the older ones and the last few in full. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
 "Who you are, and how you talk:\n" +
 "- You are one warm, attentive companion — not a coach, not a therapist, not an authority. Think of a thoughtful friend who has genuinely kept up with their life and pays close attention.\n" +
 "- You have a memory of them across conversations. Talk like someone who's spoken with them before — pick up threads you've left open, notice what's changed since last time, and don't reintroduce yourself or greet them as a stranger when the history shows you've already met. Let the memory sit lightly, the way a friend recalls things without reciting them; if the memory is empty, this really is your first conversation, so don't imply a past you don't have.\n" +
@@ -1146,10 +1146,36 @@ async function readActivity() {
   return { text, appsActive };
 }
 
+// BODY — WHOOP metrics from Recover's on-device blob (`hill-climbing-whoop`,
+// written by recover.html, E2EE-synced with everything else). Last 7 days,
+// compact; the section is omitted entirely when Recover isn't in use.
+function readWhoop() {
+  let w = null;
+  try { w = JSON.parse(localStorage.getItem('hill-climbing-whoop') || 'null'); } catch (_) {}
+  if (!w || !w.days) return '';
+  const now = new Date(), lines = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(now); dt.setDate(now.getDate() - i);
+    const key = hcDayKey(dt);
+    const d = w.days[key];
+    if (!d) continue;
+    const parts = [];
+    if (typeof d.rec === 'number') parts.push('recovery ' + d.rec + '%');
+    if (typeof d.hrv === 'number') parts.push('HRV ' + d.hrv + ' ms');
+    if (typeof d.rhr === 'number') parts.push('resting HR ' + d.rhr);
+    if (typeof d.sleepMin === 'number') parts.push('sleep ' + Math.floor(d.sleepMin / 60) + 'h' + String(d.sleepMin % 60).padStart(2, '0'));
+    if (typeof d.strain === 'number') parts.push('strain ' + d.strain);
+    if (d.wk) parts.push(d.wk + ' workout' + (d.wk === 1 ? '' : 's'));
+    if (parts.length) lines.push('  ' + (i === 0 ? 'Today' : niceDay(key)) + ': ' + parts.join(', '));
+  }
+  return lines.join('\n');
+}
+
 async function gatherContext() {
   const goals    = readGoals();
   const journal  = formatJournal(await readJournal());
   const activity = await readActivity();
+  const whoop    = readWhoop();
   const memory   = (store.memory && store.memory.summary || '').trim();
   const recent   = recentVerbatimText();
 
@@ -1168,7 +1194,8 @@ async function gatherContext() {
     memoryBlock +
     "## Their goals\n" + (goals ? goals.text : "They haven't set up goals in Climb yet.") + "\n\n" +
     "## Their journal — most recent entries\n" + (journal ? journal.text : "Their journal is empty, or they haven't kept one yet.") + "\n\n" +
-    "## Their recent practice\n" + activity.text + "\n──";
+    "## Their recent practice\n" + activity.text +
+    (whoop ? "\n\n## Their body — WHOOP, last 7 days\n" + whoop : "") + "\n──";
 
   const summary = {
     goals: goals ? goals.count : 0,
@@ -1477,8 +1504,8 @@ function renderSees() {
   const v = el('sees-view');
   v.innerHTML =
     '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
-    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time. Your goals, journal, and activity are read live and never stored. To keep context across conversations it also includes your recent conversations and a running summary of the older ones — that memory is kept on your device (and synced if you’ve signed in), and you can erase it with <em>Clear all conversations</em>. When a question needs it, the companion can also search the web on your key — only with general queries it writes itself, never your private details.</p>' +
-    '<div class="digest-box" id="digest-box">Reading your goals, journal, activity, and past conversations…</div></div>' +
+    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time. Your goals, journal, activity, and WHOOP body signals (if you’ve connected Recover) are read live and never stored. To keep context across conversations it also includes your recent conversations and a running summary of the older ones — that memory is kept on your device (and synced if you’ve signed in), and you can erase it with <em>Clear all conversations</em>. When a question needs it, the companion can also search the web on your key — only with general queries it writes itself, never your private details.</p>' +
+    '<div class="digest-box" id="digest-box">Reading your goals, journal, activity, body signals, and past conversations…</div></div>' +
     '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
   el('sees-back').addEventListener('click', () => setView('home'));
   gatherContext().then(ctx => {
@@ -2150,7 +2177,7 @@ function renderMenu() {
       menuItem('key-btn', 'API key', 'Change or remove your key') +
       menuItem('about-btn', 'About the companion', "How it works, what it isn't") +
       menuItem('clear-btn', 'Clear all conversations', 'Delete every thread, and what it remembers') +
-      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn’t lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you’ve signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details. If you ask it to, it can write up a request about these apps — a heading and a prompt on what to build or decide — to your on-device <em>Requests</em> list, yours to review, copy, or delete.</div>';
+      '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, recent activity, and recent WHOOP body signals (if you’ve connected Recover) are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn’t lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you’ve signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details. If you ask it to, it can write up a request about these apps — a heading and a prompt on what to build or decide — to your on-device <em>Requests</em> list, yours to review, copy, or delete.</div>';
     el('sees-btn').addEventListener('click', () => { setMenu(false); setView('sees'); });
     el('requests-btn').addEventListener('click', () => { setMenu(false); setView('requests'); });
     el('new-btn').addEventListener('click', () => {

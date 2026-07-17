@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Recover · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Recover">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Recover (moss) ─────────────────────
+         Sits between ERP's sage (120°) and Reflect's amber (38°) on
+         the wheel without touching either; reads as vitality/rest. */
+      --accent:      hsl(84,50%,62%);
+      --accent-soft: hsla(84,46%,58%,0.45);
+      --accent-glow: hsla(84,52%,48%,0.16);
+      --bg: var(--bg-base);
+      /* WHOOP's own recovery bands, kept so the numbers read familiarly. */
+      --rec-high: hsl(140,55%,58%);
+      --rec-mid:  hsl(44,80%,62%);
+      --rec-low:  hsl(8,68%,64%);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    /* Corner menu — data-management dropdown, mirrors train. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 248px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-item.danger .menu-item-title { color: hsl(8,62%,66%); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+    .hidden { display: none !important; }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    h1 { font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; letter-spacing: 0.01em; }
+    .sub { color: var(--mid); font-size: 0.92rem; margin: 4px 0 28px; }
+
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 22px 22px 20px; margin-bottom: 18px;
+    }
+    .card h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.2rem; margin-bottom: 10px; }
+    .card p { color: var(--mid); font-size: 0.9rem; margin-bottom: 10px; }
+    .card ol { color: var(--mid); font-size: 0.9rem; margin: 0 0 12px 18px; }
+    .card ol li { margin-bottom: 6px; }
+    .card a { color: var(--accent); }
+
+    .redirect-uri {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem;
+      color: var(--text); background: rgba(0,0,0,0.35); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; margin: 4px 0 12px; word-break: break-all;
+      user-select: all;
+    }
+    .flow-note {
+      font-size: 0.8rem; color: var(--dim); line-height: 1.55;
+      border-left: 2px solid var(--accent-soft); padding-left: 12px; margin: 14px 0 4px;
+    }
+
+    input.cred {
+      width: 100%; padding: 10px 12px; margin-bottom: 10px;
+      background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 8px;
+      color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    input.cred:focus { border-color: var(--accent-soft); }
+    .err { color: hsl(8,68%,68%); font-size: 0.82rem; margin: 2px 0 10px; min-height: 1em; }
+
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      border-radius: var(--radius-pill); border: 1px solid var(--line-strong);
+      background: transparent; color: var(--text);
+      padding: 10px 22px; font-size: 0.92rem; letter-spacing: 0.02em;
+      transition: border-color var(--ease), color var(--ease), background var(--ease);
+    }
+    .btn:hover { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover { background: var(--accent-glow); }
+    .btn[disabled] { opacity: 0.5; cursor: default; }
+
+    /* ── connected view ─────────────────────────────────────────── */
+    .today-row { display: flex; align-items: center; gap: 22px; }
+    .rec-big { font-family: var(--font-display); font-size: 3.4rem; line-height: 1; }
+    .rec-big small { font-size: 1.2rem; color: var(--dim); }
+    .rec-high { color: var(--rec-high); }
+    .rec-mid  { color: var(--rec-mid); }
+    .rec-low  { color: var(--rec-low); }
+    .rec-none { color: var(--dim); }
+    .today-meta { color: var(--dim); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+    .metric { text-align: center; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; }
+    .metric b { display: block; font-size: 1.05rem; font-weight: 500; }
+    .metric span { font-size: 0.68rem; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .chart { display: flex; align-items: flex-end; gap: 3px; height: 92px; margin: 14px 0 4px; }
+    .chart .bar { flex: 1; min-width: 3px; border-radius: 3px 3px 0 0; background: var(--faint); transition: height 0.3s ease; }
+    .bar.high { background: var(--rec-high); opacity: 0.85; }
+    .bar.mid  { background: var(--rec-mid);  opacity: 0.85; }
+    .bar.low  { background: var(--rec-low);  opacity: 0.85; }
+    .chart-cap { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--faint); }
+
+    .trend-rows { margin-top: 6px; }
+    .trend-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem;
+    }
+    .trend-row:last-child { border-bottom: none; }
+    .trend-row .lbl { color: var(--mid); }
+    .trend-row .val { color: var(--text); }
+    .trend-row .delta { font-size: 0.75rem; color: var(--dim); margin-left: 8px; }
+
+    .sync-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+    .sync-status { font-size: 0.78rem; color: var(--dim); }
+
+    footer.note { color: var(--faint); font-size: 0.75rem; margin-top: 26px; line-height: 1.55; }
+
+    @media (max-width: 640px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar" aria-hidden="true"></div>
+<a id="home-link" href="index.html" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9h13v-9"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · recover</div>
+
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Data menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden">
+    <button class="menu-item" id="mi-sync"><span class="menu-item-title">Sync now</span><span class="menu-item-sub">Pull the latest from WHOOP</span></button>
+    <button class="menu-item" id="mi-export"><span class="menu-item-title">Export data</span><span class="menu-item-sub">Download everything as JSON</span></button>
+    <button class="menu-item" id="mi-disconnect"><span class="menu-item-title">Disconnect WHOOP</span><span class="menu-item-sub">Forget credentials on this device; keep data</span></button>
+    <button class="menu-item danger" id="mi-delete"><span class="menu-item-title">Delete all Recover data</span><span class="menu-item-sub">Erase the metrics stored here</span></button>
+    <div class="menu-note">Your WHOOP credentials and tokens live only in this browser and are never synced. Metrics stay on-device; if suite sync is on they're end-to-end encrypted like everything else.</div>
+  </div>
+</div>
+
+<main>
+  <h1>Recover</h1>
+  <p class="sub">your body's signals, alongside your practice</p>
+
+  <!-- ── Setup: not yet connected ─────────────────────────────── -->
+  <section id="setup-panel" class="panel hidden">
+    <div class="card">
+      <h2>Bring your WHOOP with you</h2>
+      <p>Recover reads your recovery, sleep, and strain from WHOOP so the suite can meet your day where your body actually is. It connects through <b>your own WHOOP developer app</b> — the same bring-your-own-credentials shape as the suite's AI apps.</p>
+      <ol>
+        <li>Sign in at <a href="https://developer.whoop.com" target="_blank" rel="noopener">developer.whoop.com</a> and create an app (any name).</li>
+        <li>Add this exact Redirect URI to the app:</li>
+      </ol>
+      <div class="redirect-uri" id="redirect-uri"></div>
+      <ol start="3">
+        <li>Enable the scopes: <b>read:recovery, read:cycles, read:sleep, read:workout, read:profile, offline</b>.</li>
+        <li>Copy the Client ID and Client Secret below.</li>
+      </ol>
+      <input class="cred" id="cid-input" type="text" spellcheck="false" autocomplete="off" placeholder="Client ID">
+      <input class="cred" id="csec-input" type="password" spellcheck="false" autocomplete="off" placeholder="Client Secret">
+      <div class="err" id="setup-err"></div>
+      <button class="btn primary" id="connect-btn" type="button">Connect WHOOP</button>
+      <p class="flow-note">What leaves this device: your WHOOP sign-in and data requests travel from this browser through a small relay on the suite's own Supabase project to WHOOP — the relay stores nothing, logs nothing, and can only reach WHOOP. Your Client ID, Secret, and tokens stay in this browser and are never synced. The health metrics that come back live on this device; if you turn on suite sync they're end-to-end encrypted, so the sync server can't read them either.</p>
+    </div>
+  </section>
+
+  <!-- ── Busy: exchanging the OAuth code ──────────────────────── -->
+  <section id="busy-panel" class="panel hidden">
+    <div class="card"><h2 id="busy-msg">Connecting to WHOOP…</h2></div>
+  </section>
+
+  <!-- ── Connected: today + trends ────────────────────────────── -->
+  <section id="data-panel" class="panel hidden">
+    <div class="card">
+      <div class="today-meta" id="today-label">Latest</div>
+      <div class="today-row">
+        <div class="rec-big" id="rec-big">–<small>%</small></div>
+        <div style="flex:1">
+          <div class="metric-grid" style="margin-top:0">
+            <div class="metric"><b id="m-hrv">–</b><span>HRV ms</span></div>
+            <div class="metric"><b id="m-rhr">–</b><span>RHR</span></div>
+            <div class="metric"><b id="m-sleep">–</b><span>Sleep</span></div>
+            <div class="metric"><b id="m-strain">–</b><span>Strain</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recovery, last four weeks</h2>
+      <div class="chart" id="rec-chart" aria-label="Daily recovery scores"></div>
+      <div class="chart-cap"><span id="chart-from"></span><span>today</span></div>
+    </div>
+
+    <div class="card">
+      <h2>This week against last</h2>
+      <div class="trend-rows" id="trend-rows"></div>
+    </div>
+
+    <div class="sync-row">
+      <span class="sync-status" id="sync-status"></span>
+      <button class="btn" id="sync-btn" type="button">Sync now</button>
+    </div>
+  </section>
+
+  <footer class="note">Recover is a window, not a scoreboard — a low number is information about what your body needs, never a grade. Data comes from your WHOOP account on your own credentials and stays yours.</footer>
+</main>
+
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script>
+'use strict';
+// ═════════════════════════════════════════════════════════════════════════════
+// Recover — WHOOP integration (bring-your-own developer app)
+//
+// Data flow (REQUIREMENTS §1.1 / A.4): browser ⇄ whoop-relay (stateless Edge
+// Function on the suite's Supabase project; stores/logs nothing; upstream
+// pinned to api.prod.whoop.com) ⇄ WHOOP. Credentials + tokens: device-local,
+// NEVER synced. Metrics blob: on-device, E2EE-synced when suite sync is on.
+// ═════════════════════════════════════════════════════════════════════════════
+const VERSION = 'v0.1 · recover';
+const RELAY_URL = 'https://eztapprkcnwoebnfdebb.supabase.co/functions/v1/whoop-relay';
+const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth';
+const SCOPES = 'offline read:recovery read:cycles read:sleep read:workout read:profile';
+
+const STATE_KEY = 'hill-climbing-whoop';        // metrics blob (E2EE-sync-registered below)
+const AUTH_KEY  = 'hill-climbing-whoop-auth';   // { cid, secret, access, refresh, exp } — device-local, NEVER synced
+const OAUTH_STATE_KEY = 'hill-climbing-whoop-state';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-whoop';
+const BACKFILL_DAYS = 90;                        // first sync reaches back this far
+const RESYNC_OVERLAP_DAYS = 3;                   // re-fetch window so late-scored records land
+const AUTO_SYNC_MS = 6 * 60 * 60 * 1000;         // quiet refresh on open, at most every 6 h
+
+const el = (id) => document.getElementById(id);
+
+// ── state ────────────────────────────────────────────────────────────────────
+let state = loadState();
+let auth  = loadAuth();
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    if (s && s.days && typeof s.days === 'object') return s;
+  } catch (e) {}
+  return { v: 1, days: {}, lastSync: 0 };
+}
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+}
+function loadAuth() {
+  try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null') || null; } catch (e) { return null; }
+}
+function saveAuth() {
+  try {
+    if (auth) localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    else localStorage.removeItem(AUTH_KEY);
+  } catch (e) {}
+}
+const connected = () => !!(auth && auth.refresh);
+
+// ── day helpers ──────────────────────────────────────────────────────────────
+// WHOOP timestamps are UTC ISO; records carry the user's timezone_offset
+// ("-07:00"). A "day" here is the user's local calendar day, zero-padded like
+// hcDayKey everywhere else in the suite.
+function dayFromISO(iso, offset) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return null;
+  let offMin = 0;
+  if (typeof offset === 'string') {
+    const m = offset.match(/^([+-])(\d{2}):(\d{2})/);
+    if (m) offMin = (m[1] === '-' ? -1 : 1) * (parseInt(m[2], 10) * 60 + parseInt(m[3], 10));
+  }
+  const d = new Date(t + offMin * 60000);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+function localDayKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function dayObj(key) { return state.days[key] || (state.days[key] = {}); }
+
+// ── relay calls ──────────────────────────────────────────────────────────────
+async function relay(body) {
+  const r = await fetch(RELAY_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
+}
+async function tokenRequest(params) {
+  return relay({ kind: 'token', params });
+}
+async function ensureAccess() {
+  if (!connected()) throw new Error('not connected');
+  if (auth.access && auth.exp && Date.now() < auth.exp - 60000) return auth.access;
+  const r = await tokenRequest({
+    grant_type: 'refresh_token',
+    refresh_token: auth.refresh,
+    client_id: auth.cid,
+    client_secret: auth.secret,
+    scope: 'offline',
+  });
+  if (!r.ok || !r.data.access_token) {
+    // Refresh genuinely rejected → tokens are dead; keep cid/secret so
+    // reconnecting is one tap, but surface the disconnected state.
+    auth.access = ''; auth.refresh = ''; auth.exp = 0; saveAuth();
+    render();
+    throw new Error('refresh failed');
+  }
+  auth.access = r.data.access_token;
+  auth.refresh = r.data.refresh_token || auth.refresh;   // WHOOP rotates refresh tokens
+  auth.exp = Date.now() + (r.data.expires_in || 3600) * 1000;
+  saveAuth();
+  return auth.access;
+}
+async function apiGet(path) {
+  let token = await ensureAccess();
+  let r = await relay({ kind: 'api', path, token });
+  if (r.status === 401) {                     // stale access token → one refresh + retry
+    auth.exp = 0; token = await ensureAccess();
+    r = await relay({ kind: 'api', path, token });
+  }
+  if (!r.ok) throw new Error('api ' + r.status);
+  return r.data;
+}
+// Paginated collection GET — WHOOP v2 caps limit at 25 and pages by nextToken.
+async function apiAll(base, startISO, endISO) {
+  const out = [];
+  let next = '';
+  for (let page = 0; page < 40; page++) {     // hard cap ≈ 1000 records per collection per sync
+    const q = base + '?limit=25&start=' + encodeURIComponent(startISO) + '&end=' + encodeURIComponent(endISO) +
+      (next ? '&nextToken=' + encodeURIComponent(next) : '');
+    const data = await apiGet(q);
+    (data.records || []).forEach((rec) => out.push(rec));
+    next = data.next_token;
+    if (!next) break;
+  }
+  return out;
+}
+
+// ── OAuth connect / callback ─────────────────────────────────────────────────
+function redirectUri() {
+  return location.origin + location.pathname;
+}
+function randState() {
+  const A = 'ABCDEFGHJKMNPQRSTVWXYZ0123456789';
+  const raw = crypto.getRandomValues(new Uint8Array(8));
+  let s = '';
+  for (let i = 0; i < 8; i++) s += A[raw[i] % A.length];
+  return s;
+}
+function beginConnect() {
+  const cid = el('cid-input').value.trim();
+  const secret = el('csec-input').value.trim();
+  if (!cid || !secret) { el('setup-err').textContent = 'Both the Client ID and Client Secret are needed.'; return; }
+  auth = { cid, secret, access: '', refresh: '', exp: 0 };
+  saveAuth();
+  const st = randState();
+  try { localStorage.setItem(OAUTH_STATE_KEY, st); } catch (e) {}
+  const u = WHOOP_AUTH_URL +
+    '?response_type=code' +
+    '&client_id=' + encodeURIComponent(cid) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri()) +
+    '&scope=' + encodeURIComponent(SCOPES) +
+    '&state=' + encodeURIComponent(st);
+  location.href = u;
+}
+async function handleCallback() {
+  const p = new URLSearchParams(location.search);
+  const code = p.get('code');
+  if (!code) return false;
+  const expect = localStorage.getItem(OAUTH_STATE_KEY) || '';
+  history.replaceState(null, '', location.pathname);   // scrub ?code= from the URL/history early
+  try { localStorage.removeItem(OAUTH_STATE_KEY); } catch (e) {}
+  if (!auth || !auth.cid || !auth.secret) { showPanel('setup'); renderSetup(); return true; }
+  if (!expect || p.get('state') !== expect) {
+    showPanel('setup'); renderSetup();
+    el('setup-err').textContent = 'That sign-in attempt didn’t match this browser (state check failed). Try connecting again.';
+    return true;
+  }
+  showPanel('busy');
+  const r = await tokenRequest({
+    grant_type: 'authorization_code',
+    code,
+    client_id: auth.cid,
+    client_secret: auth.secret,
+    redirect_uri: redirectUri(),
+  });
+  if (!r.ok || !r.data.access_token) {
+    showPanel('setup'); renderSetup();
+    el('setup-err').textContent = 'WHOOP declined the connection (' + (r.data.error_description || r.data.error || r.status) + '). Check the Redirect URI and credentials, then try again.';
+    return true;
+  }
+  auth.access = r.data.access_token;
+  auth.refresh = r.data.refresh_token || '';
+  auth.exp = Date.now() + (r.data.expires_in || 3600) * 1000;
+  saveAuth();
+  el('busy-msg').textContent = 'Connected. Pulling your last ' + BACKFILL_DAYS + ' days…';
+  try { await syncNow(); } catch (e) {}
+  render();
+  return true;
+}
+
+// ── sync — idempotent day-map overwrite ─────────────────────────────────────
+// Every metric is assigned (never incremented) per local day, so re-fetching
+// an overlapping window can only correct, not double-count.
+let syncing = false;
+async function syncNow() {
+  if (syncing || !connected()) return;
+  syncing = true;
+  setSyncStatus('Syncing…');
+  try {
+    const now = new Date();
+    const since = state.lastSync
+      ? new Date(state.lastSync - RESYNC_OVERLAP_DAYS * 86400000)
+      : new Date(now.getTime() - BACKFILL_DAYS * 86400000);
+    const startISO = since.toISOString(), endISO = now.toISOString();
+
+    // Cycles first: they define the day a recovery belongs to, and carry strain.
+    const cycles = await apiAll('/developer/v2/cycle', startISO, endISO);
+    const cycleDay = {};
+    cycles.forEach((c) => {
+      const day = dayFromISO(c.start, c.timezone_offset);
+      if (!day) return;
+      cycleDay[c.id] = day;
+      if (c.score_state === 'SCORED' && c.score && typeof c.score.strain === 'number') {
+        dayObj(day).strain = Math.round(c.score.strain * 10) / 10;
+      }
+    });
+
+    const recs = await apiAll('/developer/v2/recovery', startISO, endISO);
+    recs.forEach((r) => {
+      if (r.score_state !== 'SCORED' || !r.score) return;
+      const day = cycleDay[r.cycle_id] || dayFromISO(r.created_at);
+      if (!day) return;
+      const d = dayObj(day);
+      if (typeof r.score.recovery_score === 'number') d.rec = Math.round(r.score.recovery_score);
+      if (typeof r.score.hrv_rmssd_milli === 'number') d.hrv = Math.round(r.score.hrv_rmssd_milli);
+      if (typeof r.score.resting_heart_rate === 'number') d.rhr = Math.round(r.score.resting_heart_rate);
+      if (typeof r.score.spo2_percentage === 'number') d.spo2 = Math.round(r.score.spo2_percentage * 10) / 10;
+      if (r.score.user_calibrating) d.cal = 1; else delete d.cal;
+    });
+
+    const sleeps = await apiAll('/developer/v2/activity/sleep', startISO, endISO);
+    sleeps.forEach((s) => {
+      if (s.nap || s.score_state !== 'SCORED' || !s.score) return;
+      const day = dayFromISO(s.end, s.timezone_offset);   // the morning you woke
+      if (!day) return;
+      const d = dayObj(day);
+      const st = s.score.stage_summary || {};
+      const asleepMs = (st.total_light_sleep_time_milli || 0) + (st.total_slow_wave_sleep_time_milli || 0) + (st.total_rem_sleep_time_milli || 0);
+      if (asleepMs > 0) d.sleepMin = Math.round(asleepMs / 60000);
+      if (typeof s.score.sleep_performance_percentage === 'number') d.sleepPerf = Math.round(s.score.sleep_performance_percentage);
+      if (typeof s.score.respiratory_rate === 'number') d.resp = Math.round(s.score.respiratory_rate * 10) / 10;
+    });
+
+    // Workouts: recompute counts for the fetched window, then assign.
+    const workouts = await apiAll('/developer/v2/activity/workout', startISO, endISO);
+    const wkCount = {};
+    workouts.forEach((w) => {
+      const day = dayFromISO(w.start, w.timezone_offset);
+      if (day) wkCount[day] = (wkCount[day] || 0) + 1;
+    });
+    const winStart = dayFromISO(startISO, '+00:00');
+    Object.keys(state.days).forEach((day) => {
+      if (day >= winStart) {
+        if (wkCount[day]) state.days[day].wk = wkCount[day];
+        else delete state.days[day].wk;
+      }
+    });
+    Object.keys(wkCount).forEach((day) => { dayObj(day).wk = wkCount[day]; });
+
+    state.lastSync = Date.now();
+    saveState();
+    render();
+  } catch (e) {
+    setSyncStatus(connected() ? 'Sync failed — WHOOP or the relay didn’t answer. Try again in a moment.' : 'Connection expired — reconnect below.');
+  } finally {
+    syncing = false;
+  }
+}
+
+// ── rendering ────────────────────────────────────────────────────────────────
+function showPanel(name) {
+  el('setup-panel').classList.toggle('hidden', name !== 'setup');
+  el('busy-panel').classList.toggle('hidden', name !== 'busy');
+  el('data-panel').classList.toggle('hidden', name !== 'data');
+}
+function recClass(rec) {
+  if (typeof rec !== 'number') return 'rec-none';
+  return rec >= 67 ? 'rec-high' : rec >= 34 ? 'rec-mid' : 'rec-low';
+}
+function fmtSleep(min) {
+  if (!min) return '–';
+  return Math.floor(min / 60) + 'h ' + String(min % 60).padStart(2, '0') + 'm';
+}
+function niceDate(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+function latestDayWithData() {
+  return Object.keys(state.days).filter((k) => typeof state.days[k].rec === 'number').sort().pop() || null;
+}
+function avg(arr) {
+  const xs = arr.filter((x) => typeof x === 'number');
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+}
+function weekVals(offsetDays, field) {
+  const out = [];
+  const now = new Date();
+  for (let i = offsetDays; i < offsetDays + 7; i++) {
+    const d = new Date(now); d.setDate(now.getDate() - i);
+    const rec = state.days[localDayKey(d)];
+    out.push(rec ? rec[field] : undefined);
+  }
+  return out;
+}
+function trendRow(label, cur, prev, fmt) {
+  const f = fmt || ((x) => Math.round(x));
+  let val = cur === null ? '–' : f(cur);
+  let delta = '';
+  if (cur !== null && prev !== null) {
+    const diff = cur - prev;
+    const s = f(Math.abs(diff));
+    delta = diff === 0 ? 'level with last week' : (diff > 0 ? s + ' up on last week' : s + ' down on last week');
+  }
+  return '<div class="trend-row"><span class="lbl">' + label + '</span><span><span class="val">' + val + '</span><span class="delta">' + delta + '</span></span></div>';
+}
+function render() {
+  if (!connected() && !Object.keys(state.days).length) { showPanel('setup'); renderSetup(); return; }
+  showPanel('data');
+
+  const latest = latestDayWithData();
+  const today = localDayKey(new Date());
+  const d = latest ? state.days[latest] : {};
+  el('today-label').textContent = latest ? (latest === today ? 'Today · ' + niceDate(latest) : niceDate(latest)) : 'No scored days yet';
+  const rb = el('rec-big');
+  rb.className = 'rec-big ' + recClass(d.rec);
+  rb.innerHTML = (typeof d.rec === 'number' ? d.rec : '–') + '<small>%</small>' + (d.cal ? '<small> · calibrating</small>' : '');
+  el('m-hrv').textContent = typeof d.hrv === 'number' ? d.hrv : '–';
+  el('m-rhr').textContent = typeof d.rhr === 'number' ? d.rhr : '–';
+  el('m-sleep').textContent = fmtSleep(d.sleepMin);
+  el('m-strain').textContent = typeof d.strain === 'number' ? d.strain.toFixed(1) : '–';
+
+  // 28-day recovery chart.
+  const chart = el('rec-chart');
+  chart.innerHTML = '';
+  const now = new Date();
+  let firstKey = '';
+  for (let i = 27; i >= 0; i--) {
+    const dt = new Date(now); dt.setDate(now.getDate() - i);
+    const key = localDayKey(dt);
+    if (i === 27) firstKey = key;
+    const rec = state.days[key] && state.days[key].rec;
+    const bar = document.createElement('div');
+    const has = typeof rec === 'number';
+    bar.className = 'bar' + (has ? (rec >= 67 ? ' high' : rec >= 34 ? ' mid' : ' low') : '');
+    bar.style.height = (has ? Math.max(rec, 4) : 4) + '%';
+    bar.title = key + (has ? ' · ' + rec + '%' : '');
+    chart.appendChild(bar);
+  }
+  el('chart-from').textContent = firstKey ? niceDate(firstKey).replace(/^[A-Za-z]+, /, '') : '';
+
+  // Week-on-week trends.
+  el('trend-rows').innerHTML =
+    trendRow('Recovery, 7-day avg', avg(weekVals(0, 'rec')), avg(weekVals(7, 'rec')), (x) => Math.round(x) + '%') +
+    trendRow('HRV, 7-day avg', avg(weekVals(0, 'hrv')), avg(weekVals(7, 'hrv')), (x) => Math.round(x) + ' ms') +
+    trendRow('Resting HR, 7-day avg', avg(weekVals(0, 'rhr')), avg(weekVals(7, 'rhr')), (x) => Math.round(x) + ' bpm') +
+    trendRow('Sleep, 7-day avg', avg(weekVals(0, 'sleepMin')), avg(weekVals(7, 'sleepMin')), (x) => fmtSleep(Math.round(x))) +
+    trendRow('Strain, 7-day avg', avg(weekVals(0, 'strain')), avg(weekVals(7, 'strain')), (x) => x.toFixed(1));
+
+  el('sync-btn').textContent = connected() ? 'Sync now' : 'Connect WHOOP';
+  if (!connected()) setSyncStatus('Not connected on this device — showing synced data.');
+  else setSyncStatus(state.lastSync ? 'Last synced ' + new Date(state.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not synced yet');
+}
+function renderSetup() {
+  el('redirect-uri').textContent = redirectUri();
+  if (auth && auth.cid) el('cid-input').value = auth.cid;
+}
+function setSyncStatus(t) { el('sync-status').textContent = t; }
+
+// ── data management ──────────────────────────────────────────────────────────
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hill-climbing-recover-' + localDayKey(new Date()) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function disconnect() {
+  auth = null; saveAuth();
+  if (Object.keys(state.days).length) render();
+  else { showPanel('setup'); renderSetup(); }
+}
+function deleteAll() {
+  if (!confirm('Erase all Recover metrics stored in this app? (Your WHOOP account is untouched.)')) return;
+  state = { v: 1, days: {}, lastSync: 0 };
+  saveState();
+  auth = null; saveAuth();
+  showPanel('setup'); renderSetup();
+}
+
+// ── menu wiring ──────────────────────────────────────────────────────────────
+const menuEl = el('menu'), menuBtn = el('menu-btn'), menuPanel = el('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', (e) => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+el('mi-sync').addEventListener('click', () => { setMenu(false); syncNow(); });
+el('mi-export').addEventListener('click', () => { setMenu(false); exportData(); });
+el('mi-disconnect').addEventListener('click', () => { setMenu(false); disconnect(); });
+el('mi-delete').addEventListener('click', () => { setMenu(false); deleteAll(); });
+el('connect-btn').addEventListener('click', beginConnect);
+el('sync-btn').addEventListener('click', () => {
+  if (connected()) syncNow();
+  else { showPanel('setup'); renderSetup(); }
+});
+
+// ── init ─────────────────────────────────────────────────────────────────────
+el('version-label').textContent = VERSION;
+handleCallback().then((was) => {
+  if (was) return;
+  render();
+  if (connected() && Date.now() - (state.lastSync || 0) > AUTO_SYNC_MS) syncNow();
+});
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// ONLY the metrics blob is registered. Credentials/tokens (AUTH_KEY) are
+// deliberately never synced — each device connects to WHOOP itself, because
+// WHOOP rotates refresh tokens and two devices sharing one would race.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) {}
+      state = loadState();
+      render();
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'recover' });
+}
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>

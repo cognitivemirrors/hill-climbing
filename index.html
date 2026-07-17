@@ -123,6 +123,7 @@
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
     .card.erp      { --accent: hsl(120,30%,56%); --accent-soft: hsla(120,28%,54%,0.45); --accent-glow: hsla(120,34%,42%,0.16); }
+    .card.recover  { --accent: hsl(84,50%,62%);  --accent-soft: hsla(84,46%,58%,0.45);  --accent-glow: hsla(84,52%,48%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
@@ -471,7 +472,8 @@
       <div class="rem-msg" id="ns-cmp-msg">
         Let your <b>companion</b> write this suggestion. Each time you open the hub,
         a summary of your recent practice, anything you left mid-way, your focused
-        Climb goal, and the companion's memory note are sent to Anthropic on
+        Climb goal, today's WHOOP recovery and sleep numbers (if Recover is
+        connected), and the companion's memory note are sent to Anthropic on
         <b>your own API key</b> — the same key the Companion app uses. Your journal
         entries are not sent. Nothing is stored anywhere new.
       </div>
@@ -590,6 +592,16 @@
       </span>
       <h2>Train</h2>
       <p>Log your workouts, one set at a time.</p>
+    </a>
+
+    <a class="card recover" href="recover.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 26h9l4-12 6 22 5-16 3 6h11"/>
+        </svg>
+      </span>
+      <h2>Recover</h2>
+      <p>See what your body is asking for today.</p>
     </a>
 
     <a class="card anime" href="anime.html">
@@ -1029,7 +1041,7 @@
     function refresh() { loadUsage().then(paint); }
 
     // ── Next step — a quiet, deterministic suggestion ────────────────────────
-    // Answers "what should I do right now?" so eleven cards don't become a
+    // Answers "what should I do right now?" so twelve cards don't become a
     // choice problem. Design constraints (CONSTRAINTS C2/C6/§5):
     //   · read-only over data the apps already keep on this device — nothing
     //     new is stored, nothing leaves the device;
@@ -1072,6 +1084,14 @@
 
       if (late) out.push({ text: 'It’s late. The kindest next step might be rest.' });
 
+      // 0 — the body's own signal (WHOOP, via Recover — on-device read only).
+      // Low recovery leads with ease; the number is information, never a grade.
+      const whoop = nsReadJSON('hill-climbing-whoop');
+      const wToday = whoop && whoop.days ? whoop.days[today] : null;
+      if (wToday && typeof wToday.rec === 'number' && wToday.rec < 34) {
+        out.push({ text: 'Your body is asking for ease — recovery is ' + wToday.rec + '% today. Rest counts, and a few slow breaths would be plenty.', app: 'breathe', href: 'breathe.html', go: 'Open Breathe' });
+      }
+
       // 1 — finish what you started (the user's own open intents).
       const nourish = nsReadJSON('hill-climbing-nourish');
       if (nourish) {
@@ -1096,6 +1116,11 @@
         if (step && typeof goal === 'string') {
           out.push({ text: 'One small step on “' + goal + '”: ' + step.title, app: 'climb', href: 'climb.html', go: 'Open Climb' });
         }
+      }
+
+      // 3.5 — a green light from the body: high recovery invites movement, once.
+      if (wToday && typeof wToday.rec === 'number' && wToday.rec >= 67 && !late && activeToday.indexOf('train') === -1) {
+        out.push({ text: 'Recovery is ' + wToday.rec + '% — your body has capacity today, if you feel like moving.', app: 'train', href: 'train.html', go: 'Open Train' });
       }
 
       // 4 — a time-of-day invitation to a practice today hasn't touched.
@@ -1173,6 +1198,7 @@
       '- Rest is a first-class answer. Late at night, or when today already held practice, "enough is enough" or rest (app: "rest") is often the best suggestion.',
       '- Never use streaks, missed-day counts, guilt, urgency, or pressure. No exclamation marks. Invitational, like a friend who knows them — never a coach chasing engagement.',
       '- Never suggest ERP or exposure exercises: that work is paced by the person and their therapist, not a landing page.',
+      '- If their WHOOP recovery is low, lean toward rest or the gentlest practices — a body asking for ease is not a day to push. Never treat a recovery number as a grade.',
       '- Ground the suggestion in what you were given: something they left mid-way, their focused goal, the hour, the shape of their week, their memory note.',
       'Answer with the app to open ("rest" when the suggestion is not to practice) and the sentence(s).',
     ].join('\n');
@@ -1215,6 +1241,20 @@
           .filter(function (t) { return t && t.goalId === climb.focusId && !t.done && typeof t.title === 'string'; })
           .slice(0, 3).map(function (t) { return t.title; });
         lines.push('Focused Climb goal: “' + climb.goals[climb.focusId].title + '”' + (steps.length ? ' — open steps: ' + steps.join('; ') : ''));
+      }
+      // Body signals (WHOOP via Recover — same on-device blob the engine reads).
+      const whoop = nsReadJSON('hill-climbing-whoop');
+      if (whoop && whoop.days) {
+        const wt = whoop.days[today], parts = [];
+        if (wt) {
+          if (typeof wt.rec === 'number') parts.push('recovery ' + wt.rec + '%');
+          if (typeof wt.hrv === 'number') parts.push('HRV ' + wt.hrv + ' ms');
+          if (typeof wt.sleepMin === 'number') parts.push('slept ' + Math.floor(wt.sleepMin / 60) + 'h' + String(wt.sleepMin % 60).padStart(2, '0'));
+        }
+        const yd = new Date(now); yd.setDate(now.getDate() - 1);
+        const wy = whoop.days[hcDayKey(yd)];
+        if (wy && typeof wy.strain === 'number') parts.push('yesterday’s strain ' + wy.strain);
+        if (parts.length) lines.push('Their body today (WHOOP): ' + parts.join(' · '));
       }
       const comp = nsReadJSON('hill-climbing-companion');
       const memory = comp && comp.memory && typeof comp.memory.summary === 'string' ? comp.memory.summary.trim() : '';
