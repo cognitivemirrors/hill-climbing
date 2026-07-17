@@ -152,7 +152,7 @@
     sb: null, config: null, user: null, dek: null,
     stores: new Map(),
     status: { state: 'signed_out', syncing: false, online: navigator.onLine !== false, lastSyncAt: null, error: null, email: null },
-    subs: [], pushArmed: false, applyingRemote: false, blobTimers: {}, srv: {},
+    subs: [], pushArmed: false, applyingRemote: false, blobTimers: {}, srv: {}, srvEnt: {},
   };
   function setStatus(patch) {
     Object.assign(S.status, patch);
@@ -170,9 +170,13 @@
   function isUnlocked()  { return !!S.dek && !!S.user; }
 
   // ── registration ────────────────────────────────────────────────────────────
-  // store = { key, kind:'blob'|'log',
-  //   blob: read()->plaintext, write(plaintext)   (write MUST bypass the app's apply())
-  //   log:  readAll()->records[], writeMany(records)->void, recordId(record)->id }
+  // store = { key, kind:'blob'|'log'|'entity',
+  //   blob:   read()->plaintext, write(plaintext)   (write MUST bypass the app's apply())
+  //   log:    readAll()->records[], writeMany(records)->void, recordId(record)->id
+  //   entity: readAll()->entities[], writeMany(entities)->void (per-entity LWW merge,
+  //           MUST bypass apply()), entityId(e)->id, entityClock(e)->number.
+  //     Each entity is its own doc (key + '/' + id) merged server-side by sync_put_blob
+  //     — last-write-wins per entity on entityClock, device_id breaking ties. }
   function registerStore(store) { S.stores.set(store.key, store); }
 
   // ── auth ─────────────────────────────────────────────────────────────────────
@@ -320,6 +324,33 @@
       await Promise.all(records.slice(i, i + 8).map((r) => _putLogRecord(store, r).catch(() => {})));
     }
   }
+  // Entity: per-entity last-write-wins. Each entity seals to its own doc and rides
+  // the same sync_put_blob LWW as a blob, so no server change is needed.
+  async function _putEntity(store, entity) {
+    if (!isUnlocked()) return;
+    const docKey = store.key + '/' + store.entityId(entity);
+    const clock = Number(store.entityClock(entity)) || Date.now();
+    const sealed = await sealDoc(S.dek, JSON.stringify(entity), aad(S.user.id, docKey, clock));
+    const { error } = await S.sb.rpc('sync_put_blob', {
+      p_doc_key: docKey, p_ct: sealed.ct, p_iv: sealed.iv, p_updated_at: clock, p_device: getDeviceId(),
+    });
+    if (error) throw error;
+  }
+  // Push local entities the server lacks or that are locally newer. `force` re-pushes
+  // every entity (used by import to win everywhere). Server clocks come from the last
+  // pull (S.srvEnt), so this both seeds the first upcast and reconciles offline edits.
+  async function _pushEntityAll(store, force) {
+    if (!isUnlocked()) return;
+    const srv = S.srvEnt[store.key] || {};
+    const list = await store.readAll();
+    const toPush = force ? list : list.filter((e) => {
+      const id = store.entityId(e);
+      return !(id in srv) || (Number(store.entityClock(e)) || 0) > srv[id];
+    });
+    for (let i = 0; i < toPush.length; i += 8) {
+      await Promise.all(toPush.slice(i, i + 8).map((e) => _putEntity(store, e).catch(() => {})));
+    }
+  }
 
   // Public push entry points — called from the app's apply() choke point.
   function queueBlobPush(key) {
@@ -336,11 +367,16 @@
     if (!isUnlocked() || !S.pushArmed) return;
     _putLogRecord(S.stores.get(key), record).catch((err) => setStatus({ error: errMsg(err) }));
   }
+  function pushEntity(key, entity) {
+    if (!isUnlocked() || !S.pushArmed) return;   // pre-arm edits ride the next pull's reconcile
+    _putEntity(S.stores.get(key), entity).catch((err) => setStatus({ error: errMsg(err) }));
+  }
   async function push(key) {
     const keys = key ? [key] : Array.from(S.stores.keys());
     for (const k of keys) {
       const store = S.stores.get(k);
       if (store.kind === 'blob') await _pushBlob(store).catch(() => {});
+      else if (store.kind === 'entity') await _pushEntityAll(store, true).catch(() => {});
       else await _pushLogAll(store).catch(() => {});
     }
   }
@@ -365,6 +401,31 @@
       } else {
         S.srv[store.key] = 0;
       }
+    } else if (store.kind === 'entity') {
+      // Fetch every entity doc for this store, decrypt, and hand the app a
+      // per-entity LWW merge. Then reconcile: push whatever is locally newer or
+      // absent on the server (this is also the one-time upcast on a fresh store).
+      const prefix = store.key + '/';
+      const { data, error } = await S.sb.from('sync_docs')
+        .select('doc_key,ciphertext,iv,updated_at').like('doc_key', prefix + '%');
+      if (error) throw error;
+      const srv = {}; const ents = [];
+      if (data && data.length) {
+        for (const row of data) {
+          const id = row.doc_key.slice(prefix.length);
+          srv[id] = Number(row.updated_at);
+          try {
+            const pt = await openDoc(S.dek, row.ciphertext, row.iv, aad(S.user.id, row.doc_key, Number(row.updated_at)));
+            ents.push(JSON.parse(pt));
+          } catch (e) { /* skip a record we can't decrypt rather than abort the whole pull */ }
+        }
+      }
+      S.srvEnt[store.key] = srv;
+      if (ents.length) {
+        S.applyingRemote = true;
+        try { await store.writeMany(ents); } finally { S.applyingRemote = false; }
+      }
+      await _pushEntityAll(store).catch(() => {});
     } else {
       const prefix = store.key + '/';
       const hwm = getSeq(store.key);
@@ -403,15 +464,16 @@
   async function pullAll() {
     if (!isUnlocked()) return;
     setStatus({ syncing: true, error: null });
-    S.srv = {};
+    S.srv = {}; S.srvEnt = {};
     try {
       for (const store of S.stores.values()) await pullStore(store);
       // Seed / reconcile: push local-newer blobs and union all local log records.
+      // Entity stores already reconciled inside pullStore (pull-then-push-newer).
       for (const store of S.stores.values()) {
         if (store.kind === 'blob') {
           const serverClock = S.srv[store.key] || 0;
           if (serverClock === 0 || getClock(store.key) > serverClock) await _pushBlob(store).catch(() => {});
-        } else {
+        } else if (store.kind === 'log') {
           await _pushLogAll(store).catch(() => {});
         }
       }
@@ -466,7 +528,7 @@
     init, signup, login, logout, currentUser,
     hasKeyBundle, setupEncryption, unlock, unlockWithRecoveryCode, changePassphrase, lock, isUnlocked,
     deleteRemoteData,
-    registerStore, push, pushLogRecord, queueBlobPush, pull, pullAll,
+    registerStore, push, pushLogRecord, pushEntity, queueBlobPush, pull, pullAll,
     getStatus, subscribe,
   };
 })();

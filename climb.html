@@ -426,7 +426,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · climb</div>
+<div class="corner" id="version-label">v0.6 · climb</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="goals">Goals</button>
   <button class="mode-btn"        data-view="steps">Steps</button>
@@ -475,7 +475,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.5 · climb';
+const VERSION   = 'v0.6 · climb';
 const STATE_KEY = 'hill-climbing-climb';
 const DB_NAME   = 'climb';
 const STORE     = 'events';
@@ -485,7 +485,13 @@ const STORE     = 'events';
 // ship in the client; Row-Level Security is the real guard (see supabase-schema.sql).
 const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
-const SYNC_BLOB_KEY     = 'ls:hill-climbing-climb';
+// Goals and tasks sync as per-entity documents (one doc per goal / per task),
+// merged last-write-wins per entity on each record's `updated` clock — so editing
+// different goals on two devices merges instead of one device clobbering the whole
+// tree. `meta` carries the single-value focus pointer. Events stay an append-only log.
+const SYNC_GOALS        = 'climb:goal';
+const SYNC_TASKS        = 'climb:task';
+const SYNC_META         = 'climb:meta';
 const SYNC_EVENTS_NS    = 'idb:climb:events';
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -598,7 +604,7 @@ function restingChildren(parentId) {
     .sort((a, b) => (a.restedAt || 0) - (b.restedAt || 0));
 }
 function tasksOf(goalId) {
-  return Object.values(state.tasks).filter(t => t.goalId === goalId);
+  return Object.values(state.tasks).filter(t => t.goalId === goalId && !t.deleted);
 }
 function subtreeIds(goalId) {
   const out = [goalId];
@@ -701,6 +707,7 @@ function normalizeState(raw) {
       created: Number.isFinite(t.created) ? t.created : Date.now(),
       updated: Number.isFinite(t.updated) ? t.updated : Date.now(),
       doneAt: Number.isFinite(t.doneAt) ? t.doneAt : null,
+      deleted: !!t.deleted,          // tombstone — kept so a delete survives sync merges
     };
   });
   // ── Single editable root — everything hangs under one goal ──────────────
@@ -815,7 +822,7 @@ function reduce(evt) {
     case 'task.rename':     t.title = evt.to; t.updated = evt.ts; break;
     case 'task.complete':   t.done = true;  t.doneAt = evt.ts; t.updated = evt.ts; break;
     case 'task.uncomplete': t.done = false; t.doneAt = null;   t.updated = evt.ts; break;
-    case 'task.delete':     delete state.tasks[evt.taskId]; break;
+    case 'task.delete':     if (t) { t.deleted = true; t.updated = evt.ts; } break;   // tombstone, not a hard delete — survives per-entity merge
   }
 }
 function apply(evt) {
@@ -827,8 +834,17 @@ function apply(evt) {
   markUsage();
   // Cross-device sync: push this immutable event + the (debounced) state blob.
   // No-ops until sync is unlocked AND the initial pull has armed pushing.
-  if (window.HCSync) { HCSync.pushLogRecord(SYNC_EVENTS_NS, evt); HCSync.queueBlobPush(SYNC_BLOB_KEY); }
+  if (window.HCSync) { HCSync.pushLogRecord(SYNC_EVENTS_NS, evt); syncPushForEvent(evt); }
   return evt;
+}
+// Push exactly the entity this event changed. Sibling `order` shifts from a
+// reorder/move aren't re-pushed — each device's reindex() keeps order valid, so
+// concurrent renames aren't clobbered by a reorder carrying a stale title.
+function syncPushForEvent(evt) {
+  if (!window.HCSync) return;
+  if (evt.type === 'focus.set' || evt.type === 'focus.clear') { HCSync.queueBlobPush(SYNC_META); return; }
+  if (evt.taskId && state.tasks[evt.taskId])      HCSync.pushEntity(SYNC_TASKS, state.tasks[evt.taskId]);
+  else if (evt.goalId && state.goals[evt.goalId]) HCSync.pushEntity(SYNC_GOALS, state.goals[evt.goalId]);
 }
 
 // Append a baseline snapshot so analysis always has a starting point. Fires
@@ -904,17 +920,17 @@ function addTask(title, goalId) {
 function renameTask(id, to) {
   to = (to || '').trim();
   const t = state.tasks[id];
-  if (!t || !to || to === t.title) return;
+  if (!t || t.deleted || !to || to === t.title) return;
   apply({ type: 'task.rename', taskId: id, from: t.title, to });
 }
 function toggleTask(id) {
   const t = state.tasks[id];
-  if (!t) return;
+  if (!t || t.deleted) return;
   apply({ type: t.done ? 'task.uncomplete' : 'task.complete', taskId: id, goalId: t.goalId, title: t.title });
 }
 function deleteTask(id) {
   const t = state.tasks[id];
-  if (!t) return;
+  if (!t || t.deleted) return;
   apply({ type: 'task.delete', taskId: id, goalId: t.goalId, title: t.title, done: t.done });
 }
 
@@ -1509,8 +1525,16 @@ async function importData(file) {
     migratedRoot = false;
     ui.path = [state.rootId]; ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
     render();
-    // Imported data should win everywhere: bump the blob clock and re-push all.
-    if (window.HCSync && HCSync.isUnlocked()) { HCSync.queueBlobPush(SYNC_BLOB_KEY); HCSync.push(SYNC_EVENTS_NS); }
+    // Imported data should win everywhere: freshen every entity clock so it beats
+    // whatever is on the server, then force-push all goals, tasks, meta and events.
+    if (window.HCSync && HCSync.isUnlocked()) {
+      const now = Date.now();
+      Object.values(state.goals).forEach(g => { g.updated = now; });
+      Object.values(state.tasks).forEach(t => { t.updated = now; });
+      save();
+      HCSync.queueBlobPush(SYNC_META);
+      HCSync.push(SYNC_GOALS); HCSync.push(SYNC_TASKS); HCSync.push(SYNC_EVENTS_NS);
+    }
     alert('Imported your goals and history.');
   } catch (err) {
     alert('Import failed: ' + err.message);
@@ -1613,18 +1637,54 @@ render();
 
 // ── Cross-device sync (opt-in, end-to-end encrypted) ────────────────────────
 // The synchronous render above is intentional and safe — it only reads. Sync
-// registers its two stores, then init() restores any session and, if unlocked,
-// runs an initial pull before it arms pushing (the render-then-clobber guard).
+// registers its stores, then init() restores any session and, if unlocked, runs
+// an initial pull before it arms pushing (the render-then-clobber guard).
+//
+// Goals and tasks are per-entity stores: each remote entity is merged only if its
+// `updated` clock beats the local copy's, so a change on one device can't wipe an
+// unrelated change on another. finishRemoteMerge() persists then re-normalizes the
+// merged maps (re-rooting orphans, repacking sibling order) — reusing load()'s
+// defensive path instead of trusting the merged tree blindly.
+function mergeRemoteEntities(target, incoming) {
+  let changed = false;
+  incoming.forEach(e => {
+    if (!e || typeof e.id !== 'string') return;
+    const cur = target[e.id];
+    if (!cur || (e.updated || 0) > (cur.updated || 0)) { target[e.id] = e; changed = true; }
+  });
+  return changed;
+}
+function finishRemoteMerge() {
+  save();                                                    // persist the merged maps
+  load();                                                    // re-normalize (orphans, order, root)
+  if (!state.goals[ui.path[0]]) ui.path = [state.rootId];    // a goal we were viewing merged away
+  ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
+  render();
+}
 if (window.HCSync) {
+  HCSync.registerStore({                                     // goals first — tasks reference them
+    key: SYNC_GOALS, kind: 'entity',
+    readAll:     () => Object.values(state.goals),
+    writeMany:   (goals) => { if (mergeRemoteEntities(state.goals, goals)) finishRemoteMerge(); },
+    entityId:    (g) => g.id,
+    entityClock: (g) => g.updated || 0,
+  });
   HCSync.registerStore({
-    key: SYNC_BLOB_KEY, kind: 'blob',
-    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    key: SYNC_TASKS, kind: 'entity',
+    readAll:     () => Object.values(state.tasks),
+    writeMany:   (tasks) => { if (mergeRemoteEntities(state.tasks, tasks)) finishRemoteMerge(); },
+    entityId:    (t) => t.id,
+    entityClock: (t) => t.updated || 0,
+  });
+  HCSync.registerStore({
+    key: SYNC_META, kind: 'blob',                            // single-value focus pointer (whole-value LWW)
+    read:  () => JSON.stringify({ focusId: state.focusId }),
     write: (str) => {                     // remote-apply path — deliberately NOT through apply()
-      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
-      load();
-      if (!state.goals[ui.path[0]]) ui.path = [state.rootId];   // remote root changed under us
-      ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
-      render();
+      try {
+        const m = JSON.parse(str);
+        const f = (m && typeof m.focusId === 'string' && state.goals[m.focusId] && m.focusId !== state.rootId) ? m.focusId : null;
+        if (f !== state.focusId) { state.focusId = f; save(); render(); }
+      } catch (e) { /* ignore malformed meta */ }
     },
   });
   HCSync.registerStore({
