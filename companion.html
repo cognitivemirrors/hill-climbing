@@ -441,6 +441,43 @@
     .req-copy-one:disabled { opacity: 0.5; cursor: default; }
     .req-prompt { font-size: 13.5px; color: var(--mid); line-height: 1.6; white-space: pre-wrap; }
 
+    /* ── threads: related thoughts & clusters (computed on-device) ── */
+    #related-strip { margin-top: 12px; }
+    .related-head, .cluster-head {
+      font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--dim); margin: 2px 0 6px;
+    }
+    .cluster {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 14px;
+    }
+    .cluster-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+    .cluster-label {
+      font-family: var(--font-display); font-size: 16px; letter-spacing: 0.02em;
+      color: var(--accent); text-transform: none;
+    }
+    .cluster-meta { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; flex: none; }
+    .thread-item {
+      display: flex; align-items: baseline; gap: 9px; padding: 7px 8px;
+      border-radius: 8px; cursor: pointer; transition: background 0.15s;
+    }
+    .thread-item:hover { background: rgba(255,255,255,0.05); }
+    .thread-tag {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent); opacity: 0.85; flex: none; width: 84px;
+    }
+    .thread-date { font-size: 11px; color: var(--dim); flex: none; }
+    .thread-label {
+      font-size: 13px; color: var(--mid); flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .thread-item:hover .thread-label { color: var(--text); }
+    .thread-full {
+      font-size: 13px; color: var(--mid); line-height: 1.6; padding: 4px 8px 10px 101px;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    @media (max-width: 560px) { .thread-tag { width: 64px; } .thread-full { padding-left: 8px; } }
+
     /* ── crisis footer (always present) ─────────────────────────── */
     #crisis {
       position: fixed; bottom: 0; left: 0; right: 0; z-index: 9;
@@ -470,7 +507,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.12 · companion</div>
+<div class="corner" id="version-label">v0.13 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -510,6 +547,8 @@
           <button class="primary" id="send-btn" type="button">Send</button>
         </div>
       </div>
+      <!-- Related prior material, surfaced live while composing (on-device only). -->
+      <div id="related-strip" class="hidden"></div>
     </div>
 
     <p class="disclaimer">
@@ -553,6 +592,9 @@
 
   <!-- Companion requests-to-the-builder (feature requests saved from a conversation) -->
   <div id="requests-view" class="hidden"></div>
+
+  <!-- Threads — thoughts & conversations clustered on-device -->
+  <div id="threads-view" class="hidden"></div>
 </main>
 
 <div id="crisis">
@@ -593,7 +635,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.12';
+const VERSION_NUM = 'v0.13';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -1202,6 +1244,7 @@ function normalizeStore(s) {
 function persist() {
   if (store.conversations.length > CONV_CAP) store.conversations.length = CONV_CAP;
   try { localStorage.setItem(LS_STORE, JSON.stringify(store)); } catch (_) {}
+  invalidateCorpus();   // conversations feed the Threads map
   if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);
 }
 function uid() {
@@ -1323,6 +1366,7 @@ function renderThread() {
   threadEl.innerHTML = turns.map(t => cTurnHTML(t.role, t.text)).join('');
   refreshTail();
   refreshBegin();
+  queueRelated();
 }
 // Once a conversation is underway, the "Let it open" seed is spent — the button
 // becomes a plain "Continue" that just returns focus to the composer.
@@ -1395,7 +1439,7 @@ async function respond() {
     if (pend) pend.remove();
     if (err && err.kind === 'key') setView('setup');
   } finally {
-    setBusy(false); refreshTail(); refreshBegin(); refreshSees(); scrollEnd();
+    setBusy(false); refreshTail(); refreshBegin(); refreshSees(); queueRelated(); scrollEnd();
   }
 }
 
@@ -1520,6 +1564,239 @@ function openConversation(c) {
   setView('home');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => msgBox.focus(), 60);
+}
+
+// ── THREADS — cluster & relate thoughts and conversations, ON-DEVICE ─────────
+// The person's own material — journal entries (Reflect, read the same way the
+// digest already does), companion conversations (their user turns), and council
+// deliberations — related to each other by TF-IDF cosine similarity and grouped
+// into threads by single-link clustering. Two surfaces: the Threads view (the
+// whole map) and a "related" strip under the composer that surfaces prior
+// thinking live while a new idea is being written. Everything here is computed
+// IN THIS BROWSER: no model call, no egress, no new storage key — clusters are
+// recomputed on view, never persisted.
+const REL_MIN_SIM     = 0.08;   // floor for "related while composing"
+const CLUSTER_MIN_SIM = 0.16;   // edge threshold for grouping into a thread
+const RELATED_MAX     = 4;      // items shown under the composer
+const ITEM_TEXT_CHARS = 4000;   // per-item text cap fed to the tokenizer
+
+// Common English filler plus the journal-voice verbs ("feel", "want", "think")
+// that would otherwise stitch every entry to every other one.
+const STOPWORDS = new Set(('a,about,above,after,again,all,also,am,an,and,any,are,as,at,be,because,been,before,being,' +
+  'below,between,both,but,by,can,cannot,could,did,do,does,doing,down,during,each,few,for,from,further,had,has,have,' +
+  'having,he,her,here,hers,him,his,how,i,if,in,into,is,it,its,itself,just,like,me,more,most,my,myself,no,nor,not,' +
+  'now,of,off,on,once,only,or,other,our,ours,out,over,own,really,same,she,should,so,some,such,than,that,the,their,' +
+  'theirs,them,then,there,these,they,thing,things,this,those,through,to,too,under,until,up,very,was,we,were,what,' +
+  'when,where,which,while,who,whom,why,will,with,would,you,your,yours,yourself,im,ive,id,ill,dont,didnt,doesnt,' +
+  'cant,wont,isnt,arent,wasnt,werent,youre,youve,thats,theres,gonna,got,get,going,go,went,know,think,feel,felt,' +
+  'want,wanted,make,made,see,say,said,much,lot,bit,today,yesterday,day,week,time,still,even,back,one,two,way,' +
+  'maybe,something,anything,everything,nothing,right,well,good,ok,okay,yes,yeah').split(','));
+
+function tokenize(text) {
+  const counts = Object.create(null);
+  const words = String(text).toLowerCase().replace(/[’‘]/g, "'").split(/[^a-z']+/);
+  for (let w of words) {
+    w = w.replace(/'s$/, '').replace(/'/g, '');
+    if (w.length < 3 || STOPWORDS.has(w)) continue;
+    if (w.length > 4 && w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1);   // light plural fold
+    counts[w] = (counts[w] || 0) + 1;
+  }
+  return counts;
+}
+
+// Unit-normalised TF-IDF vector, so similarity is a plain sparse dot product.
+function vectorize(tf, df, N) {
+  const vec = Object.create(null);
+  let norm = 0;
+  Object.keys(tf).forEach(w => {
+    const idf = Math.log((N + 1) / ((df[w] || 0) + 1)) + 1;
+    const v = (1 + Math.log(tf[w])) * idf;
+    vec[w] = v; norm += v * v;
+  });
+  norm = Math.sqrt(norm) || 1;
+  Object.keys(vec).forEach(w => { vec[w] /= norm; });
+  return vec;
+}
+function cosineSim(a, b) {
+  let s = 0;
+  const [small, big] = (Object.keys(a).length <= Object.keys(b).length) ? [a, b] : [b, a];
+  for (const w in small) if (big[w]) s += small[w] * big[w];
+  return s;
+}
+
+// The corpus: one item per journal entry / conversation / deliberation, with a
+// TF-IDF vector each. Cached as a promise (dedupes concurrent builders);
+// invalidated whenever any source store changes, so the map stays current.
+let corpusCache = null;
+function invalidateCorpus() { corpusCache = null; }
+async function getCorpus() {
+  if (!corpusCache) corpusCache = buildCorpus();
+  return corpusCache;
+}
+async function buildCorpus() {
+  const items = [];
+  // Companion conversations — the person's own words (user turns), not the model's.
+  store.conversations.forEach(c => {
+    const own = c.thread.filter(t => t.role === 'user' && !t.hidden).map(t => t.text || '').join('\n');
+    if (!own.trim()) return;
+    items.push({ key: 'conv:' + c.id, type: 'conv', ts: c.ts, label: c.title || 'A conversation',
+                 text: ((c.title || '') + '\n' + own).slice(0, ITEM_TEXT_CHARS), ref: c });
+  });
+  // Council deliberations — the situation brought, plus the person's replies.
+  loadHist().forEach(s => {
+    const own = [s.situation || ''].concat((s.thread || []).filter(t => t.role === 'user').map(t => t.text || '')).join('\n');
+    if (!own.trim()) return;
+    items.push({ key: 'council:' + (s.id || s.ts), type: 'council', ts: s.ts, label: snippet(s.situation || 'A deliberation'),
+                 text: own.slice(0, ITEM_TEXT_CHARS), ref: s });
+  });
+  // Journal entries — rating-only entries carry no thought to relate, skip them.
+  const journal = await readJournal();
+  ((journal && journal.all) || []).forEach(e => {
+    const body = (e.text || '').trim();
+    if (!body) return;
+    items.push({ key: 'journal:' + e.created, type: 'journal', ts: e.created, label: snippet(body),
+                 text: body.slice(0, ITEM_TEXT_CHARS), ref: e });
+  });
+
+  const df = Object.create(null);
+  items.forEach(it => {
+    it.tf = tokenize(it.text);
+    Object.keys(it.tf).forEach(w => { df[w] = (df[w] || 0) + 1; });
+  });
+  const N = items.length;
+  items.forEach(it => { it.vec = vectorize(it.tf, df, N); });
+  return { items, df, N };
+}
+
+// Rank the corpus against a piece of writing-in-progress.
+async function relatedTo(queryText, excludeKeys) {
+  const corpus = await getCorpus();
+  const qtf = tokenize(String(queryText).slice(0, ITEM_TEXT_CHARS));
+  if (Object.keys(qtf).length < 2) return [];
+  const qv = vectorize(qtf, corpus.df, corpus.N);
+  return corpus.items
+    .filter(it => !excludeKeys || !excludeKeys.has(it.key))
+    .map(it => ({ item: it, sim: cosineSim(qv, it.vec) }))
+    .filter(r => r.sim >= REL_MIN_SIM)
+    .sort((a, b) => b.sim - a.sim)
+    .slice(0, RELATED_MAX);
+}
+
+// Group the whole corpus into threads: single-link over pairs above the
+// threshold (union-find), keeping only groups of 2+. Each thread is labelled by
+// its highest-weight shared terms. O(n²) pairwise is fine at this scale (a few
+// hundred items, capped stores).
+async function clusterCorpus() {
+  const { items } = await getCorpus();
+  const n = items.length;
+  const parent = items.map((_, i) => i);
+  function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      if (cosineSim(items[i].vec, items[j].vec) >= CLUSTER_MIN_SIM) {
+        const a = find(i), b = find(j);
+        if (a !== b) parent[a] = b;
+      }
+  const groups = Object.create(null);
+  items.forEach((it, i) => { const r = find(i); (groups[r] = groups[r] || []).push(it); });
+  const clusters = Object.values(groups).filter(g => g.length >= 2).map(g => {
+    const termScore = Object.create(null);
+    g.forEach(it => Object.keys(it.vec).forEach(w => { termScore[w] = (termScore[w] || 0) + it.vec[w]; }));
+    const label = Object.keys(termScore).sort((a, b) => termScore[b] - termScore[a]).slice(0, 3).join(' · ');
+    g.sort((a, b) => b.ts - a.ts);
+    return { label, items: g, latest: g[0].ts, earliest: g[g.length - 1].ts };
+  });
+  clusters.sort((a, b) => (b.items.length - a.items.length) || (b.latest - a.latest));
+  const clustered = clusters.reduce((s, c) => s + c.items.length, 0);
+  return { clusters, total: items.length, unclustered: items.length - clustered };
+}
+
+// ── Threads UI (shared row renderer + the two surfaces) ──────────────────────
+function typeTag(t) { return t === 'journal' ? 'Journal' : (t === 'council' ? 'Council' : 'Conversation'); }
+function threadRowHTML(it, key) {
+  return '<div class="thread-item" data-key="' + esc(key) + '">' +
+      '<span class="thread-tag">' + typeTag(it.type) + '</span>' +
+      '<span class="thread-date">' + esc(niceDate(it.ts)) + '</span>' +
+      '<span class="thread-label">' + esc(it.label) + '</span>' +
+    '</div>' +
+    // Journal entries have no page of their own to open — they expand in place.
+    (it.type === 'journal' ? '<div class="thread-full hidden" data-full="' + esc(key) + '">' + esc(it.text) + '</div>' : '');
+}
+// Open a clicked item where it lives; journal rows toggle their inline text.
+function wireThreadRows(container, byKey) {
+  container.querySelectorAll('.thread-item').forEach(row => row.addEventListener('click', () => {
+    const it = byKey[row.dataset.key];
+    if (!it) return;
+    if (it.type === 'journal') {
+      const full = container.querySelector('.thread-full[data-full="' + row.dataset.key + '"]');
+      if (full) full.classList.toggle('hidden');
+    } else if (it.type === 'council') {
+      setMode('council');
+      openSession(it.ref);
+    } else {
+      openConversation(it.ref);
+    }
+  }));
+}
+
+async function renderThreads() {
+  const v = el('threads-view');
+  v.innerHTML =
+    '<div class="lede" style="margin-bottom:6px;">Threads.</div>' +
+    '<p class="req-intro">Your journal entries, conversations, and council deliberations, gathered into threads of related thinking — so a new idea can find what you’ve already thought. Grouped by the words they share, computed entirely on this device; nothing here is sent anywhere.</p>' +
+    '<div id="threads-list"><div class="empty">Reading your thoughts…</div></div>' +
+    '<div class="actions"><button class="ghost" id="threads-back" type="button">Back</button></div>';
+  el('threads-back').addEventListener('click', () => setView('home'));
+  let res = null;
+  try { res = await clusterCorpus(); } catch (_) {}
+  const list = el('threads-list');
+  if (currentView !== 'threads' || !list) return;   // navigated away while reading
+  if (!res || res.total < 2) {
+    list.innerHTML = '<div class="empty">Not enough here to relate yet.<br>Threads appear once a few journal entries and conversations exist to connect.</div>';
+    return;
+  }
+  if (!res.clusters.length) {
+    list.innerHTML = '<div class="empty">No clear threads yet — your ' + res.total + ' thoughts don’t overlap enough to group.<br>They’ll gather as themes recur.</div>';
+    return;
+  }
+  const byKey = Object.create(null);
+  res.clusters.forEach(c => c.items.forEach(it => { byKey[it.key] = it; }));
+  list.innerHTML = res.clusters.map(c =>
+    '<div class="cluster">' +
+      '<div class="cluster-head"><span class="cluster-label">' + esc(c.label) + '</span>' +
+        '<span class="cluster-meta">' + c.items.length + ' · ' + esc(niceDate(c.earliest)) + ' – ' + esc(niceDate(c.latest)) + '</span></div>' +
+      c.items.map(it => threadRowHTML(it, it.key)).join('') +
+    '</div>').join('') +
+    (res.unclustered ? '<p class="menu-note" style="padding:6px 2px;">' + res.unclustered + ' more stand on their own for now.</p>' : '');
+  wireThreadRows(list, byKey);
+}
+
+// The live "related" strip under the composer. Recomputed (debounced) as the
+// person types; query = their draft plus their own recent turns in the open
+// conversation. The open conversation itself is excluded from the results.
+let relatedTimer = null, relatedGen = 0;
+function queueRelated() { clearTimeout(relatedTimer); relatedTimer = setTimeout(updateRelated, 450); }
+async function updateRelated() {
+  const strip = el('related-strip');
+  if (!strip) return;
+  if (mode !== 'companion') { strip.classList.add('hidden'); strip.innerHTML = ''; return; }
+  const own = active ? active.thread.filter(t => t.role === 'user' && !t.hidden).slice(-3).map(t => t.text).join('\n') : '';
+  const query = (own + '\n' + (msgBox.value || '')).trim();
+  const gen = ++relatedGen;
+  if (query.length < 24) { strip.classList.add('hidden'); strip.innerHTML = ''; return; }
+  let hits = [];
+  try {
+    const exclude = new Set(active ? ['conv:' + active.id] : []);
+    hits = await relatedTo(query, exclude);
+  } catch (_) {}
+  if (gen !== relatedGen) return;   // a newer keystroke superseded this pass
+  if (!hits.length) { strip.classList.add('hidden'); strip.innerHTML = ''; return; }
+  const byKey = Object.create(null);
+  hits.forEach(h => { byKey[h.item.key] = h.item; });
+  strip.classList.remove('hidden');
+  strip.innerHTML = '<div class="related-head">Related — from your own thinking</div>' +
+    hits.map(h => threadRowHTML(h.item, h.item.key)).join('');
+  wireThreadRows(strip, byKey);
 }
 
 // ── About (Companion) ────────────────────────────────────────────────────────
@@ -1818,6 +2095,7 @@ function loadHist() {
 }
 function persistHist(all) {           // save locally + push to sync (no-op until sync is unlocked + armed)
   try { localStorage.setItem(LS_HIST, JSON.stringify(all)); } catch (_) {}
+  invalidateCorpus();   // deliberations feed the Threads map
   if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY_COUNCIL);
 }
 function saveSession(sess) {
@@ -2077,7 +2355,7 @@ function renderRequests() {
 }
 
 // ── Views ────────────────────────────────────────────────────────────────────
-const PANELS = ['setup', 'companion-home', 'council-home', 'history-view', 'about-view', 'sees-view', 'requests-view'];
+const PANELS = ['setup', 'companion-home', 'council-home', 'history-view', 'about-view', 'sees-view', 'requests-view', 'threads-view'];
 function hideAllPanels() { PANELS.forEach(id => el(id).classList.add('hidden')); }
 
 function setView(view) {
@@ -2103,10 +2381,13 @@ function setView(view) {
   } else if (view === 'requests') {
     renderRequests();
     el('requests-view').classList.remove('hidden');
+  } else if (view === 'threads') {
+    renderThreads();
+    el('threads-view').classList.remove('hidden');
   }
 
-  // Sub-nav only rides along on the two everyday views.
-  el('sub-nav').classList.toggle('hidden', !(view === 'home' || view === 'history'));
+  // Sub-nav only rides along on the everyday views.
+  el('sub-nav').classList.toggle('hidden', !(view === 'home' || view === 'history' || view === 'threads'));
   document.querySelectorAll('#sub-nav .sub-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
 }
 
@@ -2131,10 +2412,11 @@ function setMode(m) {
 }
 
 function renderSubNav() {
-  const homeLabel = (mode === 'companion') ? 'Talk' : 'Convene';
-  el('sub-nav').innerHTML =
-    '<button class="sub-btn" type="button" data-view="home">' + homeLabel + '</button>' +
-    '<button class="sub-btn" type="button" data-view="history">History</button>';
+  const btns = (mode === 'companion')
+    ? [['home', 'Talk'], ['threads', 'Threads'], ['history', 'History']]
+    : [['home', 'Convene'], ['history', 'History']];
+  el('sub-nav').innerHTML = btns.map(([v, label]) =>
+    '<button class="sub-btn" type="button" data-view="' + v + '">' + label + '</button>').join('');
   el('sub-nav').querySelectorAll('.sub-btn').forEach(b =>
     b.addEventListener('click', () => setView(b.dataset.view)));
 }
@@ -2151,6 +2433,7 @@ function renderMenu() {
     panel.innerHTML =
       '<div class="menu-head">Your data</div>' +
       menuItem('sees-btn', 'What the companion sees', "The exact text it's shown") +
+      menuItem('threads-btn', 'Threads', 'Related thoughts & conversations, clustered') +
       menuItem('requests-btn', 'Requests', 'Notes for the builder — review & copy') +
       menuItem('new-btn', 'New conversation', 'Start a fresh thread') +
       menuItem('key-btn', 'API key', 'Change or remove your key') +
@@ -2158,6 +2441,7 @@ function renderMenu() {
       menuItem('clear-btn', 'Clear all conversations', 'Delete every thread, and what it remembers') +
       '<div class="menu-note">Your API key never leaves this device. When you send a message, your <em>current</em> goals, journal, and recent activity are read fresh and sent to Anthropic on your key for that reply only — never written into a saved conversation. So context isn’t lost between conversations, the companion also carries its own dialogue forward: your recent conversations, and a running summary of the older ones. That memory is kept on this device (and synced if you’ve signed in) and goes nowhere but back to Anthropic on your key — clear it any time above. It can also search the web when a question needs it, with general queries only, never your private details. If you ask it to, it can write up a request about these apps — a heading and a prompt on what to build or decide — to your on-device <em>Requests</em> list, yours to review, copy, or delete.</div>';
     el('sees-btn').addEventListener('click', () => { setMenu(false); setView('sees'); });
+    el('threads-btn').addEventListener('click', () => { setMenu(false); setView('threads'); });
     el('requests-btn').addEventListener('click', () => { setMenu(false); setView('requests'); });
     el('new-btn').addEventListener('click', () => {
       setMenu(false);
@@ -2216,10 +2500,12 @@ if (window.HCSync) {
     write: (str) => {                      // remote-apply path — replace local, re-render
       try { localStorage.setItem(LS_STORE, str); } catch (e) { /* quota */ }
       store = loadStore();
+      invalidateCorpus();
       if (active) active = store.conversations.find(c => c.id === active.id) || null;
       if (mode === 'companion') {
         if (currentView === 'home') { renderThread(); refreshSees(); }
         else if (currentView === 'history') renderHistory();
+        else if (currentView === 'threads') renderThreads();
       }
     },
   });
@@ -2229,7 +2515,9 @@ if (window.HCSync) {
     read:  () => localStorage.getItem(LS_HIST) || '[]',
     write: (str) => {                      // remote-apply path — deliberately NOT through persistHist()
       try { localStorage.setItem(LS_HIST, str); } catch (e) { /* quota */ }
+      invalidateCorpus();
       if (mode === 'council' && currentView === 'history') renderHistory();
+      if (mode === 'companion' && currentView === 'threads') renderThreads();
     },
   });
   // Companion requests-to-the-builder (feature requests saved from a conversation).
@@ -2255,6 +2543,7 @@ beginBtn.addEventListener('click', () => { if (!active || !active.thread.length)
 msgBox.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(msgBox.value); }
 });
+msgBox.addEventListener('input', queueRelated);   // surface related prior thinking while composing
 
 // Council compose
 convBtn.addEventListener('click', () => {
