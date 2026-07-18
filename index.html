@@ -119,6 +119,7 @@
     .card.savor    { --accent: hsl(322,64%,68%); --accent-soft: hsla(322,58%,64%,0.45); --accent-glow: hsla(322,64%,56%,0.16); }
     .card.levity   { --accent: hsl(348,78%,72%); --accent-soft: hsla(348,72%,68%,0.45); --accent-glow: hsla(348,78%,60%,0.16); }
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
+    .card.values   { --accent: hsl(96,45%,64%);  --accent-soft: hsla(96,42%,58%,0.45);  --accent-glow: hsla(96,48%,46%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
@@ -164,6 +165,7 @@
     .dash-row.savor    { --accent: hsl(322,64%,68%); }
     .dash-row.levity   { --accent: hsl(348,78%,72%); }
     .dash-row.climb    { --accent: hsl(230,65%,72%); }
+    .dash-row.values   { --accent: hsl(96,45%,64%); }
     .dash-row.train    { --accent: hsl(20,72%,66%); }
     .dash-row.erp      { --accent: hsl(120,30%,56%); }
     .dash-streak {
@@ -218,6 +220,7 @@
     .ns-go.savor    { --accent: hsl(322,64%,68%); }
     .ns-go.levity   { --accent: hsl(348,78%,72%); }
     .ns-go.climb    { --accent: hsl(230,65%,72%); }
+    .ns-go.values   { --accent: hsl(96,45%,64%); }
     .ns-go.train    { --accent: hsl(20,72%,66%); }
     .ns-alt {
       display: none; font-family: var(--font-ui); font-size: 0.62rem;
@@ -492,7 +495,8 @@
       <div class="rem-msg" id="ns-cmp-msg">
         Let your <b>companion</b> write this suggestion. Each time you open the hub,
         a summary of your recent practice, anything you left mid-way, your focused
-        Climb goal, and the companion's memory note are sent to Anthropic on
+        Climb goal, your values list (with its recent changes), and the companion's
+        memory note are sent to Anthropic on
         <b>your own API key</b> — the same key the Companion app uses. Your journal
         entries are not sent. Nothing is stored anywhere new.
       </div>
@@ -599,6 +603,18 @@
       <p>Choose a hill and take the next small step.</p>
     </a>
 
+    <a class="card values" href="values.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="18"/>
+          <path d="M31 17l-4.6 9.4L17 31l4.6-9.4z"/>
+          <circle cx="24" cy="24" r="1.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
+      <h2>Values</h2>
+      <p>Name what you steer by, and let it change.</p>
+    </a>
+
     <a class="card train" href="train.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -682,6 +698,11 @@
       <span class="dash-label">Climb</span>
       <span class="dash-strip" data-strip="climb" aria-hidden="true"></span>
       <span class="dash-count" data-count="climb">·</span>
+    </div>
+    <div class="dash-row values">
+      <span class="dash-label">Values</span>
+      <span class="dash-strip" data-strip="values" aria-hidden="true"></span>
+      <span class="dash-count" data-count="values">·</span>
     </div>
     <div class="dash-row train">
       <span class="dash-label">Train</span>
@@ -885,7 +906,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'erp', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train'];
+    const APPS = ['meditate', 'breathe', 'erp', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'values', 'train'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -1042,6 +1063,7 @@
         savor:    logDaySet(log, 'savor'),
         levity:   logDaySet(log, 'levity'),
         climb:    logDaySet(log, 'climb'),
+        values:   logDaySet(log, 'values'),
         train:    logDaySet(log, 'train'),
       };
       render(sets, log);
@@ -1067,6 +1089,7 @@
       savor:    'A small tasting at your own counter.',
       levity:   'Notice one funny thing and write it down.',
       climb:    'Pick up a hill and take one small step.',
+      values:   'Reread the values you set down — do they still ring true?',
       train:    'Move your body, even briefly.',
     };
     // Which invitations fit the hour, in order. Same hour → same order.
@@ -1179,7 +1202,8 @@
     // per-send user action — which is why it is gated OFF by default behind an
     // explicit enable. The digest sent is NARROWER than the Companion app's:
     // activity day-counts/durations, open intents, Climb focus goal + steps,
-    // and the companion's existing memory summary — never journal prose.
+    // the Values list + its recent changes, and the companion's existing
+    // memory summary — never journal prose.
     // The deterministic engine stays as instant first paint + offline/error
     // fallback, and grounds the model as candidate context.
     const NS_SUGGEST_LS = 'hill-climbing-hub-suggest';   // '1' = enabled (device-local UI pref, never synced)
@@ -1189,7 +1213,7 @@
     const NS_SCHEMA = {
       type: 'object',
       properties: {
-        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train', 'rest'] },
+        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'values', 'train', 'rest'] },
         text: { type: 'string' },
       },
       required: ['app', 'text'],
@@ -1197,13 +1221,14 @@
     };
     const NS_SYSTEM = [
       'You are the companion from Hill Climbing — a small suite of contemplative practice apps',
-      '(Meditate, Breathe, Reflect journal, Nourish cooking, Savor tasting, Levity comedy, Climb goals, Train workouts).',
+      '(Meditate, Breathe, Reflect journal, Nourish cooking, Savor tasting, Levity comedy, Climb goals, Train workouts, and a Values list they keep).',
       'The person has just arrived at the hub. Suggest exactly ONE next step, in 1–2 short, warm sentences.',
       'Rules, which reflect the suite’s binding constraints:',
       '- Rest is a first-class answer. Late at night, or when today already held practice, "enough is enough" or rest (app: "rest") is often the best suggestion.',
       '- Never use streaks, missed-day counts, guilt, urgency, or pressure. No exclamation marks. Invitational, like a friend who knows them — never a coach chasing engagement.',
       '- Never suggest ERP or exposure exercises: that work is paced by the person and their therapist, not a landing page.',
       '- Ground the suggestion in what you were given: something they left mid-way, their focused goal, the hour, the shape of their week, their memory note.',
+      '- If their written values are included, let them shape the suggestion — steer with what they hold highest, never against it. Suggest opening Values itself only when something real invites it (the list is empty, long untouched, or a recent change seems worth sitting with).',
       'Answer with the app to open ("rest" when the suggestion is not to practice) and the sentence(s).',
     ].join('\n');
 
@@ -1219,7 +1244,7 @@
       const now = new Date();
       const lines = ['Local time: ' + now.toDateString() + ', ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0')];
       const today = hcDayKey(now);
-      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish', savor: 'Savor', levity: 'Levity', climb: 'Climb', train: 'Train' };
+      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish', savor: 'Savor', levity: 'Levity', climb: 'Climb', values: 'Values', train: 'Train' };
       const last14 = [];
       for (let i = 0; i < 14; i++) { const d = new Date(now); d.setDate(now.getDate() - i); last14.push(hcDayKey(d)); }
       lines.push('Practice in the last 14 days (day counts; "today" marked):');
@@ -1245,6 +1270,27 @@
           .filter(function (t) { return t && t.goalId === climb.focusId && !t.done && typeof t.title === 'string'; })
           .slice(0, 3).map(function (t) { return t.title; });
         lines.push('Focused Climb goal: “' + climb.goals[climb.focusId].title + '”' + (steps.length ? ' — open steps: ' + steps.join('; ') : ''));
+      }
+      // Their values — the ordered list plus the last few changes to it. The
+      // recent history rides along so a value they just added or moved up can
+      // shape the suggestion, not just the standing list.
+      const vals = nsReadJSON('hill-climbing-values');
+      if (vals && Array.isArray(vals.values) && vals.values.length) {
+        const vnames = vals.values.slice(0, 8)
+          .filter(function (v) { return v && typeof v.text === 'string'; })
+          .map(function (v, i) { return (i + 1) + '. ' + v.text.slice(0, 60); });
+        lines.push('Their values, in their own priority order:\n' + vnames.join('\n') +
+          (vals.values.length > 8 ? '\n… (' + (vals.values.length - 8) + ' more)' : ''));
+        const evDay = function (ts) { return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+        const evs = (Array.isArray(vals.history) ? vals.history.slice(-3) : []).map(function (e) {
+          if (!e || typeof e.ts !== 'number' || typeof e.type !== 'string') return null;
+          if (e.type === 'add') return evDay(e.ts) + ': added “' + e.text + '”';
+          if (e.type === 'remove') return evDay(e.ts) + ': removed “' + e.text + '”';
+          if (e.type === 'reorder') return evDay(e.ts) + ': moved “' + e.text + '” #' + e.from + ' → #' + e.to;
+          if (e.type === 'edit') return evDay(e.ts) + ': edited “' + ((e.to && e.to.text) || e.text || '') + '”';
+          return null;
+        }).filter(Boolean);
+        if (evs.length) lines.push('Recent changes to their values: ' + evs.join('; ') + '.');
       }
       const comp = nsReadJSON('hill-climbing-companion');
       const memory = comp && comp.memory && typeof comp.memory.summary === 'string' ? comp.memory.summary.trim() : '';

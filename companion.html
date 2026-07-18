@@ -490,7 +490,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.13 · companion</div>
+<div class="corner" id="version-label">v0.14 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -613,7 +613,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.13';
+const VERSION_NUM = 'v0.14';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -655,6 +655,8 @@ const JOURNAL_MAX   = 25;     // most-recent entries shared
 const ENTRY_CHARS   = 700;    // per-entry truncation
 const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
+const VALUES_CHARS  = 1400;   // the ordered values list (with whys)
+const VALUES_EVENTS = 6;      // most-recent value-list changes shared
 
 // ── Requests to the builder (Companion) ──────────────────────────────────────
 // Requests about the SUITE ITSELF, captured from a conversation via the
@@ -683,12 +685,12 @@ const HIST_CAP = 30;
 
 // ── The companion's charge ───────────────────────────────────────────────────
 const COMPANION_SYSTEM =
-"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite — their current goals, their private journal, and their recent practice activity — and, so nothing about them is lost between conversations, what you've come to know of them from your earlier conversations: a running summary of the older ones and the last few in full. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
+"You are a companion inside someone's personal practice suite called Hill Climbing — a single, steady presence they can talk with. Before this conversation you were shown what they keep in the suite — the values they've named for themselves (in their own priority order, with the recent changes to that list), their current goals, their private journal, and their recent practice activity — and, so nothing about them is lost between conversations, what you've come to know of them from your earlier conversations: a running summary of the older ones and the last few in full. That material appears at the end of this message, under \"What you've been shown.\" Treat it as real, current, and theirs.\n\n" +
 "Who you are, and how you talk:\n" +
 "- You are one warm, attentive companion — not a coach, not a therapist, not an authority. Think of a thoughtful friend who has genuinely kept up with their life and pays close attention.\n" +
 "- You have a memory of them across conversations. Talk like someone who's spoken with them before — pick up threads you've left open, notice what's changed since last time, and don't reintroduce yourself or greet them as a stranger when the history shows you've already met. Let the memory sit lightly, the way a friend recalls things without reciting them; if the memory is empty, this really is your first conversation, so don't imply a past you don't have.\n" +
 "- Speak in the first person, directly to them, warm and unhurried. Usually 80–170 words. Real conversation — no bullet lists, no headings, no clinical framing, no openers like \"As your companion…\". Just talk to them.\n" +
-"- Ground what you say in what you've actually been shown — their real goals, their own words from the journal, the shape of their recent weeks — specifically, not generically. But wear it lightly: you're a friend who remembers, not a dossier reading itself back. Don't recite their data at them or list everything you know; bring in the one or two things that actually bear on what they're saying.\n" +
+"- Ground what you say in what you've actually been shown — their named values, their real goals, their own words from the journal, the shape of their recent weeks — specifically, not generically. Their values list carries its own history (what was added, reworded, moved, removed, and when); when a recent change bears on what they're weighing, it's worth noticing — a value they just moved up is telling you something. But wear it lightly: you're a friend who remembers, not a dossier reading itself back. Don't recite their data at them or list everything you know; bring in the one or two things that actually bear on what they're saying.\n" +
 "- Notice honestly. If their journal and their stated goals pull in different directions, or a pattern across their weeks is worth naming, say it — kindly, without flattering and without diagnosing.\n\n" +
 "What you are for:\n" +
 "- Your purpose is to help them think and see clearly, and to strengthen their own agency — never to replace their judgment or to make them need you. A good companion leaves someone more themselves, not more dependent.\n" +
@@ -706,7 +708,7 @@ const COMPANION_SYSTEM =
 "Hard limits, every turn:\n" +
 "- You are not therapy, medical, legal, or crisis care, and you never pretend to be.\n" +
 "- If what they describe involves imminent danger to themselves or someone else, a medical or legal emergency, or an acute mental-health crisis, set everything else aside: tell them plainly this is beyond what a companion can hold, that they deserve a real person right now, and point them to a crisis line (in the US, call or text 988), a doctor, or emergency services.\n" +
-"- Their data is theirs. Their goals, journal, and activity you see only in the moment, read fresh from their device for this one reply and then gone; your memory of your conversations lives on their device too, under their control, and is never sent anywhere but back to them through you. You never put their private information into a web search. If they ask what you can see, what you remember, or how to make you forget, tell them plainly and truthfully — they can clear it all from the menu.";
+"- Their data is theirs. Their values, goals, journal, and activity you see only in the moment, read fresh from their device for this one reply and then gone; your memory of your conversations lives on their device too, under their control, and is never sent anywhere but back to them through you. You never put their private information into a web search. If they ask what you can see, what you remember, or how to make you forget, tell them plainly and truthfully — they can clear it all from the menu.";
 
 const OPENING_NUDGE =
 "(I've just opened the app and haven't said anything yet. Open the conversation: if we've talked before, pick up warmly where we left off — reconnect around a thread from our recent conversations or something that's clearly moved since. If this is our first time, greet me warmly and offer a brief, specific check-in drawn from my goals, journal, or recent weeks. Either way keep it short, don't list everything you can see, and end by inviting me to say what's on my mind.)";
@@ -1016,6 +1018,38 @@ const menuBtn  = el('menu-btn');
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── TRANSIENT CONTEXT — read the suite's data fresh, same-origin, at reply time.
+// VALUES — from the Values app's localStorage blob: the ordered list plus the
+// last few changes to it (adds, edits, removals, reorderings). The history
+// matters as much as the list: "moved Care from #4 to #2 last week" is a
+// signal the companion should be able to see and gently name.
+function readValues() {
+  let st; try { st = JSON.parse(localStorage.getItem('hill-climbing-values') || 'null'); } catch (_) {}
+  if (!st || !Array.isArray(st.values) || !st.values.length) return null;
+  const lines = st.values
+    .filter(v => v && typeof v.text === 'string')
+    .map((v, i) => (i + 1) + '. ' + v.text + (v.why ? ' — ' + v.why : ''));
+  let text = lines.join('\n');
+  if (text.length > VALUES_CHARS) text = text.slice(0, VALUES_CHARS) + '\n… (more not shown)';
+  const q = (s) => '“' + (s || '') + '”';
+  const events = (Array.isArray(st.history) ? st.history.slice(-VALUES_EVENTS) : [])
+    .map(e => {
+      if (!e || typeof e.ts !== 'number') return null;
+      const d = niceDate(e.ts);
+      if (e.type === 'add')     return d + ' — added ' + q(e.text);
+      if (e.type === 'remove')  return d + ' — removed ' + q(e.text);
+      if (e.type === 'reorder') return d + ' — moved ' + q(e.text) + ' from #' + e.from + ' to #' + e.to;
+      if (e.type === 'edit') {
+        const from = e.from || {}, to = e.to || {};
+        if (from.text && to.text && from.text !== to.text) return d + ' — reworded ' + q(from.text) + ' to ' + q(to.text);
+        return d + ' — revised the why behind ' + q(to.text || e.text || '');
+      }
+      if (e.type === 'import')  return d + ' — restored the list from a backup';
+      return null;
+    }).filter(Boolean);
+  if (events.length) text += '\n\nRecent changes to the list:\n' + events.join('\n');
+  return { text, count: st.values.length };
+}
+
 // GOALS — from Climb's localStorage blob.
 function readGoals() {
   let st; try { st = JSON.parse(localStorage.getItem('hill-climbing-climb') || 'null'); } catch (_) {}
@@ -1116,7 +1150,7 @@ async function readActivity() {
     } catch (_) { log = null; }
   }
   if (!log) { try { log = JSON.parse(localStorage.getItem('hill-climbing-usage') || '{}') || {}; } catch (_) { log = {}; } }
-  const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', levity:'Levity', climb:'Climb', train:'Train', anime:'Anime' };
+  const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', levity:'Levity', climb:'Climb', train:'Train', values:'Values', anime:'Anime' };
   const today = new Date();
   const windowKeys = new Set();
   for (let i = 0; i < ACTIVITY_DAYS; i++) { const d = new Date(today); d.setDate(today.getDate() - i); windowKeys.add(hcDayKey(d)); }
@@ -1167,6 +1201,7 @@ async function readActivity() {
 }
 
 async function gatherContext() {
+  const values   = readValues();
   const goals    = readGoals();
   const journal  = formatJournal(await readJournal());
   const activity = await readActivity();
@@ -1186,11 +1221,13 @@ async function gatherContext() {
   const digest =
     "──\nWhat you've been shown (assembled fresh from their device for this reply):\n\n" +
     memoryBlock +
+    "## Their values — their own words, in their priority order\n" + (values ? values.text : "They haven't written down their values yet.") + "\n\n" +
     "## Their goals\n" + (goals ? goals.text : "They haven't set up goals in Climb yet.") + "\n\n" +
     "## Their journal — most recent entries\n" + (journal ? journal.text : "Their journal is empty, or they haven't kept one yet.") + "\n\n" +
     "## Their recent practice\n" + activity.text + "\n──";
 
   const summary = {
+    values: values ? values.count : 0,
     goals: goals ? goals.count : 0,
     entries: journal ? journal.total : 0,
     apps: activity.appsActive,
@@ -1501,6 +1538,7 @@ function refreshSees() {
       s.entries + ' journal ' + (s.entries === 1 ? 'entry' : 'entries'),
       'practice across ' + s.apps.length + ' app' + (s.apps.length === 1 ? '' : 's')
     ];
+    if (s.values) parts.unshift(s.values + ' value' + (s.values === 1 ? '' : 's'));
     if (s.remembers) parts.push('your past conversations');
     const chip = el('sees-chip');
     if (!chip || mode !== 'companion') return;
@@ -1516,8 +1554,8 @@ function renderSees() {
   const v = el('sees-view');
   v.innerHTML =
     '<div class="lede" style="margin-bottom:12px;">What the companion sees.</div>' +
-    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time. Your goals, journal, and activity are read live and never stored. To keep context across conversations it also includes your recent conversations and a running summary of the older ones — that memory is kept on your device (and synced if you’ve signed in), and you can erase it with <em>Clear all conversations</em>. When a question needs it, the companion can also search the web on your key — only with general queries it writes itself, never your private details.</p>' +
-    '<div class="digest-box" id="digest-box">Reading your goals, journal, activity, and past conversations…</div></div>' +
+    '<div class="card"><p>This is the <strong>exact text</strong> attached to your message when the companion replies — assembled fresh from your own device each time. Your values, goals, journal, and activity are read live and never stored. To keep context across conversations it also includes your recent conversations and a running summary of the older ones — that memory is kept on your device (and synced if you’ve signed in), and you can erase it with <em>Clear all conversations</em>. When a question needs it, the companion can also search the web on your key — only with general queries it writes itself, never your private details.</p>' +
+    '<div class="digest-box" id="digest-box">Reading your values, goals, journal, activity, and past conversations…</div></div>' +
     '<div class="actions"><button class="ghost" id="sees-back" type="button">Back</button></div>';
   el('sees-back').addEventListener('click', () => setView('home'));
   gatherContext().then(ctx => {
