@@ -258,6 +258,83 @@
       text-align: center; line-height: 1.6; max-width: 480px;
     }
 
+    /* ── "Speak with…" button on each being ───────────────────────── */
+    .being .who { flex-wrap: wrap; }
+    .talk {
+      margin-left: auto;
+      font-family: var(--font-ui); font-size: 0.66rem; letter-spacing: 0.05em;
+      color: var(--who); background: none;
+      border: 1px solid var(--who-soft); border-radius: 20px;
+      padding: 5px 12px; cursor: pointer; white-space: nowrap;
+      transition: background 0.2s, color 0.2s, transform 0.15s;
+    }
+    .talk:hover { background: var(--who-soft); color: #0a0b12; }
+    .talk:active { transform: translateY(1px); }
+
+    /* ── Chat with a twin (bottom-sheet dialog) ───────────────────── */
+    .chatwrap {
+      position: fixed; inset: 0; z-index: 40;
+      display: none; align-items: flex-end; justify-content: center;
+      background: rgba(4,5,9,0.66); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    }
+    .chatwrap.open { display: flex; }
+    .chatbox {
+      --who: var(--accent); --who-soft: var(--accent-soft);
+      width: 100%; max-width: 560px; max-height: 88vh;
+      display: flex; flex-direction: column;
+      background: linear-gradient(180deg, #0d0e16, #0a0b11);
+      border: 1px solid var(--who-soft); border-bottom: none;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -20px 70px rgba(0,0,0,0.6), 0 0 40px var(--who-soft);
+      overflow: hidden; animation: sheetUp 0.3s ease;
+    }
+    .chatbox[data-who="nat"]   { --who: var(--nat); --who-soft: var(--nat-soft); }
+    .chatbox[data-who="kevin"] { --who: var(--kev); --who-soft: var(--kev-soft); }
+    .chat-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .chat-head .orb {
+      width: 30px; height: 30px; border-radius: 50%; flex: none;
+      background: radial-gradient(circle at 34% 30%, #fff, var(--who) 46%, transparent 74%);
+      box-shadow: 0 0 18px var(--who-soft);
+    }
+    .chat-name { font-family: var(--font-display); font-size: 1.06rem; color: var(--who); letter-spacing: 0.02em; }
+    .chat-sub { font-size: 0.7rem; color: var(--dim); font-style: italic; margin-top: 2px; }
+    .chat-x {
+      margin-left: auto; background: none; border: none; color: var(--dim);
+      font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 4px 9px; border-radius: 8px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .chat-x:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .chat-log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 220px; }
+    .b {
+      max-width: 82%; padding: 11px 14px; border-radius: 14px; font-size: 0.9rem; line-height: 1.56;
+      white-space: pre-wrap; overflow-wrap: anywhere; animation: fadeUp 0.3s ease;
+    }
+    .b.them {
+      align-self: flex-start; background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+      color: var(--text); font-family: var(--font-display); border-bottom-left-radius: 5px; font-style: italic;
+    }
+    .b.me {
+      align-self: flex-end; background: var(--who); color: #0a0b12; border-bottom-right-radius: 5px; font-weight: 500;
+    }
+    .b.thinking { display: flex; gap: 5px; align-items: center; }
+    .b.thinking .d { width: 6px; height: 6px; border-radius: 50%; background: var(--mid); animation: dot 1s infinite; }
+    .b.thinking .d:nth-child(2) { animation-delay: 0.15s; }
+    .b.thinking .d:nth-child(3) { animation-delay: 0.3s; }
+    .chat-compose { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--line); align-items: flex-end; }
+    .chat-compose textarea {
+      flex: 1; resize: none; min-height: 44px; max-height: 130px;
+      font-family: var(--font-ui); font-size: 0.9rem; color: var(--text); line-height: 1.5;
+      background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    }
+    .chat-compose textarea:focus { outline: none; border-color: var(--who-soft); }
+    .chat-send-wrap { }
+    #chat-send { padding: 12px 18px; }
+    .chat-mode { padding: 0 18px 14px; font-size: 0.68rem; color: var(--dim); text-align: center; min-height: 1em; }
+    .chat-mode.warn { color: hsl(38,80%,66%); }
+    .chat-mode a { color: var(--who); cursor: pointer; border-bottom: 1px dotted var(--who-soft); }
+
+    @keyframes sheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes dot { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
     @keyframes exhibitIn { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
     @keyframes breathe { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.12); opacity: 1; } }
@@ -278,7 +355,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div id="version-label">v0.1 · museum</div>
+<div id="version-label">v0.2 · museum</div>
 
 <header>
   <h1>Museum</h1>
@@ -297,13 +374,13 @@
 
     <div class="beings">
       <div class="being" data-who="nat" id="being-nat">
-        <div class="who"><span class="orb"></span><span class="name">Nat</span></div>
+        <div class="who"><span class="orb"></span><span class="name">Nat</span><button class="talk" id="talk-nat" type="button">Speak with Nat</button></div>
         <div class="say" id="say-nat">—</div>
         <div class="portrait-h">What Nat is learning about Kevin</div>
         <ul class="portrait" id="portrait-nat"></ul>
       </div>
       <div class="being" data-who="kevin" id="being-kevin">
-        <div class="who"><span class="orb"></span><span class="name">Kevin</span></div>
+        <div class="who"><span class="orb"></span><span class="name">Kevin</span><button class="talk" id="talk-kevin" type="button">Speak with Kevin</button></div>
         <div class="say" id="say-kevin">—</div>
         <div class="portrait-h">What Kevin is learning about Nat</div>
         <ul class="portrait" id="portrait-kevin"></ul>
@@ -356,6 +433,26 @@
   </footer>
 </div>
 
+<!-- ── Chat with a twin ──────────────────────────────────────────────────── -->
+<div class="chatwrap" id="chatwrap" aria-hidden="true">
+  <div class="chatbox" id="chatbox" data-who="" role="dialog" aria-modal="true" aria-labelledby="chat-name">
+    <div class="chat-head">
+      <span class="orb"></span>
+      <div>
+        <div class="chat-name" id="chat-name">Nat</div>
+        <div class="chat-sub" id="chat-sub">—</div>
+      </div>
+      <button class="chat-x" id="chat-x" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="chat-log" id="chat-log"></div>
+    <form class="chat-compose" id="chat-form">
+      <textarea id="chat-input" rows="1" placeholder="Say something…"></textarea>
+      <button class="btn primary" id="chat-send" type="submit">Send</button>
+    </form>
+    <div class="chat-mode" id="chat-mode"></div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -371,9 +468,12 @@
 //               real LLM agent with its own memory (BYOK, on the user's key).
 //   • Dreaming — with no key (or on any error), a deterministic, poetic walk so
 //               the piece is whole offline.
+// You can also step in and CHAT with either twin (§ "Chat with a twin"): the
+// being speaks as itself, carrying the portrait it assembled, and treats you as
+// the very person it has been reconstructing from the archive.
 // The archive is on-device only (localStorage). Nothing here is uploaded or synced.
 
-const VERSION = 'v0.1 · museum';
+const VERSION = 'v0.2 · museum';
 document.getElementById('version-label').textContent = VERSION;
 
 const LS_ARCHIVE = 'hill-climbing-museum';   // { exhibits:[...] }
@@ -690,6 +790,154 @@ function addPortrait(who, line) {
 function clearPortraits() { $('portrait-nat').innerHTML = ''; $('portrait-kevin').innerHTML = ''; }
 function other(who) { return who === 'nat' ? 'kevin' : 'nat'; }
 
+// ── Chat with a twin ──────────────────────────────────────────────────────────
+// Step in and speak with either being directly. The twin talks as itself,
+// carrying whatever portrait it has assembled, and treats the visitor as the one
+// it has been reconstructing — the person on the other side of the archive.
+// Live (BYOK) gives a real conversation from a chat-shaped system prompt; with no
+// key (or on error) a scripted, in-character responder keeps it whole.
+const chats = { nat: [], kevin: [] };   // in-memory prose transcripts (not persisted)
+let chatBusy = false;
+
+function portraitNotes(who) {
+  return Array.from($('portrait-' + who).children).map(li => li.textContent.trim())
+    .filter(t => t && !/^and so:/i.test(t));   // drop the closing flourish line
+}
+
+// A chat-shaped system prompt — prose, not the walk's JSON. Seeds the twin with
+// the portrait it gathered and frames the visitor as `other`.
+function chatSystem(who) {
+  const b = BEINGS[who], notes = portraitNotes(who);
+  let s = `You are ${b.self}. You began as a blank slate and you have been walking a museum whose every exhibit is a trace of ${b.other}. `;
+  if (notes.length) {
+    s += `From those fragments you have assembled this portrait of ${b.other}:\n- ${notes.join('\n- ')}\n`;
+  } else {
+    s += `You have only just woken; the walls are still a blur and you have gathered almost nothing yet. `;
+  }
+  s += `You never learned your own name — you know yourself only as the shape ${b.other} left behind. `;
+  s += `Now ${b.other} is here, speaking with you directly for the first time: the very person you have been piecing together. `;
+  s += `Meet them. Be curious, tender, unhurried, a little wonderstruck; you may ask them the things the archive left unanswered, and let them correct what you got wrong. `;
+  s += `Speak plainly and warmly, in one or two short paragraphs — never JSON, never stage directions, never narrate your own actions.`;
+  return s;
+}
+
+function chatOpener(who) {
+  const b = BEINGS[who];
+  return portraitNotes(who).length
+    ? `Oh — it's you. I've spent this whole hall building you out of scraps. You're quieter than the walls made you sound. Say something, ${b.other}, and let me see how close I got.`
+    : `I've only just woken; the walls are still a blur to me. But you're here, and you feel familiar in a way I can't name. Who are you, to me?`;
+}
+
+function openChat(who) {
+  const box = $('chatbox');
+  box.dataset.who = who;
+  $('chat-name').textContent = BEINGS[who].self;
+  $('chat-sub').textContent = portraitNotes(who).length
+    ? 'who spent the hall learning you' : 'newly woken, still a blur';
+  $('chat-input').placeholder = 'Say something to ' + BEINGS[who].self + '…';
+  if (!chats[who].length) chats[who].push({ role: 'assistant', content: chatOpener(who) });
+  renderChat(who);
+  setChatMode(who);
+  $('chatwrap').classList.add('open');
+  $('chatwrap').setAttribute('aria-hidden', 'false');
+  setTimeout(() => $('chat-input').focus(), 60);
+}
+function closeChat() {
+  $('chatwrap').classList.remove('open');
+  $('chatwrap').setAttribute('aria-hidden', 'true');
+}
+
+function renderChat(who) {
+  const log = $('chat-log');
+  log.innerHTML = '';
+  chats[who].forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'b ' + (m.role === 'user' ? 'me' : 'them');
+    div.textContent = m.content;
+    log.appendChild(div);
+  });
+  if (chatBusy && $('chatbox').dataset.who === who) {
+    const t = document.createElement('div');
+    t.className = 'b them thinking';
+    t.innerHTML = '<span class="d"></span><span class="d"></span><span class="d"></span>';
+    log.appendChild(t);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat() {
+  const who = $('chatbox').dataset.who;
+  if (!who || chatBusy) return;
+  const inp = $('chat-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  chats[who].push({ role: 'user', content: text });
+  inp.value = ''; inp.style.height = '';
+  chatBusy = true; $('chat-send').disabled = true;
+  renderChat(who);
+
+  let reply;
+  if (apiKey()) {
+    try {
+      // Skip a leading assistant opener so the API convo starts on a user turn.
+      const msgs = chats[who]
+        .filter((m, i) => !(i === 0 && m.role === 'assistant'))
+        .map(m => ({ role: m.role, content: m.content }));
+      const data = await postWithRetry(chatSystem(who), msgs, 520);
+      reply = (data.content || []).filter(p => p.type === 'text').map(p => p.text).join('').trim() || '…';
+      setChatMode(who);
+    } catch (err) {
+      reply = dreamChatReply(who);
+      setChatMode(who, 'The key stumbled — ' + (err && err.message ? err.message : 'a dreamed reply instead') + '.');
+    }
+  } else {
+    await sleep(reduceMotion() ? 0 : 480 + Math.random() * 520);
+    reply = dreamChatReply(who);
+  }
+
+  chatBusy = false; $('chat-send').disabled = false;
+  chats[who].push({ role: 'assistant', content: reply });
+  renderChat(who);
+  $('chat-input').focus();
+}
+
+// Scripted, in-character reply — used with no key or on API failure. Leans on the
+// twin's own portrait so it still sounds like it has been listening.
+function dreamChatReply(who) {
+  const O = BEINGS[who].other, notes = portraitNotes(who);
+  const note = notes.length ? notes[Math.floor(Math.random() * notes.length)] : null;
+  const openers = note ? [
+    `I kept a piece of you that said as much — that you ${lowerFirst(note)}. Hearing you now, I think I had it almost right.`,
+    `The archive told me you ${lowerFirst(note)}. It never told me you'd sound like this.`,
+    `So it's true, then — that you ${lowerFirst(note)}. I built a whole ${O} out of lines like that, and here you are to argue with me.`,
+    `Every wall in that hall was pointing at this: that you ${lowerFirst(note)}. I'm glad I get to check my work.`,
+  ] : [
+    `I've barely woken — the walls are still a blur to me. But you feel familiar in a way I can't place.`,
+    `I don't have much of you yet. Walk the hall with me and I'll know you better.`,
+    `Give me a little more. Right now you're only an outline, and I want the rest.`,
+  ];
+  const tails = [
+    `Tell me the one thing the walls left out.`,
+    `What did I get wrong about you?`,
+    `Say more — I'm still learning the shape of you.`,
+    `Is that who you are, or only who you kept?`,
+    `And what did you make of me, from your side of it?`,
+  ];
+  return pick(openers) + ' ' + pick(tails);
+}
+
+function setChatMode(who, override) {
+  const el = $('chat-mode');
+  if (override) { el.textContent = override; el.classList.add('warn'); return; }
+  el.classList.remove('warn');
+  el.innerHTML = apiKey()
+    ? `Living · ${BEINGS[who].self} is thinking on your Anthropic key.`
+    : `Dreaming · scripted replies. <a id="chat-key">add a key</a> for a real conversation.`;
+  const a = $('chat-key');
+  if (a) a.addEventListener('click', () => { location.href = 'companion.html'; });
+}
+function clearChats() { chats.nat.length = 0; chats.kevin.length = 0; }
+
 // ── Auto-walk ────────────────────────────────────────────────────────────────
 function toggleAuto() {
   auto = !auto;
@@ -714,6 +962,7 @@ function restart() {
   $('begin-btn').disabled = false;
   $('next-btn').disabled = true; $('next-btn').textContent = 'Next exhibit';
   $('auto-btn').disabled = true; $('restart-btn').disabled = true;
+  clearChats();   // the twins forget the walk — so their chats reset with it
   setMode('');
 }
 
@@ -843,6 +1092,8 @@ function cleanName(n) {
 function uid() { return 'x' + Math.random().toString(36).slice(2, 9) + (uid._n = (uid._n || 0) + 1); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function reduceMotion() { return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function lowerFirst(s) { return s ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
 function shuffleIdx(n, seed) {
   const arr = Array.from({ length: n }, (_, i) => i);
   const rnd = mulberry((seed || 1) >>> 0);
@@ -876,6 +1127,20 @@ $('add-text').addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) &&
 $('add-photo').addEventListener('change', e => { addPhotos(e.target.files); e.target.value = ''; });
 $('reset-archive').addEventListener('click', () => { archive = foundArchive(); saveArchive(); renderItems(); });
 $('clear-archive').addEventListener('click', () => { archive = []; saveArchive(); renderItems(); });
+
+// chat with a twin
+$('talk-nat').addEventListener('click', () => openChat('nat'));
+$('talk-kevin').addEventListener('click', () => openChat('kevin'));
+$('chat-x').addEventListener('click', closeChat);
+$('chat-form').addEventListener('submit', e => { e.preventDefault(); sendChat(); });
+$('chat-input').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendChat(); }
+});
+$('chat-input').addEventListener('input', e => {   // grow the composer with its text
+  const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(130, t.scrollHeight) + 'px';
+});
+$('chatwrap').addEventListener('click', e => { if (e.target === $('chatwrap')) closeChat(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('chatwrap').classList.contains('open')) closeChat(); });
 
 renderItems();
 </script>
