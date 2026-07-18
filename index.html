@@ -1422,7 +1422,14 @@
         'suggestion just shown to them was:\n\n' + nsSnapText(s.snap) +
         '\n\nThey opened this conversation to ask about that suggestion — help them dig into it, ' +
         'and update your view honestly if it didn’t fit.';
-      try { localStorage.setItem(NS_SEED_LS, JSON.stringify({ v: 1, ts: Date.now(), text: text.slice(0, 6000) })); } catch (e) {}
+      // `text` is the model's hidden context; `show` is what Companion renders
+      // as the visible continuity card at the top of the seeded conversation.
+      try {
+        localStorage.setItem(NS_SEED_LS, JSON.stringify({
+          v: 1, ts: Date.now(), text: text.slice(0, 6000),
+          show: { text: s.snap.reply.text, app: s.app || null },
+        }));
+      } catch (e) {}
     });
 
     // "Updates every time I return to the hub": fetch after the first paint,

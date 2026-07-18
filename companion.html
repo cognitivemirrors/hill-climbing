@@ -214,6 +214,26 @@
     .turn.chair-turn .turn-body p:last-child { margin-bottom: 0; }
     .turn.error .turn-body p { color: var(--dim); font-style: italic; }
     .err-actions { margin-top: 11px; }
+    /* Hand-off card: a conversation opened from the hub's "ask about this"
+       keeps the suggestion visibly in view — the continuity otherwise lost
+       crossing apps. Presentational only; the model's copy of the context is
+       the hidden opening turn. */
+    .hub-ref {
+      padding: 14px 17px; border: 1px dashed var(--line); border-radius: 12px;
+      background: rgba(255,255,255,0.03); animation: fadeUp 0.3s ease;
+    }
+    .hub-ref-kicker {
+      font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: 7px;
+    }
+    .hub-ref-text {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 14.5px; color: var(--mid); line-height: 1.6;
+    }
+    .hub-ref-app {
+      margin-top: 7px; font-size: 11px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--dim);
+    }
     .retry-btn { font-size: 12.5px; padding: 7px 16px; border-color: var(--accent-soft); color: var(--mid); }
     .retry-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
     /* Regenerate — a quiet control on the last reply, not a shout. */
@@ -470,7 +490,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.12 · companion</div>
+<div class="corner" id="version-label">v0.13 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -593,7 +613,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.12';
+const VERSION_NUM = 'v0.13';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -1320,9 +1340,22 @@ async function maybeUpdateMemory() {
 // ── Talk (Companion) ─────────────────────────────────────────────────────────
 function renderThread() {
   const turns = active ? active.thread.filter(t => !t.hidden) : [];
-  threadEl.innerHTML = turns.map(t => cTurnHTML(t.role, t.text)).join('');
+  // Conversations opened from the hub's "ask about this" carry `hubRef` — the
+  // suggestion they're about, kept visibly at the top of the thread (and on
+  // every reopen from History) so the person never loses what they came to ask
+  // about. Rendered here so both the fresh hand-off and reopens get it.
+  threadEl.innerHTML = (active && active.hubRef ? hubRefHTML(active.hubRef) : '') +
+    turns.map(t => cTurnHTML(t.role, t.text)).join('');
   refreshTail();
   refreshBegin();
+}
+function hubRefHTML(ref) {
+  const app = typeof ref.app === 'string' && ref.app ? ref.app : '';
+  return '<div class="hub-ref">' +
+    '<div class="hub-ref-kicker">From the hub · the suggestion this is about</div>' +
+    '<div class="hub-ref-text">“' + esc(ref.text || '') + '”</div>' +
+    (app ? '<div class="hub-ref-app">it pointed at ' + esc(app.charAt(0).toUpperCase() + app.slice(1)) + '</div>' : '') +
+  '</div>';
 }
 // Once a conversation is underway, the "Let it open" seed is spent — the button
 // becomes a plain "Continue" that just returns focus to the composer.
@@ -2303,10 +2336,16 @@ const HUB_SEED_LS = 'hill-climbing-hub-suggest-seed';
     // hidden: not rendered in the thread; awaiting: deliberately unanswered
     // until the person asks their own question (refreshTail skips the retry).
     active.thread.push({ role: 'user', text: seed.text.trim().slice(0, 6000), hidden: true, awaiting: true });
+    // Visible continuity: keep the suggestion itself on the conversation, so
+    // renderThread can show what this is about — now and on every reopen.
+    if (seed.show && typeof seed.show.text === 'string' && seed.show.text.trim()) {
+      active.hubRef = { text: seed.show.text.trim().slice(0, 300), app: seed.show.app || null, ts: seed.ts || Date.now() };
+    }
     active.title = 'About a hub suggestion · ' + niceDate(active.ts);
     persist();
     setView('home');
     renderThread();
+    msgBox.placeholder = 'Ask about this suggestion…  (⌘/Ctrl+Enter to send)';
     msgBox.focus();
   } catch (e) { /* a failed hand-off must never break the app */ }
 })();
