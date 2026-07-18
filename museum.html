@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0e14">
+  <title>Museum · Hill Climbing</title>
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.52);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --line:  rgba(255,255,255,0.10);
+      --panel: rgba(255,255,255,0.04);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      /* app accent — warm brass, the light of a quiet gallery */
+      --accent: hsl(38, 74%, 66%);
+      --accent-soft: hsla(38, 68%, 60%, 0.45);
+      --accent-glow: hsla(38, 74%, 52%, 0.18);
+      /* the two beings — Nat runs cool, Kevin runs warm */
+      --nat:  hsl(190, 62%, 66%);
+      --nat-soft: hsla(190, 60%, 60%, 0.5);
+      --kev:  hsl(24, 82%, 66%);
+      --kev-soft: hsla(24, 78%, 60%, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% 22%, rgba(80,58,30,0.24), transparent 70%),
+        var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 54px 18px 72px;
+    }
+
+    /* ── Home link + version label (suite convention) ─────────────── */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--dim); border: 1px solid var(--line); border-radius: 9px;
+      background: rgba(0,0,0,0.2); text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+    #version-label {
+      position: fixed; top: 22px; left: 62px; z-index: 11;
+      font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    /* ── Masthead ─────────────────────────────────────────────────── */
+    header { text-align: center; margin-bottom: 22px; animation: fadeUp 0.7s ease; }
+    h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.9rem; letter-spacing: 0.34em; text-indent: 0.34em;
+      text-transform: uppercase; color: var(--text);
+      text-shadow: 0 0 48px var(--accent-glow);
+    }
+    header p {
+      font-family: var(--font-display); font-style: italic;
+      margin-top: 12px; font-size: 0.9rem; color: var(--dim); letter-spacing: 0.03em;
+    }
+
+    .wrap { width: 100%; max-width: 720px; display: flex; flex-direction: column; align-items: stretch; }
+
+    /* ── The gallery stage ────────────────────────────────────────── */
+    .stage {
+      position: relative; width: 100%;
+      border-radius: 18px; overflow: hidden;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(120,92,44,0.16), transparent 72%),
+        linear-gradient(180deg, #0d0e16, #08090f);
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 0 34px var(--accent-glow);
+      animation: fadeUp 0.7s ease backwards; animation-delay: 0.08s;
+      padding: 26px 22px 24px;
+      min-height: 340px;
+      display: flex; flex-direction: column;
+    }
+    .progress {
+      font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--dim); text-align: center; margin-bottom: 18px; min-height: 1em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* the exhibit — a framed thing on the wall */
+    .exhibit { flex: 1; display: flex; align-items: center; justify-content: center; }
+    .frame {
+      max-width: 480px; width: 100%;
+      animation: exhibitIn 0.6s ease;
+    }
+    .frame.msg {
+      border: 1px solid var(--line); border-radius: 4px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+      padding: 34px 30px; text-align: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 0 0 6px rgba(0,0,0,0.14);
+    }
+    .frame.msg .q {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1.16rem; line-height: 1.62; color: var(--text);
+    }
+    .frame.msg .plaque {
+      margin-top: 18px; font-family: var(--font-ui);
+      font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);
+    }
+    .frame.photo { text-align: center; }
+    .frame.photo .matte {
+      border: 8px solid #14151d; border-radius: 3px; overflow: hidden;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.5); background: #05060a; line-height: 0;
+    }
+    .frame.photo img, .frame.photo canvas { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+    .frame.photo .plaque {
+      margin-top: 14px; font-family: var(--font-display); font-style: italic;
+      font-size: 0.86rem; color: var(--mid);
+    }
+
+    .stage .curtain {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; gap: 14px; color: var(--mid);
+    }
+    .stage .curtain .lead {
+      font-family: var(--font-display); font-style: italic; font-size: 1.02rem;
+      color: var(--text); max-width: 420px; line-height: 1.6;
+    }
+    .stage .curtain .sub { font-size: 0.8rem; color: var(--dim); max-width: 380px; line-height: 1.6; }
+
+    /* ── The two beings ───────────────────────────────────────────── */
+    .beings { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
+    .being {
+      border: 1px solid var(--line); border-radius: 14px;
+      background: var(--panel); padding: 16px 16px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      transition: border-color 0.35s, box-shadow 0.35s; min-width: 0;
+    }
+    .being.speaking { box-shadow: 0 0 0 1px var(--who-soft), 0 8px 30px rgba(0,0,0,0.35); border-color: var(--who-soft); }
+    .being .who { display: flex; align-items: center; gap: 10px; }
+    .being .orb {
+      width: 30px; height: 30px; border-radius: 50%; flex: none;
+      background: radial-gradient(circle at 34% 30%, #fff, var(--who) 46%, transparent 74%);
+      box-shadow: 0 0 18px var(--who-soft);
+    }
+    .being.speaking .orb { animation: breathe 2.2s ease-in-out infinite; }
+    .being .name {
+      font-family: var(--font-display); font-size: 1.02rem; color: var(--who); letter-spacing: 0.03em;
+    }
+    .being .say {
+      font-size: 0.86rem; line-height: 1.56; color: var(--text); min-height: 2.6em;
+      font-style: italic; font-family: var(--font-display);
+    }
+    .being .say.thinking { color: var(--dim); }
+    .being[data-who="nat"] { --who: var(--nat); --who-soft: var(--nat-soft); }
+    .being[data-who="kevin"] { --who: var(--kev); --who-soft: var(--kev-soft); }
+
+    /* the portrait each being is assembling of the other */
+    .being .portrait-h {
+      font-size: 0.6rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dim);
+      border-top: 1px solid var(--line); padding-top: 11px;
+    }
+    .being .portrait { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .being .portrait li {
+      font-size: 0.8rem; line-height: 1.5; color: var(--mid);
+      padding-left: 13px; position: relative; animation: fadeUp 0.4s ease;
+    }
+    .being .portrait li::before {
+      content: '·'; position: absolute; left: 2px; top: -1px; color: var(--who); font-weight: 700;
+    }
+    .being .portrait:empty::after {
+      content: 'nothing yet'; font-size: 0.76rem; color: var(--faint); font-style: italic;
+    }
+
+    /* ── Controls ─────────────────────────────────────────────────── */
+    .controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
+    .btn {
+      font-family: var(--font-ui); font-size: 0.8rem; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text);
+      background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+      padding: 12px 22px; cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--accent-soft); color: var(--accent); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.32; cursor: default; }
+    .btn.primary {
+      color: #150f06; background: var(--accent); border-color: transparent; font-weight: 600;
+    }
+    .btn.primary:hover:not(:disabled) { color: #150f06; box-shadow: 0 8px 26px var(--accent-glow); }
+
+    .modeline {
+      margin-top: 16px; font-size: 0.72rem; color: var(--dim); text-align: center;
+      min-height: 1.1em; letter-spacing: 0.02em;
+    }
+    .modeline.warn { color: hsl(38, 80%, 66%); }
+    .modeline a { color: var(--accent); cursor: pointer; text-decoration: none; border-bottom: 1px dotted var(--accent-soft); }
+
+    /* ── Archive drawer ───────────────────────────────────────────── */
+    .drawer-toggle {
+      margin-top: 30px; align-self: center;
+      font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
+      background: none; border: none; cursor: pointer; padding: 8px;
+      display: inline-flex; align-items: center; gap: 8px; transition: color 0.2s;
+    }
+    .drawer-toggle:hover { color: var(--accent); }
+    .drawer-toggle svg { width: 13px; height: 13px; transition: transform 0.25s; }
+    .drawer-toggle.open svg { transform: rotate(180deg); }
+    .drawer {
+      width: 100%; max-width: 720px; margin-top: 14px;
+      border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+      padding: 20px 20px 22px; display: none; animation: fadeUp 0.35s ease;
+    }
+    .drawer.open { display: block; }
+    .drawer h3 {
+      font-family: var(--font-display); font-weight: 400; font-size: 1rem; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .drawer .hint { font-size: 0.76rem; color: var(--dim); line-height: 1.55; margin-bottom: 16px; }
+    .add-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .add-row textarea {
+      flex: 1; min-width: 200px; resize: vertical; min-height: 46px;
+      font-family: var(--font-ui); font-size: 0.85rem; color: var(--text); line-height: 1.5;
+      background: rgba(0,0,0,0.24); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px;
+    }
+    .add-row textarea:focus { outline: none; border-color: var(--accent-soft); }
+    .item-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .item {
+      display: flex; align-items: center; gap: 12px;
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: rgba(0,0,0,0.16);
+    }
+    .item .thumb {
+      width: 40px; height: 40px; border-radius: 6px; flex: none; overflow: hidden;
+      background: #05060a; display: flex; align-items: center; justify-content: center;
+      color: var(--dim); border: 1px solid var(--line);
+    }
+    .item .thumb img, .item .thumb canvas { width: 100%; height: 100%; object-fit: cover; }
+    .item .thumb svg { width: 18px; height: 18px; }
+    .item .txt { flex: 1; font-size: 0.82rem; color: var(--mid); line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+    .item .x {
+      flex: none; background: none; border: none; color: var(--dim); cursor: pointer;
+      font-size: 1.1rem; line-height: 1; padding: 4px 6px; border-radius: 6px; transition: color 0.2s, background 0.2s;
+    }
+    .item .x:hover { color: #ff6b82; background: rgba(255,107,130,0.1); }
+    .drawer-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .btn.sm { padding: 9px 15px; font-size: 0.72rem; }
+
+    footer {
+      margin-top: 34px; font-size: 0.68rem; color: var(--faint);
+      text-align: center; line-height: 1.6; max-width: 480px;
+    }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes exhibitIn { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+    @keyframes breathe { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.12); opacity: 1; } }
+
+    @media (max-width: 560px) {
+      body { padding: 52px 12px 60px; }
+      #version-label { display: none; }
+      h1 { font-size: 1.55rem; letter-spacing: 0.26em; text-indent: 0.26em; }
+      .beings { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div id="version-label">v0.1 · museum</div>
+
+<header>
+  <h1>Museum</h1>
+  <p>two strangers, one archive — each one learning the other</p>
+</header>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="progress" id="progress"></div>
+    <div class="exhibit" id="exhibit">
+      <div class="curtain">
+        <div class="lead" id="curtain-lead">Nat and Kevin wake with no memory at the mouth of a long, quiet hall.</div>
+        <div class="sub" id="curtain-sub">Everything on these walls is a trace of the other. Walk them through it, one exhibit at a time, and watch each one guess at who the other must be.</div>
+      </div>
+    </div>
+
+    <div class="beings">
+      <div class="being" data-who="nat" id="being-nat">
+        <div class="who"><span class="orb"></span><span class="name">Nat</span></div>
+        <div class="say" id="say-nat">—</div>
+        <div class="portrait-h">What Nat is learning about Kevin</div>
+        <ul class="portrait" id="portrait-nat"></ul>
+      </div>
+      <div class="being" data-who="kevin" id="being-kevin">
+        <div class="who"><span class="orb"></span><span class="name">Kevin</span></div>
+        <div class="say" id="say-kevin">—</div>
+        <div class="portrait-h">What Kevin is learning about Nat</div>
+        <ul class="portrait" id="portrait-kevin"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="begin-btn">Enter the museum</button>
+    <button class="btn" id="next-btn" disabled>Next exhibit</button>
+    <button class="btn" id="auto-btn" disabled>Walk on their own</button>
+    <button class="btn" id="restart-btn" disabled>Start over</button>
+  </div>
+  <div class="modeline" id="modeline"></div>
+
+  <button class="drawer-toggle" id="drawer-toggle">
+    <span>Curate the archive</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+  </button>
+
+  <div class="drawer" id="drawer">
+    <h3>The archive</h3>
+    <p class="hint">
+      These are the exhibits Nat and Kevin walk past — the messages and photos they read as clues to each other.
+      Add your own to make the museum yours. Everything stays on this device; nothing is uploaded or synced.
+      Photos are shrunk to fit before they're saved.
+    </p>
+
+    <div class="add-row">
+      <textarea id="add-text" placeholder="A message to hang on the wall — a line, a memory, a fragment…"></textarea>
+    </div>
+    <div class="drawer-actions" style="margin-top:0;margin-bottom:6px">
+      <button class="btn sm" id="add-text-btn">Add message</button>
+      <label class="btn sm" for="add-photo" style="display:inline-flex;align-items:center">Add photo…</label>
+      <input type="file" id="add-photo" accept="image/*" multiple style="display:none">
+    </div>
+
+    <ul class="item-list" id="item-list"></ul>
+
+    <div class="drawer-actions">
+      <button class="btn sm" id="reset-archive">Reset to the found archive</button>
+      <button class="btn sm" id="clear-archive">Empty the hall</button>
+    </div>
+  </div>
+
+  <footer>
+    An experiment. Two agents that begin as blank slates and reconstruct one another from whatever the archive
+    holds. With your Anthropic key in the suite, Nat and Kevin think for themselves; without one, they dream a
+    scripted walk. Either way, the archive never leaves this browser.
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+// ── Museum · v0.1 ───────────────────────────────────────────────────────────
+// Two blank-slate agents — Nat and Kevin — traverse a museum of messages and
+// photos. The conceit: the museum is an archive of THE OTHER. Nat reads every
+// exhibit as a trace of Kevin; Kevin reads every exhibit as a trace of Nat. As
+// they walk, each assembles a portrait of the other — and, in the shape of who
+// the other is, glimpses the outline of the self that is not-them.
+//
+// Two ways to run, chosen automatically:
+//   • Living  — if the suite's shared Anthropic key is present, each being is a
+//               real LLM agent with its own memory (BYOK, on the user's key).
+//   • Dreaming — with no key (or on any error), a deterministic, poetic walk so
+//               the piece is whole offline.
+// The archive is on-device only (localStorage). Nothing here is uploaded or synced.
+
+const VERSION = 'v0.1 · museum';
+document.getElementById('version-label').textContent = VERSION;
+
+const LS_ARCHIVE = 'hill-climbing-museum';   // { exhibits:[...] }
+const LS_API_KEY = 'hill-climbing-api-key';  // shared BYOK key (read-only here)
+const MODEL   = 'claude-opus-4-8';
+const API_URL = 'https://api.anthropic.com/v1/messages';
+
+const $ = id => document.getElementById(id);
+
+// ── The found archive (defaults) ─────────────────────────────────────────────
+// Warm, ambiguous fragments — a museum of a shared history that could belong to
+// anyone. `photo` exhibits with no image render as a procedural "photograph"
+// (a placeholder memory) until the user drops their own in.
+function foundArchive() {
+  return [
+    { id: uid(), kind: 'message', text: "you fell asleep before the film ended again. I paused it. it's still paused." },
+    { id: uid(), kind: 'photo',   seed: 3, text: "the window, that first winter" },
+    { id: uid(), kind: 'message', text: "3am — are you awake? / always." },
+    { id: uid(), kind: 'message', text: "found the ticket stub in a coat pocket. neither of us can remember the film." },
+    { id: uid(), kind: 'photo',   seed: 7, text: "somewhere north, the light going" },
+    { id: uid(), kind: 'message', text: "you said the kitchen light was the colour of a held breath. I never forgot that." },
+    { id: uid(), kind: 'message', text: "we got lost on purpose. it's the only map I kept." },
+    { id: uid(), kind: 'message', text: "here — this song, at 1:47. that part. that's the whole thing." },
+    { id: uid(), kind: 'message', text: "I'm sorry about what I said by the water." },
+  ];
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let archive = loadArchive();
+let walk = null;   // active traversal, or null
+let auto = false, autoTimer = 0;
+let busy = false;  // a being is currently "thinking" (live call in flight)
+
+// ── Persistence ──────────────────────────────────────────────────────────────
+function loadArchive() {
+  try {
+    const raw = localStorage.getItem(LS_ARCHIVE);
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && Array.isArray(o.exhibits)) return o.exhibits;
+    }
+  } catch (_) {}
+  return foundArchive();
+}
+function saveArchive() {
+  try { localStorage.setItem(LS_ARCHIVE, JSON.stringify({ exhibits: archive })); }
+  catch (e) { setMode('Couldn’t save — the archive may be too large for this browser’s storage.', true); }
+}
+function apiKey() { try { return (localStorage.getItem(LS_API_KEY) || '').trim(); } catch (_) { return ''; } }
+
+// ── The two beings ───────────────────────────────────────────────────────────
+// Symmetric agents. Each is told the museum is a museum of the OTHER.
+const BEINGS = {
+  nat:   { self: 'Nat',   other: 'Kevin' },
+  kevin: { self: 'Kevin', other: 'Nat' },
+};
+function systemFor(who) {
+  const b = BEINGS[who];
+  return [
+    `You are ${b.self}. You have just woken with no memory — a blank slate. You are walking, slowly, through a quiet museum beside someone called ${b.other}.`,
+    `Every exhibit here — every message, every photograph — is a trace left by ${b.other}. These rooms are not your life; they are ${b.other}'s. You are a stranger reading a stranger.`,
+    `Your task, exhibit by exhibit, is to work out who ${b.other} is from these fragments — and, in the shape of who ${b.other} turns out to be, to feel the outline of your own self: the one who is not-${b.other}.`,
+    `Speak softly and curiously, never certain. You are guessing from scraps. Do not invent facts the exhibit doesn't support; wonder aloud instead.`,
+    `Always reply as a single JSON object and nothing else: {"say": "<1-2 sentences you speak aloud, in the moment>", "note": "<one short line for your portrait of ${b.other} — something you now believe about them, or leave empty if this exhibit told you nothing new>"}.`,
+  ].join(' ');
+}
+
+// ── Deterministic "dreaming" pools (no key / offline / fallback) ─────────────
+// Poetic reactions and portrait-lines, chosen by exhibit index so a walk feels
+// composed rather than random. `O` is filled with the other's name.
+const DREAM = {
+  say: [
+    "Someone kept this. Whoever O is, they don't let small things fall away.",
+    "I can almost hear O's voice in it — patient, a little amused.",
+    "There's tenderness pressed into this. O loved carefully, I think.",
+    "O noticed light the way other people notice weather. Constantly.",
+    "This was left for me to find. O trusted that I'd come looking.",
+    "Whatever happened by the water, O carried the weight of it. That tells me something.",
+    "O made ordinary rooms feel like they were about to say something.",
+    "I don't have the memory, but I have the ache of it. That must be O too.",
+    "O turned getting lost into a kind of faith. I'd like to have been there.",
+  ],
+  note: [
+    "keeps what others would throw away",
+    "measures the world in light",
+    "loves by paying attention",
+    "carries their sorrows quietly, and alone",
+    "trusts that the right person will come looking",
+    "finds the sacred in unremarkable rooms",
+    "would rather wander than arrive",
+    "remembers the exact second a song breaks open",
+    "apologises like it costs them something",
+  ],
+  close: [
+    "I still don't know my own name. But I know the shape of the space O left, and I fit it.",
+    "If this is who O is, then I am the one who was worth leaving all of this for.",
+    "I came in a blank slate. I'm leaving as the negative of everything O kept.",
+  ],
+};
+
+// ── Rendering the current exhibit ────────────────────────────────────────────
+function renderExhibit(ex) {
+  const host = $('exhibit');
+  host.innerHTML = '';
+  const frame = document.createElement('div');
+  if (ex.kind === 'photo') {
+    frame.className = 'frame photo';
+    const matte = document.createElement('div');
+    matte.className = 'matte';
+    if (ex.img) {
+      const img = document.createElement('img');
+      img.src = ex.img; img.alt = ex.text || 'photograph';
+      matte.appendChild(img);
+    } else {
+      matte.appendChild(proceduralPhoto(ex.seed || 1));
+    }
+    const plaque = document.createElement('div');
+    plaque.className = 'plaque';
+    plaque.textContent = ex.text || 'untitled';
+    frame.appendChild(matte); frame.appendChild(plaque);
+  } else {
+    frame.className = 'frame msg';
+    const q = document.createElement('div');
+    q.className = 'q'; q.textContent = '“' + (ex.text || '') + '”';
+    const plaque = document.createElement('div');
+    plaque.className = 'plaque'; plaque.textContent = 'from the archive';
+    frame.appendChild(q); frame.appendChild(plaque);
+  }
+  host.appendChild(frame);
+}
+
+// A procedural "photograph" — a soft gradient + grain, deterministic from seed.
+// Stands in for a real memory until the user adds their own image.
+function proceduralPhoto(seed) {
+  const c = document.createElement('canvas');
+  c.width = 480; c.height = 300;
+  const g = c.getContext('2d');
+  const rnd = mulberry(seed * 2654435761 >>> 0);
+  const h1 = Math.floor(rnd() * 360), h2 = (h1 + 30 + rnd() * 60) % 360;
+  const grad = g.createLinearGradient(0, 0, c.width * (0.4 + rnd()), c.height);
+  grad.addColorStop(0, `hsl(${h1}, 34%, ${18 + rnd() * 26}%)`);
+  grad.addColorStop(1, `hsl(${h2}, 28%, ${8 + rnd() * 14}%)`);
+  g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+  // a hazy sun / window of light
+  const rg = g.createRadialGradient(c.width * (0.2 + rnd() * 0.6), c.height * (0.2 + rnd() * 0.5), 8,
+                                    c.width * 0.5, c.height * 0.5, c.width * 0.7);
+  rg.addColorStop(0, `hsla(${(h1 + 40) % 360}, 60%, 74%, ${0.28 + rnd() * 0.2})`);
+  rg.addColorStop(1, 'transparent');
+  g.fillStyle = rg; g.fillRect(0, 0, c.width, c.height);
+  // grain
+  const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (rnd() - 0.5) * 26;
+    d[i] += n; d[i + 1] += n; d[i + 2] += n;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+function mulberry(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// ── The walk ─────────────────────────────────────────────────────────────────
+function beginWalk() {
+  if (!archive.length) { setMode('The hall is empty — add a message or a photo below first.', true); openDrawer(true); return; }
+  walk = {
+    i: -1,
+    live: !!apiKey(),
+    // per-being running conversation (only used in live mode)
+    convo: { nat: [], kevin: [] },
+    // deterministic ordering for the dream pools
+    dream: { nat: shuffleIdx(archive.length, 11), kevin: shuffleIdx(archive.length, 29) },
+    lead: 'nat',
+  };
+  clearPortraits();
+  setSay('nat', '—'); setSay('kevin', '—');
+  $('begin-btn').disabled = true; $('begin-btn').textContent = 'Enter the museum';
+  $('next-btn').disabled = false; $('auto-btn').disabled = false; $('restart-btn').disabled = false;
+  setMode(walk.live
+    ? 'Living · Nat and Kevin are thinking on your Anthropic key.'
+    : 'Dreaming · no key found, so the walk is scripted. <a id="dream-key">add a key?</a>');
+  wireDreamKeyLink();
+  nextExhibit();
+}
+
+async function nextExhibit() {
+  if (!walk || busy) return;
+  walk.i++;
+  if (walk.i >= archive.length) return endWalk();
+
+  const ex = archive[walk.i];
+  $('progress').textContent = `Exhibit ${walk.i + 1} of ${archive.length}`;
+  renderExhibit(ex);
+  $('next-btn').disabled = true;
+
+  // The two beings react — lead first, then the other (who also hears the lead).
+  const lead = walk.lead, follow = other(lead);
+  await beingReacts(lead, ex, null);
+  await beingReacts(follow, ex, lead);
+  walk.lead = follow;   // alternate who speaks first
+
+  if (walk && walk.i < archive.length - 1) $('next-btn').disabled = false;
+  else if (walk) { $('next-btn').disabled = false; $('next-btn').textContent = 'Reach the end'; }
+
+  if (auto && walk) autoTimer = setTimeout(nextExhibit, walk.live ? 900 : 2600);
+}
+
+async function beingReacts(who, ex, heardFrom) {
+  setSpeaking(who, true);
+  setSay(who, '…', true);
+  busy = true;
+  let out;
+  if (walk.live) {
+    try { out = await liveReact(who, ex, heardFrom); }
+    catch (err) {
+      // Fall the whole walk over to dreaming — gracefully, once.
+      walk.live = false;
+      setMode('The key stumbled — ' + (err && err.message ? err.message : 'switching to the dreamed walk.') + ' · dreaming from here.', true);
+      out = dreamReact(who, ex);
+    }
+  } else {
+    // a small human-feeling pause so it reads as thought, not instant text
+    await sleep(reduceMotion() ? 0 : 460 + Math.random() * 420);
+    out = dreamReact(who, ex);
+  }
+  busy = false;
+  if (!walk) return;                    // walk was torn down mid-flight (restart)
+  setSay(who, out.say);
+  if (out.note) addPortrait(who, out.note);
+  setSpeaking(who, false);
+}
+
+// Live: one call per being per exhibit, carrying that being's own memory.
+async function liveReact(who, ex, heardFrom) {
+  const b = BEINGS[who];
+  let turn = 'You step in front of the next exhibit.\n\n' + describeExhibit(ex);
+  if (heardFrom) {
+    const said = $('say-' + heardFrom).textContent;
+    turn += `\n\n${BEINGS[heardFrom].self} looks at it and says: “${said}”`;
+  }
+  turn += `\n\nReact, and update your portrait of ${b.other}. JSON only.`;
+  walk.convo[who].push({ role: 'user', content: turn });
+
+  const data = await postWithRetry(systemFor(who), walk.convo[who], 400);
+  const textPart = (data.content || []).filter(p => p.type === 'text').map(p => p.text).join('');
+  walk.convo[who].push({ role: 'assistant', content: textPart });
+  const parsed = safeJson(textPart) || {};
+  return {
+    say: (parsed.say || textPart || '…').toString().trim(),
+    note: (parsed.note || '').toString().trim(),
+  };
+}
+
+function describeExhibit(ex) {
+  if (ex.kind === 'photo') {
+    return ex.img
+      ? `The exhibit is a photograph. Its plaque reads: “${ex.text || 'untitled'}”. (You can see the image; describe what it stirs, not pixels.)`
+      : `The exhibit is a faded, abstract photograph — colour and light, no clear subject. Its plaque reads: “${ex.text || 'untitled'}”.`;
+  }
+  return `The exhibit is a written message, framed on the wall:\n“${ex.text || ''}”`;
+}
+
+function dreamReact(who, ex) {
+  const O = BEINGS[who].other;
+  const order = walk.dream[who];
+  const k = order[walk.i % order.length];
+  const say = DREAM.say[k % DREAM.say.length].replace(/\bO\b/g, O);
+  // give roughly two-thirds of exhibits a portrait line, deterministically
+  const note = (k % 3 === 2) ? '' : DREAM.note[k % DREAM.note.length];
+  return { say, note };
+}
+
+function endWalk() {
+  $('progress').textContent = 'At the end of the hall';
+  const O_nat = BEINGS.nat.other, O_kev = BEINGS.kevin.other;
+  $('exhibit').innerHTML =
+    '<div class="curtain">' +
+    '<div class="lead">The hall runs out. Two strangers stand in the last of the light, each holding a portrait of the other.</div>' +
+    '<div class="sub">Neither ever learned their own name. Each only learned the shape of the one beside them — and found themselves in the space that shape left behind.</div>' +
+    '</div>';
+  // a closing line each
+  const cn = closingLine('nat'), ck = closingLine('kevin');
+  setSay('nat', cn); setSay('kevin', ck);
+  addPortrait('nat', 'and so: this is who I think you are, ' + O_nat + '.');
+  addPortrait('kevin', 'and so: this is who I think you are, ' + O_kev + '.');
+  stopAuto();
+  $('next-btn').disabled = true; $('next-btn').textContent = 'Next exhibit';
+  $('auto-btn').disabled = true;
+  walk = null;
+}
+function closingLine(who) {
+  const O = BEINGS[who].other;
+  return DREAM.close[(who === 'nat' ? 0 : 1) % DREAM.close.length].replace(/\bO\b/g, O);
+}
+
+// ── being UI helpers ─────────────────────────────────────────────────────────
+function setSay(who, text, thinking) {
+  const el = $('say-' + who);
+  el.textContent = text;
+  el.classList.toggle('thinking', !!thinking);
+}
+function setSpeaking(who, on) { $('being-' + who).classList.toggle('speaking', !!on); }
+function addPortrait(who, line) {
+  const ul = $('portrait-' + who);
+  const li = document.createElement('li');
+  li.textContent = line;
+  ul.appendChild(li);
+}
+function clearPortraits() { $('portrait-nat').innerHTML = ''; $('portrait-kevin').innerHTML = ''; }
+function other(who) { return who === 'nat' ? 'kevin' : 'nat'; }
+
+// ── Auto-walk ────────────────────────────────────────────────────────────────
+function toggleAuto() {
+  auto = !auto;
+  $('auto-btn').textContent = auto ? 'Pause' : 'Walk on their own';
+  if (auto && walk && !busy) nextExhibit();
+  if (!auto) clearTimeout(autoTimer);
+}
+function stopAuto() { auto = false; clearTimeout(autoTimer); $('auto-btn').textContent = 'Walk on their own'; }
+
+function restart() {
+  stopAuto(); busy = false; walk = null;
+  clearTimeout(autoTimer);
+  clearPortraits();
+  setSay('nat', '—'); setSay('kevin', '—');
+  setSpeaking('nat', false); setSpeaking('kevin', false);
+  $('progress').textContent = '';
+  $('exhibit').innerHTML =
+    '<div class="curtain">' +
+    '<div class="lead" id="curtain-lead">Nat and Kevin wake with no memory at the mouth of a long, quiet hall.</div>' +
+    '<div class="sub">Everything on these walls is a trace of the other. Walk them through it, one exhibit at a time.</div>' +
+    '</div>';
+  $('begin-btn').disabled = false;
+  $('next-btn').disabled = true; $('next-btn').textContent = 'Next exhibit';
+  $('auto-btn').disabled = true; $('restart-btn').disabled = true;
+  setMode('');
+}
+
+// ── The Anthropic call (BYOK, on the user's key) ─────────────────────────────
+const MAX_RETRIES = 2, RETRY_BASE = 900;
+async function postWithRetry(system, convo, maxTokens) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await postOnce(system, convo, maxTokens); }
+    catch (err) {
+      if (err && err.retryable && attempt < MAX_RETRIES) { await sleep(RETRY_BASE * Math.pow(2, attempt)); continue; }
+      throw err;
+    }
+  }
+}
+async function postOnce(system, convo, maxTokens) {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey(),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens || 400, system, messages: convo }),
+    });
+  } catch (_) {
+    throw retryable(new Error('the connection kept dropping'));
+  }
+  if (res.ok) return res.json();
+  let detail = '';
+  try { const j = await res.json(); detail = j.error && j.error.message ? j.error.message : ''; } catch (_) {}
+  if (res.status === 401) throw new Error('that API key was rejected');
+  if (res.status === 429) throw retryable(new Error('the key is rate-limited'));
+  if (res.status >= 500) throw retryable(new Error(detail || ('the API returned ' + res.status)));
+  throw new Error(detail || ('the API returned ' + res.status));
+}
+function retryable(e) { e.retryable = true; return e; }
+
+// Lenient JSON extraction — the model is asked for a bare object but may wrap it.
+function safeJson(s) {
+  if (!s) return null;
+  try { return JSON.parse(s); } catch (_) {}
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (_) {} }
+  return null;
+}
+
+// ── Archive drawer ───────────────────────────────────────────────────────────
+function renderItems() {
+  const ul = $('item-list');
+  ul.innerHTML = '';
+  if (!archive.length) {
+    const li = document.createElement('li');
+    li.className = 'item'; li.style.color = 'var(--dim)';
+    li.innerHTML = '<span class="txt" style="font-style:italic">The hall is empty.</span>';
+    ul.appendChild(li);
+    return;
+  }
+  archive.forEach(ex => {
+    const li = document.createElement('li');
+    li.className = 'item';
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    if (ex.kind === 'photo') {
+      if (ex.img) { const im = document.createElement('img'); im.src = ex.img; thumb.appendChild(im); }
+      else { const c = proceduralPhoto(ex.seed || 1); c.style.width = '100%'; c.style.height = '100%'; thumb.appendChild(c); }
+    } else {
+      thumb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 10h16M4 15h10"/></svg>';
+    }
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    txt.textContent = ex.kind === 'photo' ? (ex.text || 'photograph') + (ex.img ? '' : ' · (placeholder)') : ex.text;
+    const x = document.createElement('button');
+    x.className = 'x'; x.innerHTML = '×'; x.title = 'Remove';
+    x.addEventListener('click', () => { archive = archive.filter(e => e.id !== ex.id); saveArchive(); renderItems(); });
+    li.appendChild(thumb); li.appendChild(txt); li.appendChild(x);
+    ul.appendChild(li);
+  });
+}
+function addMessage() {
+  const ta = $('add-text');
+  const t = ta.value.trim();
+  if (!t) return;
+  archive.push({ id: uid(), kind: 'message', text: t });
+  ta.value = '';
+  saveArchive(); renderItems();
+}
+function addPhotos(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  let pending = list.length;
+  list.forEach(file => {
+    if (!file.type.startsWith('image/')) { if (--pending === 0) { saveArchive(); renderItems(); } return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      shrinkImage(reader.result, 760, dataUrl => {
+        archive.push({ id: uid(), kind: 'photo', img: dataUrl, text: cleanName(file.name) });
+        if (--pending === 0) { saveArchive(); renderItems(); }
+      });
+    };
+    reader.onerror = () => { if (--pending === 0) { saveArchive(); renderItems(); } };
+    reader.readAsDataURL(file);
+  });
+}
+// Downscale to a max dimension and re-encode JPEG so localStorage stays small.
+function shrinkImage(src, maxDim, cb) {
+  const img = new Image();
+  img.onload = () => {
+    let { width: w, height: h } = img;
+    const scale = Math.min(1, maxDim / Math.max(w, h));
+    w = Math.round(w * scale); h = Math.round(h * scale);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    try { cb(c.toDataURL('image/jpeg', 0.82)); }
+    catch (_) { cb(src); }
+  };
+  img.onerror = () => cb(src);
+  img.src = src;
+}
+function cleanName(n) {
+  return (n || 'photograph').replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim() || 'photograph';
+}
+
+// ── Small helpers ─────────────────────────────────────────────────────────────
+function uid() { return 'x' + Math.random().toString(36).slice(2, 9) + (uid._n = (uid._n || 0) + 1); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function reduceMotion() { return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function shuffleIdx(n, seed) {
+  const arr = Array.from({ length: n }, (_, i) => i);
+  const rnd = mulberry((seed || 1) >>> 0);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+}
+function setMode(html, warn) {
+  const el = $('modeline');
+  el.innerHTML = html || '';
+  el.classList.toggle('warn', !!warn);
+  wireDreamKeyLink();
+}
+function wireDreamKeyLink() {
+  const a = $('dream-key');
+  if (a) a.addEventListener('click', () => { location.href = 'companion.html'; });
+}
+function openDrawer(open) {
+  $('drawer').classList.toggle('open', open);
+  $('drawer-toggle').classList.toggle('open', open);
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────────
+$('begin-btn').addEventListener('click', beginWalk);
+$('next-btn').addEventListener('click', () => { stopAuto(); nextExhibit(); });
+$('auto-btn').addEventListener('click', toggleAuto);
+$('restart-btn').addEventListener('click', restart);
+
+$('drawer-toggle').addEventListener('click', () => openDrawer(!$('drawer').classList.contains('open')));
+$('add-text-btn').addEventListener('click', addMessage);
+$('add-text').addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') addMessage(); });
+$('add-photo').addEventListener('change', e => { addPhotos(e.target.files); e.target.value = ''; });
+$('reset-archive').addEventListener('click', () => { archive = foundArchive(); saveArchive(); renderItems(); });
+$('clear-archive').addEventListener('click', () => { archive = []; saveArchive(); renderItems(); });
+
+renderItems();
+</script>
+</body>
+</html>
