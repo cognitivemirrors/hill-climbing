@@ -3,7 +3,7 @@
    Strategy: network-first for page navigations (so version bumps reach
    users immediately when online), cache-first for static assets, and a
    full offline fallback to the cached app shell when the network is gone. */
-const CACHE_VERSION = 'hc-v2.21';
+const CACHE_VERSION = 'hc-v2.22';
 const CACHE_NAME = `hill-climbing-${CACHE_VERSION}`;
 
 const APP_SHELL = [

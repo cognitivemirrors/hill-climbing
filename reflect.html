@@ -313,7 +313,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.8 · reflect</div>
+<div class="corner" id="version-label">v0.9 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -398,7 +398,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.8 · reflect';
+const VERSION    = 'v0.9 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)
@@ -418,7 +418,12 @@ const IMG_RETRY_QUALITY = 0.7;
 // returned description + verbatim transcription are stored on the image inside
 // the entry record, so they ride the same E2EE sync / export / delete as the
 // photo. Photos attached while the toggle is off are never sent anywhere.
-const PHOTO_AI_LS      = 'hill-climbing-reflect-photo-ai';  // '1' = enabled; device-local, never synced
+const PHOTO_AI_LS      = 'hill-climbing-reflect-photo-ai';  // '1' = enabled
+// The consent choice is REMEMBERED ACROSS DEVICES (founder request): the flag
+// syncs as its own tiny E2EE blob, so enabling once — on any synced device —
+// counts everywhere, and turning it off propagates the same way. '1' on / '0'
+// off (an explicit '0' must win over "unset" on a fresh device).
+const PHOTO_AI_SYNC_KEY = 'ls:hill-climbing-reflect-photo-ai';
 const API_KEY_LS       = 'hill-climbing-api-key';           // shared BYOK credential (REQUIREMENTS A.1)
 const PHOTO_AI_MODEL   = 'claude-opus-4-8';                 // one line to flip to a cheaper tier
 const PHOTO_AI_MAX_TOK = 1500;
@@ -617,7 +622,8 @@ function showPhotoAiConsent() {
       'to write a short description and transcribe any visible text. Those notes are saved into the ' +
       'entry beside the photo (and ride the same encrypted sync). Like the other bring-your-own-key ' +
       'features, what is sent is readable by Anthropic under their API terms. Photos you attached ' +
-      'before turning this on are never sent. One tap turns it off.';
+      'before turning this on are never sent. You only decide this once: if sync is on, the choice ' +
+      'carries to your other devices, and one tap turns it off everywhere.';
     document.getElementById('photo-ai-enable').classList.remove('hidden');
   } else {
     photoAiText.textContent =
@@ -1020,7 +1026,8 @@ photoFile.addEventListener('change', e => {
 // Describe-photos opt-in: off → consent note (explicit enable); on → off instantly.
 photoAiToggle.addEventListener('click', () => {
   if (photoAiOn()) {
-    localStorage.removeItem(PHOTO_AI_LS);
+    localStorage.setItem(PHOTO_AI_LS, '0');    // explicit off, so revocation syncs too
+    if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);
     refreshPhotoAiToggle();
     flashSaved('photo describing off');
   } else {
@@ -1029,6 +1036,7 @@ photoAiToggle.addEventListener('click', () => {
 });
 document.getElementById('photo-ai-enable').addEventListener('click', () => {
   localStorage.setItem(PHOTO_AI_LS, '1');
+  if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);   // consent remembered across synced devices
   photoAiConsent.classList.add('hidden');
   refreshPhotoAiToggle();
   flashSaved('photo describing on');
@@ -1093,6 +1101,17 @@ if (window.HCSync) {
       });
       return idbPutMany(Object.keys(byId).map((k) => byId[k]));
     }).then(loadEntries).then(() => { if (state.view === 'history') renderHistory(); }),
+  });
+  // The photo-describe consent is decided once and remembered across devices:
+  // it syncs as its own tiny E2EE blob (LWW). '1' on / '0' off — never the raw
+  // absence of the key, so an explicit off wins over a fresh device's unset.
+  HCSync.registerStore({
+    key: PHOTO_AI_SYNC_KEY, kind: 'blob',
+    read:  () => photoAiOn() ? '1' : '0',
+    write: (str) => {                      // remote-apply path
+      try { localStorage.setItem(PHOTO_AI_LS, str === '1' ? '1' : '0'); } catch (e) { /* quota */ }
+      refreshPhotoAiToggle();
+    },
   });
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'reflect' });
