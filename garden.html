@@ -176,11 +176,14 @@
     #board { position: relative; margin: 0 auto; }
     #board .cell, #board .piece { position: absolute; }
 
-    /* static layer: paving, hedge stones, moss beds */
-    .cell.floor, .cell.bed { background: rgba(255,255,255,0.035); border-radius: 7px; }
+    /* static layer: paving, hedge stones, moss beds.
+       Walls must read as solid at a glance — keep a wide luminance gap:
+       stones (brightest) > walls (solid) > floor (faint) > void (black). */
+    .cell.floor, .cell.bed { background: rgba(255,255,255,0.03); border-radius: 7px; }
     .cell.wall {
-      background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.028));
-      border-radius: 9px; border: 1px solid rgba(255,255,255,0.03);
+      background: linear-gradient(160deg, rgba(255,255,255,0.17), rgba(255,255,255,0.09));
+      border-radius: 6px; border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.35);
     }
     .cell.bed::after {
       content: ''; position: absolute; left: 50%; top: 50%;
@@ -203,10 +206,10 @@
       transition: opacity 0.6s ease;
     }
     .stone-tile {
-      width: 72%; height: 72%; border-radius: 34%;
-      background: linear-gradient(145deg, rgba(255,255,255,0.30), rgba(255,255,255,0.11));
-      border: 1px solid rgba(255,255,255,0.30);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 2px 8px rgba(0,0,0,0.32);
+      width: 72%; height: 72%; border-radius: 40%;
+      background: linear-gradient(145deg, rgba(255,255,255,0.48), rgba(255,255,255,0.20));
+      border: 1px solid rgba(255,255,255,0.48);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 2px 8px rgba(0,0,0,0.38);
       transition: border-color 0.45s ease, box-shadow 0.45s ease, background 0.45s ease;
     }
     .piece.on-bed .stone-tile {
@@ -277,7 +280,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · garden</div>
+<div class="corner" id="version-label">v0.2 · garden</div>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -345,7 +348,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.1 · garden';
+const VERSION   = 'v0.2 · garden';
 const STATE_KEY = 'hill-climbing-garden';
 const HISTORY_CAP = 400;
 
