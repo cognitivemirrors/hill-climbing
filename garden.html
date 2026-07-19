@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Garden · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Garden">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Garden (moss) ──────────────────────
+         A soft moss green: quieter and cooler than Nourish's green,
+         the colour of the beds the stones come to rest on. */
+      --accent:      hsl(90,42%,66%);
+      --accent-soft: hsla(90,38%,60%,0.5);
+      --accent-glow: hsla(90,45%,52%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner menu — a single icon that opens a small data-management dropdown. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+    .btn.ghost.armed { color: var(--accent); }
+
+    /* ── the path (level select) ────────────────────────────────── */
+    #path-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+    .intro {
+      font-family: var(--font-display); font-size: 1.05rem; font-style: italic;
+      color: var(--mid); line-height: 1.7; max-width: 420px; margin-bottom: 34px;
+    }
+    .plots {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      width: 100%; max-width: 460px;
+    }
+    .plot {
+      position: relative; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 5px; min-height: 92px; padding: 12px 6px 10px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      color: var(--text); cursor: pointer; font-family: var(--font-ui);
+      transition: border-color 0.2s, background 0.2s, transform 0.2s ease;
+    }
+    .plot:hover { border-color: var(--line-strong); background: rgba(255,255,255,0.06); }
+    .plot.latest { border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.055); }
+    .plot-num { font-family: var(--font-display); font-size: 1.55rem; line-height: 1; color: var(--text); }
+    .plot-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      border: 1px solid var(--faint); background: transparent;
+      transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+    .plot.solved .plot-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+    .plot-name {
+      font-size: 9.5px; letter-spacing: 0.05em; line-height: 1.3; color: var(--accent);
+      min-height: 0; max-width: 100%; overflow-wrap: break-word;
+    }
+    .path-progress { margin-top: 26px; font-size: 12px; color: var(--dim); letter-spacing: 0.06em; }
+
+    /* ── the board ──────────────────────────────────────────────── */
+    #board-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 4px; }
+    .board-kicker { font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+    .board-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.6rem;
+      line-height: 1.2; color: var(--text); margin-bottom: 22px;
+      text-shadow: 0 0 36px var(--accent-glow);
+    }
+    #board-wrap { touch-action: none; padding: 6px; }
+    #board { position: relative; margin: 0 auto; }
+    #board .cell, #board .piece { position: absolute; }
+
+    /* static layer: paving, hedge stones, moss beds.
+       Walls must read as solid at a glance — keep a wide luminance gap:
+       stones (brightest) > walls (solid) > floor (faint) > void (black). */
+    .cell.floor, .cell.bed { background: rgba(255,255,255,0.03); border-radius: 7px; }
+    .cell.wall {
+      background: linear-gradient(160deg, rgba(255,255,255,0.17), rgba(255,255,255,0.09));
+      border-radius: 6px; border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.35);
+    }
+    .cell.bed::after {
+      content: ''; position: absolute; left: 50%; top: 50%;
+      width: 58%; height: 58%; transform: translate(-50%,-50%);
+      border-radius: 50%;
+      background: radial-gradient(circle at 42% 38%, hsla(90,45%,58%,0.28), hsla(90,45%,50%,0.10) 70%);
+      border: 1px solid var(--accent-soft);
+    }
+
+    /* moving layer: the keeper and the stones glide via transform */
+    .piece {
+      left: 0; top: 0; display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s cubic-bezier(0.3,0.6,0.3,1);
+      pointer-events: none;
+    }
+    .keeper-dot {
+      width: 36%; height: 36%; border-radius: 50%;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 0 0 5px rgba(255,255,255,0.07), 0 0 14px rgba(255,255,255,0.10);
+      transition: opacity 0.6s ease;
+    }
+    .stone-tile {
+      width: 72%; height: 72%; border-radius: 40%;
+      background: linear-gradient(145deg, rgba(255,255,255,0.48), rgba(255,255,255,0.20));
+      border: 1px solid rgba(255,255,255,0.48);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 2px 8px rgba(0,0,0,0.38);
+      transition: border-color 0.45s ease, box-shadow 0.45s ease, background 0.45s ease;
+    }
+    .piece.on-bed .stone-tile {
+      background: linear-gradient(145deg, hsla(90,40%,66%,0.38), hsla(90,40%,54%,0.16));
+      border-color: var(--accent-soft);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 0 16px var(--accent-glow);
+    }
+    #board.settled .piece.on-bed .stone-tile { box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 0 26px hsla(90,45%,52%,0.30); }
+    #board.settled .keeper-dot { opacity: 0.35; }
+
+    /* board controls */
+    .board-controls { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 18px; flex-wrap: wrap; }
+    .board-hint { margin-top: 14px; font-size: 11px; color: var(--faint); letter-spacing: 0.08em; }
+
+    /* settled */
+    #settled-box { display: flex; flex-direction: column; align-items: center; margin-top: 20px; animation: fadeUp 0.5s ease; }
+    .settled-line {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.5rem;
+      color: var(--text); text-shadow: 0 0 36px var(--accent-glow);
+    }
+    .settled-sub { font-size: 12.5px; color: var(--mid); letter-spacing: 0.04em; margin: 6px 0 20px; }
+    .settled-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+    /* on-screen d-pad — deliberate single steps on small screens */
+    .dpad {
+      display: none; grid-template-areas: '. u .' 'l . r' '. d .';
+      gap: 6px; margin-top: 18px;
+    }
+    .dpad button {
+      width: 52px; height: 44px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+      font-size: 16px; cursor: pointer; touch-action: manipulation;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .dpad button:active { border-color: var(--accent-soft); color: var(--accent); background: var(--accent-glow); }
+    .dpad [data-dir="u"] { grid-area: u; }
+    .dpad [data-dir="l"] { grid-area: l; }
+    .dpad [data-dir="r"] { grid-area: r; }
+    .dpad [data-dir="d"] { grid-area: d; }
+
+    /* visually-hidden live region for status announcements */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .plots { grid-template-columns: repeat(3, 1fr); }
+      .board-hint { display: none; }
+      .dpad { display: grid; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, #menu-panel, #settled-box { animation: none; }
+      .piece, .stone-tile, .keeper-dot, .plot-dot { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.2 · garden</div>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download a backup file</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <div class="menu-note">Your progress lives only on this device.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- ══ THE PATH — level select ═══════════════════════════════ -->
+  <section id="path-panel" class="panel">
+    <div class="kicker">A stone garden</div>
+    <p class="intro">Nudge every stone onto a bed of moss. Stones only move forward — one gentle push at a time, never pulled. Undo as much as you like; the garden is patient.</p>
+    <div class="plots" id="plots"></div>
+    <div class="path-progress" id="path-progress"></div>
+  </section>
+
+  <!-- ══ THE BOARD ═════════════════════════════════════════════ -->
+  <section id="board-panel" class="panel hidden">
+    <div class="board-kicker" id="board-kicker">level 1 of 12</div>
+    <div class="board-title" id="board-title">First stone</div>
+    <div id="board-wrap"><div id="board"></div></div>
+
+    <div class="board-controls" id="board-controls">
+      <button class="btn ghost" id="undo-btn" disabled>undo</button>
+      <button class="btn ghost" id="restart-btn">again</button>
+      <button class="btn ghost" id="path-btn">the path</button>
+    </div>
+    <div class="board-hint">arrows or WASD · Z undo · R restart</div>
+
+    <div class="dpad" id="dpad" aria-label="Move the keeper">
+      <button type="button" data-dir="u" aria-label="Step up">↑</button>
+      <button type="button" data-dir="l" aria-label="Step left">←</button>
+      <button type="button" data-dir="r" aria-label="Step right">→</button>
+      <button type="button" data-dir="d" aria-label="Step down">↓</button>
+    </div>
+
+    <div id="settled-box" class="hidden">
+      <div class="settled-line">The garden settles.</div>
+      <div class="settled-sub" id="settled-sub">in 12 moves</div>
+      <div class="settled-actions">
+        <button class="btn primary" id="next-btn">NEXT GARDEN</button>
+        <button class="btn ghost" id="linger-btn">linger</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="sr-only" id="announce" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const VERSION   = 'v0.2 · garden';
+const STATE_KEY = 'hill-climbing-garden';
+const HISTORY_CAP = 400;
+
+// ── The twelve gardens ────────────────────────────────────────────────────────
+// Standard Sokoban notation: # wall · @ keeper · $ stone · . moss bed
+// · * stone on bed · + keeper on bed · space floor.
+// Every level is machine-verified solvable by the standalone BFS solver kept
+// in the workshop (garden-solver.js) — never ship a garden it hasn't passed.
+const LEVELS = [
+  { name: 'First stone', map: [
+    '#######',
+    '#     #',
+    '# @$ .#',
+    '#     #',
+    '#######',
+  ]},
+  { name: 'The turn', map: [
+    '########',
+    '#      #',
+    '#  .   #',
+    '# $@   #',
+    '#      #',
+    '########',
+  ]},
+  { name: 'Two stones', map: [
+    '########',
+    '#      #',
+    '# .  . #',
+    '# $  $ #',
+    '#  @   #',
+    '########',
+  ]},
+  { name: 'Corner moss', map: [
+    '#######',
+    '#.   .#',
+    '# $ $ #',
+    '#  @  #',
+    '#     #',
+    '#######',
+  ]},
+  { name: 'One, then the other', map: [
+    '#######',
+    '# .   #',
+    '# $$. #',
+    '#  @  #',
+    '#     #',
+    '#######',
+  ]},
+  { name: 'The narrow gate', map: [
+    '########',
+    '#  #   #',
+    '# $ .. #',
+    '# @#   #',
+    '# $#   #',
+    '#  #   #',
+    '########',
+  ]},
+  { name: 'Around the hedge', map: [
+    '#########',
+    '#    .  #',
+    '# $##   #',
+    '# @##   #',
+    '# $##   #',
+    '#    .  #',
+    '#########',
+  ]},
+  { name: 'Three beds', map: [
+    '#########',
+    '# . . . #',
+    '#       #',
+    '# $ $ $ #',
+    '#   @   #',
+    '#########',
+  ]},
+  { name: 'The procession', map: [
+    '#########',
+    '#   #   #',
+    '# $$$ ..#',
+    '# @    .#',
+    '#       #',
+    '#########',
+  ]},
+  { name: 'Single file', map: [
+    '##########',
+    '#   #    #',
+    '# $ # .  #',
+    '# $   .  #',
+    '# $ # .  #',
+    '# @ #    #',
+    '##########',
+  ]},
+  { name: 'The courtyard', map: [
+    '#########',
+    '#.     .#',
+    '#       #',
+    '#   $   #',
+    '#  $@$  #',
+    '#   $   #',
+    '#.     .#',
+    '#########',
+  ]},
+  { name: 'The quiet room', map: [
+    '###########',
+    '#    #    #',
+    '# $  #  . #',
+    '# $  @  . #',
+    '# $  #  . #',
+    '#    #    #',
+    '###########',
+  ]},
+];
+
+const NUM_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// One tiny blob: which gardens have settled (first-solve timestamps) and the
+// last plot opened. Nothing else is kept — no counts, no comparisons.
+const state = { v: 1, solved: {}, last: 0 };
+
+function load() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  if (!raw || typeof raw !== 'object') raw = {};
+  if (raw.solved && typeof raw.solved === 'object') {
+    state.solved = {};
+    Object.keys(raw.solved).forEach(k => {
+      const i = Number(k);
+      if (Number.isInteger(i) && i >= 0 && i < LEVELS.length && typeof raw.solved[k] === 'number') {
+        state.solved[i] = raw.solved[k];
+      }
+    });
+  }
+  if (typeof raw.last === 'number' && Number.isInteger(raw.last) && raw.last >= 0 && raw.last < LEVELS.length) {
+    state.last = raw.last;
+  }
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+}
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const pathPanel  = document.getElementById('path-panel');
+const boardPanel = document.getElementById('board-panel');
+const boardEl    = document.getElementById('board');
+const boardWrap  = document.getElementById('board-wrap');
+const plotsEl    = document.getElementById('plots');
+const settledBox = document.getElementById('settled-box');
+const controlsEl = document.getElementById('board-controls');
+const hintEl     = document.querySelector('.board-hint');
+const dpadEl     = document.getElementById('dpad');
+const undoBtn    = document.getElementById('undo-btn');
+const restartBtn = document.getElementById('restart-btn');
+const nextBtn    = document.getElementById('next-btn');
+const importFile = document.getElementById('import-file');
+const announceEl = document.getElementById('announce');
+
+function announce(msg) { announceEl.textContent = msg; }
+
+// ── Level runtime ─────────────────────────────────────────────────────────────
+let levelIndex = -1;
+let level = null;        // { w, h, walls:Set('x,y'), beds:Set('x,y') }
+let keeper = null;       // { x, y, el }
+let stones = [];         // [{ x, y, el }]
+let history = [];        // [{ k:[x,y], s:[[x,y],…], m }]
+let moveCount = 0;
+let cellPx = 44;
+let bedsFilled = -1;     // stones-on-moss count, to announce only on change
+let isSettledView = false;
+let settleShown = false;   // "in N moves" is stated once per settling, not on every move over a complete board
+
+function key(x, y) { return x + ',' + y; }
+function wallAt(x, y) { return level.walls.has(key(x, y)); }
+function bedAt(x, y)  { return level.beds.has(key(x, y)); }
+function stoneAt(x, y) { return stones.find(s => s.x === x && s.y === y) || null; }
+function stonesOnBeds() { return stones.filter(s => bedAt(s.x, s.y)).length; }
+function boardComplete() { return stones.length > 0 && stonesOnBeds() === stones.length; }
+
+function parseLevel(i) {
+  const rows = LEVELS[i].map;
+  const h = rows.length;
+  const w = Math.max(...rows.map(r => r.length));
+  const parsed = { w, h, walls: new Set(), beds: new Set(), stones: [], keeper: null };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = rows[y][x] || ' ';
+      if (c === '#') parsed.walls.add(key(x, y));
+      if (c === '.' || c === '*' || c === '+') parsed.beds.add(key(x, y));
+      if (c === '$' || c === '*') parsed.stones.push([x, y]);
+      if (c === '@' || c === '+') parsed.keeper = [x, y];
+    }
+  }
+  return parsed;
+}
+
+// Cell size: fit the level to the viewport — cap 52px, floor 34px, but never
+// let a wide board overflow a narrow phone (shrink further before scrolling).
+function computeCell() {
+  const availW = Math.min(document.querySelector('main').clientWidth, window.innerWidth - 28) - 12;
+  const availH = Math.max(200, window.innerHeight - 320);
+  let c = Math.min(52, Math.floor(availW / level.w), Math.floor(availH / level.h));
+  c = Math.max(c, 34);
+  if (c * level.w > availW) c = Math.max(26, Math.floor(availW / level.w));
+  return c;
+}
+
+function positionPiece(p) {
+  p.el.style.width = cellPx + 'px';
+  p.el.style.height = cellPx + 'px';
+  p.el.style.transform = 'translate(' + (p.x * cellPx) + 'px,' + (p.y * cellPx) + 'px)';
+}
+function layoutBoard() {
+  cellPx = computeCell();
+  boardEl.style.width  = (level.w * cellPx) + 'px';
+  boardEl.style.height = (level.h * cellPx) + 'px';
+  boardEl.querySelectorAll('.cell').forEach(el => {
+    const x = +el.dataset.x, y = +el.dataset.y;
+    const wall = el.classList.contains('wall');
+    const inset = wall ? 1 : 1.5;
+    el.style.left = (x * cellPx + inset) + 'px';
+    el.style.top  = (y * cellPx + inset) + 'px';
+    el.style.width  = (cellPx - inset * 2) + 'px';
+    el.style.height = (cellPx - inset * 2) + 'px';
+  });
+  positionPiece(keeper);
+  stones.forEach(positionPiece);
+}
+
+function buildBoard() {
+  boardEl.innerHTML = '';
+  boardEl.classList.remove('settled');
+  for (let y = 0; y < level.h; y++) {
+    for (let x = 0; x < level.w; x++) {
+      const k = key(x, y);
+      const cell = document.createElement('div');
+      if (level.walls.has(k)) cell.className = 'cell wall';
+      else if (level.beds.has(k)) cell.className = 'cell bed';
+      else cell.className = 'cell floor';
+      cell.dataset.x = x; cell.dataset.y = y;
+      boardEl.appendChild(cell);
+    }
+  }
+  stones = level.stones.map(([x, y]) => {
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.innerHTML = '<div class="stone-tile"></div>';
+    boardEl.appendChild(el);
+    return { x, y, el };
+  });
+  const kEl = document.createElement('div');
+  kEl.className = 'piece';
+  kEl.innerHTML = '<div class="keeper-dot"></div>';
+  boardEl.appendChild(kEl);
+  keeper = { x: level.keeper[0], y: level.keeper[1], el: kEl };
+  layoutBoard();
+  refreshBedGlow();
+}
+
+function refreshBedGlow() {
+  stones.forEach(s => s.el.classList.toggle('on-bed', bedAt(s.x, s.y)));
+}
+
+// ── Movement ──────────────────────────────────────────────────────────────────
+function snapshot() {
+  history.push({ k: [keeper.x, keeper.y], s: stones.map(s => [s.x, s.y]), m: moveCount });
+  if (history.length > HISTORY_CAP) history.shift();
+  undoBtn.disabled = false;
+}
+
+function tryMove(dx, dy) {
+  if (!level) return false;
+  const nx = keeper.x + dx, ny = keeper.y + dy;
+  if (wallAt(nx, ny)) return false;               // stillness is the answer
+  const s = stoneAt(nx, ny);
+  let pushed = false;
+  if (s) {
+    const tx = nx + dx, ty = ny + dy;
+    if (wallAt(tx, ty) || stoneAt(tx, ty)) return false;
+    snapshot();
+    s.x = tx; s.y = ty;
+    positionPiece(s);
+    pushed = true;
+  } else {
+    snapshot();
+  }
+  keeper.x = nx; keeper.y = ny;
+  positionPiece(keeper);
+  moveCount++;
+  afterMove(pushed);
+  return true;
+}
+
+function afterMove(pushed) {
+  refreshBedGlow();
+  const filled = stonesOnBeds();
+  if (boardComplete()) {
+    if (!settleShown) settle();
+  } else {
+    settleShown = false;
+    if (isSettledView) unsettleView();
+    if (pushed && filled !== bedsFilled) {
+      announce(NUM_WORDS[filled] + ' of ' + NUM_WORDS[stones.length] + ' stones on moss');
+    }
+  }
+  bedsFilled = filled;
+}
+
+function undo() {
+  if (!history.length) return false;
+  const snap = history.pop();
+  keeper.x = snap.k[0]; keeper.y = snap.k[1];
+  snap.s.forEach((pos, i) => { stones[i].x = pos[0]; stones[i].y = pos[1]; });
+  moveCount = snap.m;
+  positionPiece(keeper);
+  stones.forEach(positionPiece);
+  refreshBedGlow();
+  undoBtn.disabled = history.length === 0;
+  if (!boardComplete()) settleShown = false;
+  if (isSettledView && !boardComplete()) unsettleView();
+  bedsFilled = stonesOnBeds();
+  announce('undone');
+  return true;
+}
+
+// ── Restart, with an inline confirm-arm (no alert, no drama) ─────────────────
+let restartArmed = false;
+let restartTimer = null;
+function disarmRestart() {
+  restartArmed = false;
+  if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
+  restartBtn.textContent = 'again';
+  restartBtn.classList.remove('armed');
+}
+function restartPressed() {
+  if (restartArmed) { disarmRestart(); doRestart(); return; }
+  restartArmed = true;
+  restartBtn.textContent = 'again?';
+  restartBtn.classList.add('armed');
+  restartTimer = setTimeout(disarmRestart, 2000);
+}
+function doRestart() {
+  level = parseLevel(levelIndex);
+  history = [];
+  moveCount = 0;
+  bedsFilled = -1;
+  settleShown = false;
+  undoBtn.disabled = true;
+  unsettleView();
+  buildBoard();
+  bedsFilled = stonesOnBeds();
+  announce('level reset');
+}
+
+// ── Settling ──────────────────────────────────────────────────────────────────
+function nextUnsolved(from) {
+  for (let j = 1; j <= LEVELS.length; j++) {
+    const i = (from + j) % LEVELS.length;
+    if (!state.solved[i]) return i;
+  }
+  return null;
+}
+
+function settle() {
+  settleShown = true;
+  if (!state.solved[levelIndex]) {          // the record is of the achievement —
+    state.solved[levelIndex] = Date.now();  // it never un-solves, never compares
+    save();
+  }
+  boardEl.classList.add('settled');
+  isSettledView = true;
+  document.getElementById('settled-sub').textContent =
+    'in ' + moveCount + (moveCount === 1 ? ' move' : ' moves');
+  const next = nextUnsolved(levelIndex);
+  nextBtn.textContent = next === null ? 'BACK TO THE PATH' : 'NEXT GARDEN';
+  nextBtn.dataset.next = next === null ? '' : String(next);
+  controlsEl.classList.add('hidden');
+  hintEl.classList.add('hidden');
+  dpadEl.classList.add('hidden');
+  settledBox.classList.remove('hidden');
+  disarmRestart();
+  announce('The garden settles — every stone on moss.');
+}
+
+function unsettleView() {
+  isSettledView = false;
+  boardEl.classList.remove('settled');
+  settledBox.classList.add('hidden');
+  controlsEl.classList.remove('hidden');
+  hintEl.classList.remove('hidden');
+  dpadEl.classList.remove('hidden');
+}
+
+// ── Screens ───────────────────────────────────────────────────────────────────
+function swapPanel(panel) {
+  [pathPanel, boardPanel].forEach(p => p.classList.add('hidden'));
+  panel.classList.remove('hidden');
+  panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
+}
+
+function openLevel(i) {
+  levelIndex = i;
+  state.last = i; save();
+  level = parseLevel(i);
+  history = [];
+  moveCount = 0;
+  bedsFilled = -1;
+  settleShown = false;
+  undoBtn.disabled = true;
+  disarmRestart();
+  unsettleView();
+  document.getElementById('board-kicker').textContent = 'level ' + (i + 1) + ' of ' + LEVELS.length;
+  document.getElementById('board-title').textContent = LEVELS[i].name;
+  buildBoard();
+  bedsFilled = stonesOnBeds();
+  swapPanel(boardPanel);
+  announce('Level ' + (i + 1) + ' — ' + LEVELS[i].name + '. ' +
+    NUM_WORDS[stones.length] + (stones.length === 1 ? ' stone' : ' stones') + ' to settle.');
+}
+
+function renderPath() {
+  plotsEl.innerHTML = '';
+  LEVELS.forEach((lv, i) => {
+    const solved = !!state.solved[i];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'plot' + (solved ? ' solved' : '') + (i === state.last ? ' latest' : '');
+    b.setAttribute('aria-label', 'Plot ' + (i + 1) + ' — ' + lv.name + (solved ? ', settled' : ''));
+    const num = document.createElement('span');
+    num.className = 'plot-num'; num.textContent = i + 1;
+    const dot = document.createElement('span');
+    dot.className = 'plot-dot'; dot.setAttribute('aria-hidden', 'true');
+    b.append(num, dot);
+    if (solved) {
+      const name = document.createElement('span');
+      name.className = 'plot-name'; name.textContent = lv.name;
+      b.appendChild(name);
+    }
+    b.addEventListener('click', () => openLevel(i));
+    plotsEl.appendChild(b);
+  });
+  const n = Object.keys(state.solved).length;
+  const prog = document.getElementById('path-progress');
+  if (n === 0) { prog.textContent = ''; prog.classList.add('hidden'); }
+  else {
+    prog.classList.remove('hidden');
+    prog.textContent = n === LEVELS.length ? 'all twelve settled' : NUM_WORDS[n] + ' of twelve settled';
+  }
+}
+
+function showPath() {
+  level = null; levelIndex = -1;
+  renderPath();
+  swapPanel(pathPanel);
+}
+
+// ── Export / import (your data is yours) ─────────────────────────────────────
+function exportData() {
+  const payload = { app: 'garden', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = 'garden-' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object' || !incoming.solved || typeof incoming.solved !== 'object') {
+      throw new Error('not a Garden export');
+    }
+    state.solved = {};
+    Object.keys(incoming.solved).forEach(k => {       // drop unknown indices
+      const i = Number(k);
+      if (Number.isInteger(i) && i >= 0 && i < LEVELS.length && typeof incoming.solved[k] === 'number') {
+        state.solved[i] = incoming.solved[k];
+      }
+    });
+    if (typeof incoming.last === 'number' && Number.isInteger(incoming.last) && incoming.last >= 0 && incoming.last < LEVELS.length) {
+      state.last = incoming.last;
+    }
+    save();
+    showPath();
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Input: keyboard ───────────────────────────────────────────────────────────
+const KEY_DIRS = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+  W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
+};
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (boardPanel.classList.contains('hidden')) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+  const dir = KEY_DIRS[e.key];
+  if (dir) { e.preventDefault(); tryMove(dir[0], dir[1]); return; }
+  if (e.key === 'z' || e.key === 'Z' || e.key === 'Backspace') { e.preventDefault(); undo(); return; }
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); restartPressed(); }
+});
+
+// ── Input: swipe + d-pad ──────────────────────────────────────────────────────
+let touchStart = null;
+boardWrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+boardWrap.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+boardWrap.addEventListener('touchend', e => {
+  if (!touchStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
+  touchStart = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;   // a rest, not a swipe
+  if (Math.abs(dx) > Math.abs(dy)) tryMove(dx > 0 ? 1 : -1, 0);
+  else tryMove(0, dy > 0 ? 1 : -1);
+  e.preventDefault();
+});
+const DPAD_DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
+dpadEl.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    const dir = DPAD_DIRS[b.dataset.dir];
+    if (dir) tryMove(dir[0], dir[1]);
+  });
+});
+
+// ── Events ────────────────────────────────────────────────────────────────────
+undoBtn.addEventListener('click', undo);
+restartBtn.addEventListener('click', restartPressed);
+document.getElementById('path-btn').addEventListener('click', showPath);
+document.getElementById('linger-btn').addEventListener('click', unsettleView);
+nextBtn.addEventListener('click', () => {
+  const next = nextBtn.dataset.next;
+  if (next === '') showPath();
+  else openLevel(Number(next));
+});
+window.addEventListener('resize', () => { if (level) layoutBoard(); });
+
+// Corner data menu — open/close, close on outside-click or Esc.
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+showPath();
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>

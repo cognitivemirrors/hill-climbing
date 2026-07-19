@@ -124,6 +124,8 @@
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
     .card.erp      { --accent: hsl(120,30%,56%); --accent-soft: hsla(120,28%,54%,0.45); --accent-glow: hsla(120,34%,42%,0.16); }
+    .card.echo     { --accent: hsl(197,72%,68%); --accent-soft: hsla(197,66%,64%,0.45); --accent-glow: hsla(197,72%,56%,0.16); }
+    .card.garden   { --accent: hsl(90,42%,66%);  --accent-soft: hsla(90,38%,60%,0.45);  --accent-glow: hsla(90,45%,52%,0.16); }
 
     /* ── Footer ───────────────────────────────────────────────── */
     footer {
@@ -627,6 +629,31 @@
       <p>Log your workouts, one set at a time.</p>
     </a>
 
+    <a class="card echo" href="echo.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="15" cy="24" r="2.4" fill="currentColor" stroke="none"/>
+          <path d="M22 17a10 10 0 0 1 0 14"/>
+          <path d="M27.5 12.5a17 17 0 0 1 0 23"/>
+          <path d="M33 8a24 24 0 0 1 0 32"/>
+        </svg>
+      </span>
+      <h2>Echo</h2>
+      <p>Hear a phrase of bells and play it back.</p>
+    </a>
+
+    <a class="card garden" href="garden.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="24" cy="19" rx="8" ry="6.5"/>
+          <path d="M12 30c3.5 2.3 7.5 3.5 12 3.5s8.5-1.2 12-3.5"/>
+          <path d="M9 37c4.5 2 9.8 3 15 3s10.5-1 15-3"/>
+        </svg>
+      </span>
+      <h2>Garden</h2>
+      <p>Nudge every stone onto its bed of moss.</p>
+    </a>
+
     <a class="card anime" href="anime.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1070,7 +1097,7 @@
     function refresh() { loadUsage().then(paint); }
 
     // ── Next step — a quiet, deterministic suggestion ────────────────────────
-    // Answers "what should I do right now?" so eleven cards don't become a
+    // Answers "what should I do right now?" so thirteen cards don't become a
     // choice problem. Design constraints (CONSTRAINTS C2/C6/§5):
     //   · read-only over data the apps already keep on this device — nothing
     //     new is stored, nothing leaves the device;
