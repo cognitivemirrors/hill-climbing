@@ -490,7 +490,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.13 · companion</div>
+<div class="corner" id="version-label">v0.14 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -613,7 +613,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.13';
+const VERSION_NUM = 'v0.14';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -653,6 +653,8 @@ const SYNC_BLOB_KEY = 'ls:hill-climbing-companion';
 const CONV_CAP      = 60;
 const JOURNAL_MAX   = 25;     // most-recent entries shared
 const ENTRY_CHARS   = 700;    // per-entry truncation
+const PHOTO_OCR_CHARS = 1200; // per-photo transcription truncation (a photographed
+                              // journal page IS the entry, so it gets more room)
 const GOALS_CHARS   = 4000;
 const ACTIVITY_DAYS = 28;
 
@@ -1073,7 +1075,9 @@ function readJournal() {
         const getAll = db.transaction('entries', 'readonly').objectStore('entries').getAll();
         getAll.onsuccess = function () {
           const all = (getAll.result || [])
-            .filter(e => e && typeof e.created === 'number')
+            // Tombstones (deleted:true) stay in the store so deletions propagate
+            // through sync — they must never reach the digest.
+            .filter(e => e && typeof e.created === 'number' && !e.deleted)
             .sort((a, b) => b.created - a.created);
           done({ all });
         };
@@ -1090,10 +1094,28 @@ function formatJournal(journal) {
     meta.push(niceDate(e.created));
     if (e.mood) meta.push('mood ' + e.mood + '/7');
     if (e.satisfaction) meta.push('satisfaction ' + e.satisfaction + '/7');
+    // Photo entries (reflect v0.7+) count as content. The photos themselves are
+    // NEVER sent — only the notes reflect's opt-in describe flow already stored
+    // beside them (desc = AI description, ocr = transcribed text; both may be
+    // absent). A photo-only entry is still an entry.
+    const imgs = Array.isArray(e.images) ? e.images.filter(Boolean) : [];
+    if (imgs.length) meta.push(imgs.length + ' photo' + (imgs.length === 1 ? '' : 's'));
+    const notes = imgs.map(im => {
+      let s = (typeof im.desc === 'string' && im.desc.trim()) ? '[photo: ' + im.desc.trim() + ']' : '';
+      let ocr = (typeof im.ocr === 'string') ? im.ocr.trim() : '';
+      if (ocr) {
+        if (ocr.length > PHOTO_OCR_CHARS) ocr = ocr.slice(0, PHOTO_OCR_CHARS) + '…';
+        s += (s ? '\n' : '[photo]\n') + 'text in the photo: "' + ocr + '"';
+      }
+      return s;
+    }).filter(Boolean).join('\n');
     let body = (e.text || '').trim();
-    if (!body && !e.mood && !e.satisfaction) return null;
     if (body.length > ENTRY_CHARS) body = body.slice(0, ENTRY_CHARS) + '…';
-    return '[' + meta.join(' · ') + ']' + (body ? ('\n' + body) : ' (rating only, no note)');
+    const full = [body, notes].filter(Boolean).join('\n');
+    if (!full && !e.mood && !e.satisfaction && !imgs.length) return null;
+    return '[' + meta.join(' · ') + ']' +
+      (full ? ('\n' + full)
+            : (imgs.length ? ' (photo attached, no notes)' : ' (rating only, no note)'));
   }).filter(Boolean);
   const omitted = journal.all.length - recent.length;
   let text = parts.join('\n\n');
