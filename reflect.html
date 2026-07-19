@@ -167,6 +167,30 @@
       font-size: 10px; color: var(--faint); letter-spacing: 0.05em;
     }
 
+    /* ── photos (write-view draft strip + add button) ───────────── */
+    .photo-strip { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+    .photo-thumb {
+      position: relative; width: 84px; height: 84px; border-radius: 10px;
+      overflow: hidden; border: 1px solid var(--line); animation: fadeUp 0.2s ease;
+    }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-remove {
+      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; border-radius: 50%; background: rgba(0,0,0,0.55);
+      color: rgba(255,255,255,0.85); font-size: 14px; line-height: 1; cursor: pointer;
+    }
+    .photo-remove:hover { background: rgba(0,0,0,0.75); }
+    #add-photo-btn {
+      height: 34px; padding: 0 16px; border-radius: 17px;
+      border: 1px dashed rgba(255,255,255,0.22); background: transparent;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.05em; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #add-photo-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.4); }
+    #add-photo-btn:disabled { opacity: 0.35; cursor: default; }
+    #photo-busy { font-size: 11px; color: var(--dim); letter-spacing: 0.05em; }
+
     .write-actions { display: flex; align-items: center; gap: 18px; margin-top: 24px; }
     #save-btn {
       min-width: 124px; height: 44px; border-radius: 22px; padding: 0 26px;
@@ -206,6 +230,19 @@
     .rating-swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
     .entry-text { font-family: var(--font-display); font-size: 16px; line-height: 1.75; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
     .entry-text:empty::before { content: '— check-in, no note —'; color: var(--faint); font-style: italic; }
+    .entry-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .entry-photos img {
+      height: 96px; max-width: 160px; object-fit: cover; display: block;
+      border-radius: 9px; border: 1px solid var(--line); cursor: zoom-in;
+    }
+
+    /* full-size photo viewer */
+    #lightbox {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(5,6,10,0.93); cursor: zoom-out; animation: fadeUp 0.15s ease;
+    }
+    #lightbox img { max-width: 94vw; max-height: 92vh; border-radius: 6px; }
     .entry-actions { display: flex; gap: 16px; margin-top: 12px; opacity: 0; transition: opacity 0.2s; }
     .entry-card:hover .entry-actions { opacity: 1; }
     .entry-actions button {
@@ -239,7 +276,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.6 · reflect</div>
+<div class="corner" id="version-label">v0.7 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -272,6 +309,12 @@
     <div class="prompt-line" id="prompt-line"></div>
     <textarea id="entry-text" placeholder="Write freely. Nothing here leaves your device."></textarea>
 
+    <div class="photo-strip" id="photo-strip">
+      <button id="add-photo-btn" type="button">+ add a photo</button>
+      <span id="photo-busy" class="hidden">preparing…</span>
+      <input type="file" id="photo-file" accept="image/*" multiple class="hidden">
+    </div>
+
     <div class="scales">
       <div class="scale-block">
         <div class="scale-top"><span class="scale-label">Mood</span><span class="scale-value" id="mood-value">—</span></div>
@@ -290,7 +333,7 @@
       <button id="cancel-edit-btn" class="hidden">cancel edit</button>
       <span id="save-feedback">saved</span>
     </div>
-    <div class="hint">⌘/Ctrl + Enter to save · a note, a rating, or both</div>
+    <div class="hint">⌘/Ctrl + Enter to save · a note, a rating, a photo — any of them</div>
   </section>
 
   <!-- history -->
@@ -310,11 +353,20 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.6 · reflect';
+const VERSION    = 'v0.7 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)
 const SCALE_MAX  = 7;
+// Photos are stored INSIDE the entry record as compressed JPEG data URLs, so
+// they ride the existing per-entry E2EE sync log, export/import, and edit flow
+// unchanged. Downscaling keeps each one small enough for that path.
+const MAX_IMAGES     = 4;            // per entry
+const IMG_MAX_DIM    = 1400;         // px, long edge
+const IMG_QUALITY    = 0.82;         // JPEG
+const IMG_SOFT_CAP   = 900 * 1024;   // if a first pass exceeds this, recompress harder
+const IMG_RETRY_DIM  = 1100;
+const IMG_RETRY_QUALITY = 0.7;
 const PROMPTS = [
   'What’s present right now?',
   'What’s been asking for your attention?',
@@ -330,7 +382,7 @@ const state = {
   view:      'write',
   entries:   [],                                  // newest first
   editingId: null,
-  draft:     { text: '', mood: null, satisfaction: null },
+  draft:     { text: '', mood: null, satisfaction: null, images: [] },
   pendingDelete: null,                            // {id, timer} for two-tap delete
 };
 
@@ -418,6 +470,10 @@ const saveFeedback= document.getElementById('save-feedback');
 const historyList = document.getElementById('history-list');
 const historyEmpty= document.getElementById('history-empty');
 const importFile  = document.getElementById('import-file');
+const photoStrip  = document.getElementById('photo-strip');
+const addPhotoBtn = document.getElementById('add-photo-btn');
+const photoBusy   = document.getElementById('photo-busy');
+const photoFile   = document.getElementById('photo-file');
 
 // ── Scale inputs ────────────────────────────────────────────────────────────
 function renderScale(containerId, value) {
@@ -449,9 +505,93 @@ document.getElementById('scale-sat').addEventListener('click', e => {
   if (e.target.dataset.v) pickScale('satisfaction', +e.target.dataset.v);
 });
 
+// ── Photos ──────────────────────────────────────────────────────────────────
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+    img.src = url;
+  });
+}
+function scaleToJpeg(img, maxDim, quality) {
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return { dataUrl: canvas.toDataURL('image/jpeg', quality), w, h };
+}
+async function compressImage(file) {
+  const img = await readImageFile(file);
+  let out = scaleToJpeg(img, IMG_MAX_DIM, IMG_QUALITY);
+  if (out.dataUrl.length > IMG_SOFT_CAP) out = scaleToJpeg(img, IMG_RETRY_DIM, IMG_RETRY_QUALITY);
+  return out;
+}
+async function addPhotos(files) {
+  photoBusy.classList.remove('hidden');
+  addPhotoBtn.disabled = true;
+  try {
+    for (const f of files) {
+      if (state.draft.images.length >= MAX_IMAGES) { flashSaved(`up to ${MAX_IMAGES} photos`); break; }
+      try { state.draft.images.push(await compressImage(f)); }
+      catch (err) { flashSaved('couldn’t read that image'); }
+    }
+  } finally {
+    photoBusy.classList.add('hidden');
+    renderDraftPhotos();
+    refreshSaveState();
+  }
+}
+function renderDraftPhotos() {
+  photoStrip.querySelectorAll('.photo-thumb').forEach(el => el.remove());
+  state.draft.images.forEach((im, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-thumb';
+    const img = document.createElement('img');
+    img.src = im.dataUrl; img.alt = 'attached photo';
+    const rm = document.createElement('button');
+    rm.className = 'photo-remove'; rm.type = 'button';
+    rm.textContent = '×'; rm.setAttribute('aria-label', 'Remove photo');
+    rm.addEventListener('click', () => {
+      state.draft.images.splice(i, 1);
+      renderDraftPhotos();
+      refreshSaveState();
+    });
+    wrap.appendChild(img); wrap.appendChild(rm);
+    photoStrip.insertBefore(wrap, addPhotoBtn);
+  });
+  addPhotoBtn.disabled = state.draft.images.length >= MAX_IMAGES;
+}
+// Import/sync hygiene: accept only strict base64 image data URLs, never markup.
+function sanitizeImages(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.slice(0, MAX_IMAGES).map(im =>
+    im && typeof im.dataUrl === 'string' &&
+    /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(im.dataUrl)
+      ? { dataUrl: im.dataUrl, w: +im.w || null, h: +im.h || null }
+      : null
+  ).filter(Boolean);
+}
+function openLightbox(dataUrl) {
+  const box = document.createElement('div');
+  box.id = 'lightbox';
+  const img = document.createElement('img');
+  img.src = dataUrl; img.alt = 'photo, full size';
+  box.appendChild(img);
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  box.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(box);
+}
+
 // ── Write view ──────────────────────────────────────────────────────────────
 function refreshSaveState() {
-  const has = textEl.value.trim() || state.draft.mood || state.draft.satisfaction;
+  const has = textEl.value.trim() || state.draft.mood || state.draft.satisfaction ||
+              state.draft.images.length;
   saveBtn.disabled = !has;
 }
 function autoGrow() {
@@ -461,6 +601,7 @@ function autoGrow() {
 function renderWrite() {
   textEl.value = state.draft.text;
   autoGrow();
+  renderDraftPhotos();
   renderScales();
   refreshSaveState();
   if (state.editingId) {
@@ -479,7 +620,7 @@ function renderWrite() {
 }
 function resetDraft() {
   state.editingId = null;
-  state.draft = { text: '', mood: null, satisfaction: null };
+  state.draft = { text: '', mood: null, satisfaction: null, images: [] };
 }
 function flashSaved(msg) {
   saveFeedback.textContent = msg;
@@ -489,12 +630,13 @@ function flashSaved(msg) {
 
 async function save() {
   const text = textEl.value.trim();
-  if (!text && !state.draft.mood && !state.draft.satisfaction) return;
+  if (!text && !state.draft.mood && !state.draft.satisfaction && !state.draft.images.length) return;
   const now = Date.now();
 
   if (state.editingId) {
     const e = state.entries.find(x => x.id === state.editingId);
-    const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction, updated: now };
+    const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction,
+                      images: state.draft.images, updated: now };
     await idbPut(updated);
     if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, updated);
     resetDraft();
@@ -504,6 +646,7 @@ async function save() {
     const entry = {
       id: uid(), created: now, updated: now,
       text, mood: state.draft.mood, satisfaction: state.draft.satisfaction,
+      images: state.draft.images,
       embedding: null, embModel: null,            // reserved for the semantic-map phase
     };
     await idbPut(entry);
@@ -519,7 +662,8 @@ function startEdit(id) {
   const e = state.entries.find(x => x.id === id);
   if (!e) return;
   state.editingId = id;
-  state.draft = { text: e.text || '', mood: e.mood || null, satisfaction: e.satisfaction || null };
+  state.draft = { text: e.text || '', mood: e.mood || null, satisfaction: e.satisfaction || null,
+                  images: (e.images || []).slice() };
   switchView('write');
 }
 
@@ -553,16 +697,31 @@ function renderHistory() {
     }
     const card = document.createElement('div');
     card.className = 'entry-card';
+    const imgs = Array.isArray(e.images) ? e.images : [];
     card.innerHTML = `
       <div class="entry-head">
         <span class="entry-time">${timeLabel(e.created)}${e.updated > e.created + 1000 ? ' · edited' : ''}</span>
         <span class="entry-ratings">${ratingChip('mood', e.mood)}${ratingChip('sat', e.satisfaction)}</span>
       </div>
-      <div class="entry-text">${escapeHTML(e.text || '')}</div>
+      <div class="entry-text${!e.text && imgs.length ? ' hidden' : ''}">${escapeHTML(e.text || '')}</div>
       <div class="entry-actions">
         <button data-act="edit">edit</button>
         <button data-act="delete">delete</button>
       </div>`;
+    if (imgs.length) {
+      // Photos are built via DOM (src property, never markup) so a hostile
+      // dataUrl from an import/sync merge stays inert.
+      const row = document.createElement('div');
+      row.className = 'entry-photos';
+      imgs.forEach(im => {
+        if (!im || typeof im.dataUrl !== 'string') return;
+        const img = document.createElement('img');
+        img.src = im.dataUrl; img.alt = 'journal photo'; img.loading = 'lazy';
+        img.addEventListener('click', () => openLightbox(im.dataUrl));
+        row.appendChild(img);
+      });
+      card.insertBefore(row, card.querySelector('.entry-actions'));
+    }
     card.querySelector('[data-act="edit"]').addEventListener('click', () => startEdit(e.id));
     const delBtn = card.querySelector('[data-act="delete"]');
     delBtn.addEventListener('click', () => handleDelete(e.id, delBtn));
@@ -576,9 +735,11 @@ function handleDelete(id, btn) {
     // the deletion propagates through sync. A hard idbDelete would leave the
     // entry alive on other devices and let it resurrect on a fresh pull.
     const e = state.entries.find(x => x.id === id);
+    // Tombstones drop the photo bytes — no reason to keep (or push through
+    // sync) megabytes of imagery on an entry the user deleted.
     const tomb = e
-      ? { ...e, deleted: true, updated: Date.now() }
-      : { id, deleted: true, created: Date.now(), updated: Date.now(), text: '', mood: null, satisfaction: null };
+      ? { ...e, images: [], deleted: true, updated: Date.now() }
+      : { id, deleted: true, created: Date.now(), updated: Date.now(), text: '', mood: null, satisfaction: null, images: [] };
     idbPut(tomb)
       .then(() => { if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, tomb); })
       .then(loadEntries)
@@ -641,6 +802,7 @@ async function importData(file) {
         text: String(e.text || ''),
         mood: e.mood ?? null,
         satisfaction: e.satisfaction ?? null,
+        images: sanitizeImages(e.images),
         embedding: e.embedding ?? null,
         embModel: e.embModel ?? null,
       };
@@ -664,6 +826,11 @@ saveBtn.addEventListener('click', save);
 cancelEdit.addEventListener('click', () => { resetDraft(); switchView('history'); });
 textEl.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!saveBtn.disabled) save(); }
+});
+addPhotoBtn.addEventListener('click', () => photoFile.click());
+photoFile.addEventListener('change', e => {
+  if (e.target.files && e.target.files.length) addPhotos(Array.from(e.target.files));
+  e.target.value = '';
 });
 // Corner data menu — open/close, close on outside-click or Esc (ported from nourish).
 const menuEl = document.getElementById('menu');
