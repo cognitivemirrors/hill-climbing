@@ -167,6 +167,58 @@
       font-size: 10px; color: var(--faint); letter-spacing: 0.05em;
     }
 
+    /* ── photos (write-view draft strip + add button) ───────────── */
+    .photo-strip { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; margin-top: 14px; }
+    .photo-item { width: 84px; display: flex; flex-direction: column; gap: 4px; animation: fadeUp 0.2s ease; }
+    .photo-thumb {
+      position: relative; width: 84px; height: 84px; border-radius: 10px;
+      overflow: hidden; border: 1px solid var(--line);
+    }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-item .photo-cap {
+      font-size: 9.5px; line-height: 1.35; color: var(--dim);
+      max-height: 51px; overflow: hidden;
+    }
+    .photo-remove {
+      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; border-radius: 50%; background: rgba(0,0,0,0.55);
+      color: rgba(255,255,255,0.85); font-size: 14px; line-height: 1; cursor: pointer;
+    }
+    .photo-remove:hover { background: rgba(0,0,0,0.75); }
+    #add-photo-btn {
+      height: 34px; padding: 0 16px; border-radius: 17px;
+      border: 1px dashed rgba(255,255,255,0.22); background: transparent;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.05em; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #add-photo-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.4); }
+    #add-photo-btn:disabled { opacity: 0.35; cursor: default; }
+    #photo-busy { font-size: 11px; color: var(--dim); letter-spacing: 0.05em; align-self: center; }
+
+    /* opt-in AI describe/transcribe toggle + its consent note */
+    #photo-ai-toggle {
+      background: none; border: none; padding: 8px 2px; align-self: center;
+      color: var(--faint); font-size: 11px; letter-spacing: 0.05em; cursor: pointer;
+      transition: color 0.2s;
+    }
+    #photo-ai-toggle:hover { color: var(--mid); }
+    #photo-ai-toggle.on { color: var(--accent-soft); }
+    #photo-ai-consent {
+      margin-top: 12px; padding: 14px 16px; border: 1px solid var(--line);
+      border-radius: 12px; background: var(--panel); animation: fadeUp 0.2s ease;
+    }
+    #photo-ai-consent p { font-size: 12.5px; line-height: 1.6; color: var(--mid); }
+    .consent-actions { display: flex; gap: 14px; margin-top: 10px; }
+    .consent-actions button {
+      background: none; border: 1px solid rgba(255,255,255,0.22); border-radius: 15px;
+      padding: 5px 14px; color: var(--text); font-size: 12px; cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .consent-actions button:hover { border-color: rgba(255,255,255,0.4); }
+    .consent-actions button.quiet { border: none; color: var(--dim); }
+    .consent-actions button.quiet:hover { color: var(--text); }
+
     .write-actions { display: flex; align-items: center; gap: 18px; margin-top: 24px; }
     #save-btn {
       min-width: 124px; height: 44px; border-radius: 22px; padding: 0 26px;
@@ -206,6 +258,28 @@
     .rating-swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
     .entry-text { font-family: var(--font-display); font-size: 16px; line-height: 1.75; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
     .entry-text:empty::before { content: '— check-in, no note —'; color: var(--faint); font-style: italic; }
+    .entry-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .entry-photos img {
+      height: 96px; max-width: 160px; object-fit: cover; display: block;
+      border-radius: 9px; border: 1px solid var(--line); cursor: zoom-in;
+    }
+    .entry-photo-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .photo-desc { font-size: 12.5px; line-height: 1.55; color: var(--mid); font-style: italic; }
+    .photo-ocr {
+      font-size: 12.5px; line-height: 1.6; color: var(--mid); white-space: pre-wrap;
+      border-left: 2px solid rgba(255,255,255,0.14); padding: 2px 0 2px 12px;
+      max-height: 220px; overflow-y: auto;
+    }
+
+    /* full-size photo viewer */
+    #lightbox {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column; gap: 12px;
+      align-items: center; justify-content: center; padding: 20px;
+      background: rgba(5,6,10,0.93); cursor: zoom-out; animation: fadeUp 0.15s ease;
+    }
+    #lightbox img { max-width: 94vw; max-height: 86vh; border-radius: 6px; }
+    #lightbox .lb-cap { max-width: 640px; font-size: 13px; line-height: 1.55; color: var(--mid); font-style: italic; text-align: center; }
     .entry-actions { display: flex; gap: 16px; margin-top: 12px; opacity: 0; transition: opacity 0.2s; }
     .entry-card:hover .entry-actions { opacity: 1; }
     .entry-actions button {
@@ -239,7 +313,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.6 · reflect</div>
+<div class="corner" id="version-label">v0.9 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -272,6 +346,20 @@
     <div class="prompt-line" id="prompt-line"></div>
     <textarea id="entry-text" placeholder="Write freely. Nothing here leaves your device."></textarea>
 
+    <div class="photo-strip" id="photo-strip">
+      <button id="add-photo-btn" type="button">+ add a photo</button>
+      <button id="photo-ai-toggle" type="button">describe photos: off</button>
+      <span id="photo-busy" class="hidden">preparing…</span>
+      <input type="file" id="photo-file" accept="image/*" multiple class="hidden">
+    </div>
+    <div id="photo-ai-consent" class="hidden">
+      <p id="photo-ai-consent-text"></p>
+      <div class="consent-actions">
+        <button id="photo-ai-enable" type="button">Turn on</button>
+        <button id="photo-ai-dismiss" type="button" class="quiet">not now</button>
+      </div>
+    </div>
+
     <div class="scales">
       <div class="scale-block">
         <div class="scale-top"><span class="scale-label">Mood</span><span class="scale-value" id="mood-value">—</span></div>
@@ -290,7 +378,7 @@
       <button id="cancel-edit-btn" class="hidden">cancel edit</button>
       <span id="save-feedback">saved</span>
     </div>
-    <div class="hint">⌘/Ctrl + Enter to save · a note, a rating, or both</div>
+    <div class="hint">⌘/Ctrl + Enter to save · a note, a rating, a photo — any of them</div>
   </section>
 
   <!-- history -->
@@ -310,11 +398,48 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.6 · reflect';
+const VERSION    = 'v0.9 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)
 const SCALE_MAX  = 7;
+// Photos are stored INSIDE the entry record as compressed JPEG data URLs, so
+// they ride the existing per-entry E2EE sync log, export/import, and edit flow
+// unchanged. Downscaling keeps each one small enough for that path.
+const MAX_IMAGES     = 4;            // per entry
+const IMG_MAX_DIM    = 1400;         // px, long edge
+const IMG_QUALITY    = 0.82;         // JPEG
+const IMG_SOFT_CAP   = 900 * 1024;   // if a first pass exceeds this, recompress harder
+const IMG_RETRY_DIM  = 1100;
+const IMG_RETRY_QUALITY = 0.7;
+// Opt-in AI describe/transcribe for attached photos (OFF by default). When — and
+// only when — the user enables it, each NEWLY ATTACHED photo is sent once to
+// Anthropic on the user's own key (the suite's shared BYOK credential) and the
+// returned description + verbatim transcription are stored on the image inside
+// the entry record, so they ride the same E2EE sync / export / delete as the
+// photo. Photos attached while the toggle is off are never sent anywhere.
+const PHOTO_AI_LS      = 'hill-climbing-reflect-photo-ai';  // '1' = enabled
+// The consent choice is REMEMBERED ACROSS DEVICES (founder request): the flag
+// syncs as its own tiny E2EE blob, so enabling once — on any synced device —
+// counts everywhere, and turning it off propagates the same way. '1' on / '0'
+// off (an explicit '0' must win over "unset" on a fresh device).
+const PHOTO_AI_SYNC_KEY = 'ls:hill-climbing-reflect-photo-ai';
+const API_KEY_LS       = 'hill-climbing-api-key';           // shared BYOK credential (REQUIREMENTS A.1)
+const PHOTO_AI_MODEL   = 'claude-opus-4-8';                 // one line to flip to a cheaper tier
+const PHOTO_AI_MAX_TOK = 1500;
+const DESC_CAP         = 600;      // chars kept from the model's description
+const OCR_CAP          = 20000;    // chars kept from the transcription
+const PHOTO_AI_SYSTEM =
+  'You describe photos for someone’s private journal. Reply with JSON. ' +
+  '"description": one or two plain, factual sentences about what the photo shows — enough to recall the moment later. ' +
+  'Never name or guess who a person is, and don’t speculate about places beyond what is visibly written. ' +
+  '"text": every piece of legible text in the photo, transcribed verbatim (keep line breaks); an empty string if there is none.';
+const PHOTO_AI_SCHEMA = {
+  type: 'object',
+  properties: { description: { type: 'string' }, text: { type: 'string' } },
+  required: ['description', 'text'],
+  additionalProperties: false,
+};
 const PROMPTS = [
   'What’s present right now?',
   'What’s been asking for your attention?',
@@ -330,7 +455,8 @@ const state = {
   view:      'write',
   entries:   [],                                  // newest first
   editingId: null,
-  draft:     { text: '', mood: null, satisfaction: null },
+  draft:     { text: '', mood: null, satisfaction: null, images: [] },
+  photoBusy: false,                               // true while compressing/describing — save waits
   pendingDelete: null,                            // {id, timer} for two-tap delete
 };
 
@@ -418,6 +544,13 @@ const saveFeedback= document.getElementById('save-feedback');
 const historyList = document.getElementById('history-list');
 const historyEmpty= document.getElementById('history-empty');
 const importFile  = document.getElementById('import-file');
+const photoStrip  = document.getElementById('photo-strip');
+const addPhotoBtn = document.getElementById('add-photo-btn');
+const photoBusy   = document.getElementById('photo-busy');
+const photoFile   = document.getElementById('photo-file');
+const photoAiToggle  = document.getElementById('photo-ai-toggle');
+const photoAiConsent = document.getElementById('photo-ai-consent');
+const photoAiText    = document.getElementById('photo-ai-consent-text');
 
 // ── Scale inputs ────────────────────────────────────────────────────────────
 function renderScale(containerId, value) {
@@ -449,10 +582,192 @@ document.getElementById('scale-sat').addEventListener('click', e => {
   if (e.target.dataset.v) pickScale('satisfaction', +e.target.dataset.v);
 });
 
+// ── Photos ──────────────────────────────────────────────────────────────────
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+    img.src = url;
+  });
+}
+function scaleToJpeg(img, maxDim, quality) {
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return { dataUrl: canvas.toDataURL('image/jpeg', quality), w, h };
+}
+async function compressImage(file) {
+  const img = await readImageFile(file);
+  let out = scaleToJpeg(img, IMG_MAX_DIM, IMG_QUALITY);
+  if (out.dataUrl.length > IMG_SOFT_CAP) out = scaleToJpeg(img, IMG_RETRY_DIM, IMG_RETRY_QUALITY);
+  return out;
+}
+
+// ── Opt-in AI describe + transcribe (BYOK — the user's own Anthropic key) ────
+function photoAiOn() { return localStorage.getItem(PHOTO_AI_LS) === '1'; }
+function refreshPhotoAiToggle() {
+  photoAiToggle.textContent = 'describe photos: ' + (photoAiOn() ? 'on' : 'off');
+  photoAiToggle.classList.toggle('on', photoAiOn());
+}
+function showPhotoAiConsent() {
+  const hasKey = !!localStorage.getItem(API_KEY_LS);
+  if (hasKey) {
+    photoAiText.textContent =
+      'When this is on, each photo you attach is sent once to Anthropic — on your own API key — ' +
+      'to write a short description and transcribe any visible text. Those notes are saved into the ' +
+      'entry beside the photo (and ride the same encrypted sync). Like the other bring-your-own-key ' +
+      'features, what is sent is readable by Anthropic under their API terms. Photos you attached ' +
+      'before turning this on are never sent. You only decide this once: if sync is on, the choice ' +
+      'carries to your other devices, and one tap turns it off everywhere.';
+    document.getElementById('photo-ai-enable').classList.remove('hidden');
+  } else {
+    photoAiText.textContent =
+      'Describing photos uses the suite’s shared Anthropic key, and no key is set on this device yet. ' +
+      'Add your API key in Companion (or Council, or Nourish’s chef) first, then come back here.';
+    document.getElementById('photo-ai-enable').classList.add('hidden');
+  }
+  photoAiConsent.classList.remove('hidden');
+}
+// Ask Anthropic for {description, text} for one just-attached photo. Failure is
+// quiet — the photo is already attached and the entry works without notes.
+async function describeImage(im) {
+  if (!photoAiOn()) return;
+  const key = localStorage.getItem(API_KEY_LS);
+  if (!key) return;
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        // Required for direct browser access to the Anthropic API (BYOK — the user's own key).
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: PHOTO_AI_MODEL,
+        max_tokens: PHOTO_AI_MAX_TOK,
+        system: PHOTO_AI_SYSTEM,
+        output_config: { format: { type: 'json_schema', schema: PHOTO_AI_SCHEMA } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: im.dataUrl.split(',')[1] } },
+            { type: 'text', text: 'Describe this journal photo and transcribe any text in it.' },
+          ],
+        }],
+      }),
+    });
+    if (!r.ok) { flashSaved('couldn’t describe the photo'); return; }
+    const data = await r.json();
+    if (data.stop_reason === 'refusal') return;
+    const block = (data.content || []).find(b => b.type === 'text');
+    const out = JSON.parse(block.text);
+    if (typeof out.description === 'string' && out.description.trim()) im.desc = out.description.trim().slice(0, DESC_CAP);
+    if (typeof out.text === 'string' && out.text.trim()) im.ocr = out.text.trim().slice(0, OCR_CAP);
+  } catch (err) {
+    flashSaved('couldn’t describe the photo');
+  }
+}
+
+async function addPhotos(files) {
+  state.photoBusy = true;
+  photoBusy.classList.remove('hidden');
+  addPhotoBtn.disabled = true;
+  refreshSaveState();
+  try {
+    for (const f of files) {
+      if (state.draft.images.length >= MAX_IMAGES) { flashSaved(`up to ${MAX_IMAGES} photos`); break; }
+      let im;
+      try { im = await compressImage(f); }
+      catch (err) { flashSaved('couldn’t read that image'); continue; }
+      state.draft.images.push(im);
+      renderDraftPhotos();
+      if (photoAiOn() && localStorage.getItem(API_KEY_LS)) {
+        photoBusy.textContent = 'describing…';
+        await describeImage(im);           // sequential: notes land before save unlocks
+        renderDraftPhotos();
+      }
+    }
+  } finally {
+    state.photoBusy = false;
+    photoBusy.classList.add('hidden');
+    photoBusy.textContent = 'preparing…';
+    renderDraftPhotos();
+    refreshSaveState();
+  }
+}
+function renderDraftPhotos() {
+  photoStrip.querySelectorAll('.photo-item').forEach(el => el.remove());
+  state.draft.images.forEach((im, i) => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-thumb';
+    const img = document.createElement('img');
+    img.src = im.dataUrl; img.alt = im.desc || 'attached photo';
+    const rm = document.createElement('button');
+    rm.className = 'photo-remove'; rm.type = 'button';
+    rm.textContent = '×'; rm.setAttribute('aria-label', 'Remove photo');
+    rm.addEventListener('click', () => {
+      state.draft.images.splice(i, 1);
+      renderDraftPhotos();
+      refreshSaveState();
+    });
+    wrap.appendChild(img); wrap.appendChild(rm);
+    item.appendChild(wrap);
+    if (im.desc) {                          // model output — textContent keeps it inert
+      const cap = document.createElement('div');
+      cap.className = 'photo-cap';
+      cap.textContent = im.desc + (im.ocr ? ' · has text' : '');
+      item.appendChild(cap);
+    }
+    photoStrip.insertBefore(item, addPhotoBtn);
+  });
+  addPhotoBtn.disabled = state.photoBusy || state.draft.images.length >= MAX_IMAGES;
+}
+// Import/sync hygiene: accept only strict base64 image data URLs, never markup;
+// coerce the AI notes to bounded plain strings.
+function sanitizeImages(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.slice(0, MAX_IMAGES).map(im => {
+    if (!im || typeof im.dataUrl !== 'string' ||
+        !/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(im.dataUrl)) return null;
+    const out = { dataUrl: im.dataUrl, w: +im.w || null, h: +im.h || null };
+    if (typeof im.desc === 'string' && im.desc.trim()) out.desc = im.desc.trim().slice(0, DESC_CAP);
+    if (typeof im.ocr === 'string' && im.ocr.trim()) out.ocr = im.ocr.trim().slice(0, OCR_CAP);
+    return out;
+  }).filter(Boolean);
+}
+function openLightbox(dataUrl, desc) {
+  const box = document.createElement('div');
+  box.id = 'lightbox';
+  const img = document.createElement('img');
+  img.src = dataUrl; img.alt = desc || 'photo, full size';
+  box.appendChild(img);
+  if (desc) {
+    const cap = document.createElement('div');
+    cap.className = 'lb-cap';
+    cap.textContent = desc;                 // model output — textContent keeps it inert
+    box.appendChild(cap);
+  }
+  const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  box.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(box);
+}
+
 // ── Write view ──────────────────────────────────────────────────────────────
 function refreshSaveState() {
-  const has = textEl.value.trim() || state.draft.mood || state.draft.satisfaction;
-  saveBtn.disabled = !has;
+  const has = textEl.value.trim() || state.draft.mood || state.draft.satisfaction ||
+              state.draft.images.length;
+  saveBtn.disabled = !has || state.photoBusy;
 }
 function autoGrow() {
   textEl.style.height = 'auto';
@@ -461,6 +776,7 @@ function autoGrow() {
 function renderWrite() {
   textEl.value = state.draft.text;
   autoGrow();
+  renderDraftPhotos();
   renderScales();
   refreshSaveState();
   if (state.editingId) {
@@ -479,7 +795,7 @@ function renderWrite() {
 }
 function resetDraft() {
   state.editingId = null;
-  state.draft = { text: '', mood: null, satisfaction: null };
+  state.draft = { text: '', mood: null, satisfaction: null, images: [] };
 }
 function flashSaved(msg) {
   saveFeedback.textContent = msg;
@@ -489,12 +805,13 @@ function flashSaved(msg) {
 
 async function save() {
   const text = textEl.value.trim();
-  if (!text && !state.draft.mood && !state.draft.satisfaction) return;
+  if (!text && !state.draft.mood && !state.draft.satisfaction && !state.draft.images.length) return;
   const now = Date.now();
 
   if (state.editingId) {
     const e = state.entries.find(x => x.id === state.editingId);
-    const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction, updated: now };
+    const updated = { ...e, text, mood: state.draft.mood, satisfaction: state.draft.satisfaction,
+                      images: state.draft.images, updated: now };
     await idbPut(updated);
     if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, updated);
     resetDraft();
@@ -504,6 +821,7 @@ async function save() {
     const entry = {
       id: uid(), created: now, updated: now,
       text, mood: state.draft.mood, satisfaction: state.draft.satisfaction,
+      images: state.draft.images,
       embedding: null, embModel: null,            // reserved for the semantic-map phase
     };
     await idbPut(entry);
@@ -519,7 +837,8 @@ function startEdit(id) {
   const e = state.entries.find(x => x.id === id);
   if (!e) return;
   state.editingId = id;
-  state.draft = { text: e.text || '', mood: e.mood || null, satisfaction: e.satisfaction || null };
+  state.draft = { text: e.text || '', mood: e.mood || null, satisfaction: e.satisfaction || null,
+                  images: (e.images || []).slice() };
   switchView('write');
 }
 
@@ -553,16 +872,47 @@ function renderHistory() {
     }
     const card = document.createElement('div');
     card.className = 'entry-card';
+    const imgs = Array.isArray(e.images) ? e.images : [];
     card.innerHTML = `
       <div class="entry-head">
         <span class="entry-time">${timeLabel(e.created)}${e.updated > e.created + 1000 ? ' · edited' : ''}</span>
         <span class="entry-ratings">${ratingChip('mood', e.mood)}${ratingChip('sat', e.satisfaction)}</span>
       </div>
-      <div class="entry-text">${escapeHTML(e.text || '')}</div>
+      <div class="entry-text${!e.text && imgs.length ? ' hidden' : ''}">${escapeHTML(e.text || '')}</div>
       <div class="entry-actions">
         <button data-act="edit">edit</button>
         <button data-act="delete">delete</button>
       </div>`;
+    if (imgs.length) {
+      // Photos + AI notes are built via DOM (src property / textContent, never
+      // markup) so hostile content from an import/sync merge stays inert.
+      const row = document.createElement('div');
+      row.className = 'entry-photos';
+      const notes = document.createElement('div');
+      notes.className = 'entry-photo-notes';
+      imgs.forEach(im => {
+        if (!im || typeof im.dataUrl !== 'string') return;
+        const img = document.createElement('img');
+        img.src = im.dataUrl; img.alt = im.desc || 'journal photo'; img.loading = 'lazy';
+        img.addEventListener('click', () => openLightbox(im.dataUrl, im.desc));
+        row.appendChild(img);
+        if (im.desc) {
+          const d = document.createElement('div');
+          d.className = 'photo-desc';
+          d.textContent = im.desc;
+          notes.appendChild(d);
+        }
+        if (im.ocr) {
+          const o = document.createElement('div');
+          o.className = 'photo-ocr';
+          o.textContent = im.ocr;
+          notes.appendChild(o);
+        }
+      });
+      const actions = card.querySelector('.entry-actions');
+      card.insertBefore(row, actions);
+      if (notes.childNodes.length) card.insertBefore(notes, actions);
+    }
     card.querySelector('[data-act="edit"]').addEventListener('click', () => startEdit(e.id));
     const delBtn = card.querySelector('[data-act="delete"]');
     delBtn.addEventListener('click', () => handleDelete(e.id, delBtn));
@@ -576,9 +926,11 @@ function handleDelete(id, btn) {
     // the deletion propagates through sync. A hard idbDelete would leave the
     // entry alive on other devices and let it resurrect on a fresh pull.
     const e = state.entries.find(x => x.id === id);
+    // Tombstones drop the photo bytes — no reason to keep (or push through
+    // sync) megabytes of imagery on an entry the user deleted.
     const tomb = e
-      ? { ...e, deleted: true, updated: Date.now() }
-      : { id, deleted: true, created: Date.now(), updated: Date.now(), text: '', mood: null, satisfaction: null };
+      ? { ...e, images: [], deleted: true, updated: Date.now() }
+      : { id, deleted: true, created: Date.now(), updated: Date.now(), text: '', mood: null, satisfaction: null, images: [] };
     idbPut(tomb)
       .then(() => { if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, tomb); })
       .then(loadEntries)
@@ -641,6 +993,7 @@ async function importData(file) {
         text: String(e.text || ''),
         mood: e.mood ?? null,
         satisfaction: e.satisfaction ?? null,
+        images: sanitizeImages(e.images),
         embedding: e.embedding ?? null,
         embModel: e.embModel ?? null,
       };
@@ -665,6 +1018,32 @@ cancelEdit.addEventListener('click', () => { resetDraft(); switchView('history')
 textEl.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!saveBtn.disabled) save(); }
 });
+addPhotoBtn.addEventListener('click', () => photoFile.click());
+photoFile.addEventListener('change', e => {
+  if (e.target.files && e.target.files.length) addPhotos(Array.from(e.target.files));
+  e.target.value = '';
+});
+// Describe-photos opt-in: off → consent note (explicit enable); on → off instantly.
+photoAiToggle.addEventListener('click', () => {
+  if (photoAiOn()) {
+    localStorage.setItem(PHOTO_AI_LS, '0');    // explicit off, so revocation syncs too
+    if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);
+    refreshPhotoAiToggle();
+    flashSaved('photo describing off');
+  } else {
+    showPhotoAiConsent();
+  }
+});
+document.getElementById('photo-ai-enable').addEventListener('click', () => {
+  localStorage.setItem(PHOTO_AI_LS, '1');
+  if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);   // consent remembered across synced devices
+  photoAiConsent.classList.add('hidden');
+  refreshPhotoAiToggle();
+  flashSaved('photo describing on');
+});
+document.getElementById('photo-ai-dismiss').addEventListener('click', () => {
+  photoAiConsent.classList.add('hidden');
+});
 // Corner data menu — open/close, close on outside-click or Esc (ported from nourish).
 const menuEl = document.getElementById('menu');
 const menuBtn = document.getElementById('menu-btn');
@@ -684,6 +1063,7 @@ importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e
 
 // ── Init ────────────────────────────────────────────────────────────────────
 document.getElementById('version-label').textContent = VERSION;
+refreshPhotoAiToggle();
 (async () => {
   try {
     await loadEntries();
@@ -721,6 +1101,17 @@ if (window.HCSync) {
       });
       return idbPutMany(Object.keys(byId).map((k) => byId[k]));
     }).then(loadEntries).then(() => { if (state.view === 'history') renderHistory(); }),
+  });
+  // The photo-describe consent is decided once and remembered across devices:
+  // it syncs as its own tiny E2EE blob (LWW). '1' on / '0' off — never the raw
+  // absence of the key, so an explicit off wins over a fresh device's unset.
+  HCSync.registerStore({
+    key: PHOTO_AI_SYNC_KEY, kind: 'blob',
+    read:  () => photoAiOn() ? '1' : '0',
+    write: (str) => {                      // remote-apply path
+      try { localStorage.setItem(PHOTO_AI_LS, str === '1' ? '1' : '0'); } catch (e) { /* quota */ }
+      refreshPhotoAiToggle();
+    },
   });
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'reflect' });
