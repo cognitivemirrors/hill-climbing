@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Foresee · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Foresee">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Foresee (first light) ──────────────
+         A clear pale gold, the color of early light on a day you can
+         see coming. Sits between Reflect's amber (38°) and the greens
+         (120°/150°) without touching either. */
+      --accent:      hsl(58,68%,64%);
+      --accent-soft: hsla(58,62%,60%,0.5);
+      --accent-glow: hsla(58,68%,50%,0.14);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner menu — a single icon that opens a small data-management dropdown. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 15px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.07em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+    /* a quiet count on the Open tab when calls have come due */
+    .mode-btn .due-n { color: var(--accent); }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+
+    /* ── home panel ─────────────────────────────────────────────── */
+    #home-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+
+    /* the climb — ten rungs, current highlighted, climbed ones filled */
+    .ladder { display: flex; gap: 6px; align-items: flex-end; height: 48px; margin-bottom: 28px; }
+    .rung {
+      width: 16px; border-radius: 4px; background: var(--faint);
+      transition: background 0.4s ease, height 0.4s ease;
+    }
+    .rung.climbed { background: var(--accent-soft); }
+    .rung.current { background: var(--accent); box-shadow: 0 0 18px var(--accent-glow); }
+
+    .level-num {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 3.1rem; line-height: 1; color: var(--text);
+      text-shadow: 0 0 36px var(--accent-glow); margin-bottom: 8px;
+    }
+    .level-theme {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1.05rem; color: var(--mid); margin-bottom: 22px;
+    }
+    .home-stats { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 6px; }
+    .home-due {
+      font-size: 12px; color: var(--accent); letter-spacing: 0.04em;
+      background: transparent; border: none; cursor: pointer; font-family: var(--font-ui);
+      text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--accent-soft);
+      margin-bottom: 30px; padding: 2px 4px;
+    }
+    .home-due.none { color: var(--faint); text-decoration: none; cursor: default; }
+    .home-hint { margin-top: 22px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 340px; }
+
+    /* ── compose card ───────────────────────────────────────────── */
+    .card {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 22px 24px 24px; animation: fadeUp 0.35s ease;
+    }
+    .card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .level-tag {
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 999px; padding: 4px 11px;
+    }
+    .card-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.55rem;
+      line-height: 1.25; color: var(--text); margin-bottom: 14px;
+    }
+    .block-label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+    .compose-brief { font-size: 14px; line-height: 1.6; color: var(--mid); margin-bottom: 18px; }
+    .seed-block { border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 18px; }
+    .seed-text {
+      font-family: var(--font-display); font-style: italic; font-size: 14px;
+      line-height: 1.62; color: var(--mid);
+      border-left: 2px solid var(--accent-soft); padding-left: 14px;
+    }
+    .compose-field { margin-bottom: 20px; }
+    .compose-field textarea {
+      width: 100%; min-height: 72px; resize: vertical;
+      background: rgba(0,0,0,0.25); border: 1px solid var(--line); border-radius: 12px;
+      color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px so iOS Safari doesn't auto-zoom on focus */
+      line-height: 1.5; padding: 12px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .compose-field textarea:focus { border-color: var(--accent-soft); }
+    .compose-field textarea::placeholder { color: var(--faint); }
+
+    /* confidence slider */
+    .conf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .conf-value {
+      font-family: var(--font-display); font-size: 1.7rem; color: var(--text);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .conf-value small { font-size: 0.95rem; color: var(--dim); }
+    input[type=range] {
+      width: 100%; appearance: none; -webkit-appearance: none; height: 30px; background: transparent; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 4px; border-radius: 2px;
+      background: linear-gradient(to right, var(--faint), var(--accent-soft));
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 22px; height: 22px; margin-top: -9px; border-radius: 50%;
+      background: var(--accent); border: none; box-shadow: 0 0 14px var(--accent-glow);
+    }
+    input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.16); }
+    input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: none; }
+    .conf-hint { font-size: 11.5px; color: var(--dim); line-height: 1.55; margin-top: 6px; min-height: 18px; }
+    .conf-hint.coin { color: var(--accent); }
+
+    /* resolves-by select */
+    .due-select {
+      width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--line); border-radius: 12px;
+      color: var(--text); font-family: var(--font-ui); font-size: 14px;
+      padding: 11px 14px; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer;
+    }
+    .due-select:focus { border-color: var(--accent-soft); }
+
+    .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 24px; }
+
+    /* ── committed panel ────────────────────────────────────────── */
+    #committed-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 26px; }
+    .result-line {
+      font-family: var(--font-display); font-size: 1.5rem; line-height: 1.45;
+      color: var(--text); max-width: 440px; margin-bottom: 16px;
+    }
+    .result-sub { font-size: 13px; color: var(--mid); letter-spacing: 0.03em; max-width: 400px; margin-bottom: 36px; line-height: 1.6; }
+    .result-sub b { color: var(--accent); font-weight: 400; }
+    .result-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+    /* ── open view ──────────────────────────────────────────────── */
+    #open-view { max-width: 560px; margin: 0 auto; }
+    .open-head { text-align: center; margin-bottom: 22px; }
+    .open-title { font-family: var(--font-display); font-weight: 400; font-size: 1.5rem; color: var(--text); }
+    .open-sub { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-top: 5px; }
+    /* verdict banner — the staircase's answer after a resolution */
+    #verdict-line {
+      display: none; text-align: center; margin-bottom: 24px;
+      font-family: var(--font-display); font-size: 1.05rem; font-style: italic;
+      color: var(--text); line-height: 1.6; animation: fadeUp 0.3s ease;
+    }
+    #verdict-line.show { display: block; }
+    #verdict-line b { color: var(--accent); font-weight: 400; font-style: normal; }
+    .pred-card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 14px; animation: fadeUp 0.3s ease;
+    }
+    .pred-card.due { border-color: var(--accent-soft); }
+    .pred-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+    .pred-conf { font-size: 11px; letter-spacing: 0.08em; color: var(--accent); white-space: nowrap; }
+    .pred-when { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+    .pred-when .duebit { color: var(--accent); }
+    .pred-text {
+      font-family: var(--font-display); font-size: 15.5px; line-height: 1.55;
+      color: var(--text); white-space: pre-wrap; word-break: break-word; margin-bottom: 12px;
+    }
+    .pred-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .verdict-btn {
+      flex: 1; min-width: 92px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 1px solid var(--line); color: var(--mid);
+      font-family: var(--font-ui); font-size: 12.5px; letter-spacing: 0.03em;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .verdict-btn:hover { color: var(--text); border-color: var(--line-strong); background: rgba(255,255,255,0.04); }
+    .verdict-btn.yes:hover { color: var(--accent); border-color: var(--accent-soft); }
+    .open-empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 60px; line-height: 1.9; }
+    .open-note { text-align: center; font-size: 11px; color: var(--faint); margin-top: 24px; line-height: 1.6; max-width: 420px; margin-left: auto; margin-right: auto; }
+
+    /* ── calibration view ───────────────────────────────────────── */
+    .prog-summary { display: flex; gap: 14px; margin-bottom: 30px; flex-wrap: wrap; }
+    .stat {
+      flex: 1; min-width: 96px; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 16px 18px; text-align: center;
+    }
+    .stat-num { font-family: var(--font-display); font-size: 1.8rem; color: var(--text); line-height: 1; }
+    .stat-cap { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-top: 8px; }
+
+    .section-label {
+      font-family: var(--font-display); font-size: 13px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 14px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .cal-intro { font-size: 12.5px; color: var(--mid); line-height: 1.6; margin-bottom: 20px; }
+    .cal-row { margin-bottom: 18px; }
+    .cal-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+    .cal-said { font-family: var(--font-display); font-size: 14px; color: var(--text); }
+    .cal-n { font-size: 10.5px; color: var(--faint); letter-spacing: 0.06em; }
+    .cal-bars { display: flex; flex-direction: column; gap: 4px; }
+    .cal-bar { position: relative; height: 9px; border-radius: 5px; background: rgba(255,255,255,0.05); overflow: hidden; }
+    .cal-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; display: block; }
+    .cal-bar.said i { background: var(--faint); }
+    .cal-bar.real i { background: var(--accent-soft); }
+    .cal-caption { font-size: 11px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
+    .cal-caption b { color: var(--accent); font-weight: 400; }
+    .cal-legend { display: flex; gap: 18px; font-size: 10.5px; color: var(--dim); letter-spacing: 0.06em; margin-bottom: 16px; }
+    .cal-legend .swatch { display: inline-block; width: 18px; height: 8px; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+    .cal-legend .swatch.said { background: var(--faint); }
+    .cal-legend .swatch.real { background: var(--accent-soft); }
+    .cal-small { font-size: 11px; color: var(--faint); line-height: 1.6; margin: 4px 0 30px; }
+
+    .hist-day { margin-bottom: 22px; }
+    .hist-day-h {
+      font-family: var(--font-display); font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+    }
+    .hist-row { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hist-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; align-self: center; }
+    .hist-title { font-size: 13.5px; color: var(--text); flex: 1; line-height: 1.5; word-break: break-word; }
+    .hist-outcome { font-size: 11px; letter-spacing: 0.04em; color: var(--dim); white-space: nowrap; }
+
+    .empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 40px; line-height: 1.9; }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .level-num { font-size: 2.6rem; }
+      .card-title { font-size: 1.4rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .card, .pred-card { animation: none; }
+      .rung { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · foresee</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="practice">Predict</button>
+  <button class="mode-btn"        data-view="open" id="open-tab">Open</button>
+  <button class="mode-btn"        data-view="progress">Calibration</button>
+</nav>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download a backup file</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <div class="menu-note">Your predictions live only on this device.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- ══ PREDICT ═══════════════════════════════════════════════ -->
+  <section id="practice-view">
+
+    <!-- home / idle -->
+    <div id="home-panel" class="panel">
+      <div class="kicker">Your calibration ladder</div>
+      <div class="ladder" id="ladder" aria-hidden="true"></div>
+      <div class="level-num" id="home-level">1</div>
+      <div class="level-theme" id="home-theme">today, out in the world</div>
+      <div class="home-stats" id="home-stats">no calls made yet</div>
+      <button class="home-due none" id="home-due" type="button"></button>
+      <button class="btn primary" id="new-call-btn">MAKE A CALL</button>
+      <div class="home-hint">Say what will happen, and how sure you are. Reality does the grading — that’s the whole trick. This is practice in knowing how much to trust your own judgment.</div>
+    </div>
+
+    <!-- the composer -->
+    <div id="compose-panel" class="panel hidden">
+      <div class="card">
+        <div class="card-top">
+          <span class="level-tag" id="c-level-tag">level 1</span>
+        </div>
+        <div class="card-title" id="c-title">today, out in the world</div>
+        <div class="compose-brief" id="c-brief"></div>
+        <div class="seed-block">
+          <div class="block-label">Calls of this shape</div>
+          <div class="seed-text" id="c-seeds"></div>
+        </div>
+        <div class="compose-field">
+          <div class="block-label">Your call</div>
+          <textarea id="pred-input" placeholder="Write it as a plain statement that will be clearly true or false…" maxlength="240"></textarea>
+        </div>
+        <div class="compose-field">
+          <div class="block-label">How likely is it?</div>
+          <div class="conf-row">
+            <span class="conf-value"><span id="conf-num">75</span><small>%</small></span>
+          </div>
+          <input type="range" id="conf-slider" min="5" max="95" step="5" value="75" aria-label="How likely, in percent">
+          <div class="conf-hint" id="conf-hint">Below 50% means you’re calling it <em>unlikely</em> — that counts too.</div>
+        </div>
+        <div class="compose-field">
+          <div class="block-label">Resolves by</div>
+          <select class="due-select" id="due-select" aria-label="When this resolves"></select>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn primary" id="commit-btn">WRITE IT DOWN</button>
+        <button class="btn ghost" id="compose-back-btn">never mind</button>
+      </div>
+    </div>
+
+    <!-- committed -->
+    <div id="committed-panel" class="panel hidden">
+      <div class="result-line">Written down.</div>
+      <div class="result-sub" id="committed-sub"></div>
+      <div class="result-actions">
+        <button class="btn primary" id="another-call-btn">ANOTHER CALL</button>
+        <button class="btn ghost" id="done-btn">done for now</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ OPEN ══════════════════════════════════════════════════ -->
+  <section id="open-view" class="hidden">
+    <div class="open-head">
+      <div class="open-title">Open calls</div>
+      <div class="open-sub">When reality has voted, record it.</div>
+    </div>
+    <div id="verdict-line"></div>
+    <div id="open-list"></div>
+    <div id="open-empty" class="open-empty hidden">
+      Nothing outstanding.<br>Make a call and it will wait here for its verdict.
+    </div>
+    <div class="open-note">Record what actually happened, not what would be nice. A miss is exactly the data this practice runs on — “can’t say” is honest too, and never moves the ladder.</div>
+  </section>
+
+  <!-- ══ CALIBRATION ═══════════════════════════════════════════ -->
+  <section id="progress-view" class="hidden">
+    <div class="prog-summary">
+      <div class="stat"><div class="stat-num" id="p-level">1</div><div class="stat-cap">level</div></div>
+      <div class="stat"><div class="stat-num" id="p-resolved">0</div><div class="stat-cap">calls resolved</div></div>
+      <div class="stat"><div class="stat-num" id="p-open">0</div><div class="stat-cap">still open</div></div>
+    </div>
+
+    <div class="section-label">How your confidence is matching reality</div>
+    <div class="cal-intro">Each row folds your calls to the side you backed: “~80%” collects every call you were about 80% sure of, whichever way it pointed. Well-calibrated means the two bars meet.</div>
+    <div class="cal-legend">
+      <span><span class="swatch said"></span>what you said</span>
+      <span><span class="swatch real"></span>what happened</span>
+    </div>
+    <div id="cal-rows"></div>
+    <div id="cal-empty" class="empty hidden">
+      No resolved calls yet.<br>The curve appears once reality has voted a few times.
+    </div>
+    <div class="cal-small" id="cal-small"></div>
+
+    <div class="section-label">History</div>
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty hidden">
+      Nothing resolved yet.<br>Your first verdict will land here.
+    </div>
+  </section>
+</main>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
+<script src="/hc-sync-chip.js"></script>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const VERSION  = 'v0.1 · foresee';
+const STATE_KEY = 'hill-climbing-foresee';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-foresee';   // this app's registered E2E-sync doc (see hc-sync.js)
+const LVL_MIN = 1;
+const LVL_MAX = 10;
+
+// The ladder climbs two things at once: how far out the call reaches, and how
+// much of it is about your own mind. Level 1 is "checkable by tonight, out in
+// the world"; level 10 is "a month out, about your inner weather" — the calls
+// people are most confidently wrong about.
+const LEVELS = {
+  1:  { theme: 'today, out in the world', h: 0,
+        brief: 'Something small, concrete, and outside yourself — settled by tonight, with no room to argue about whether it happened.',
+        seeds: ['The 6 o’clock bus will be late.', 'I’ll have a reply to that message before the day ends.'] },
+  2:  { theme: 'tomorrow, concrete', h: 1,
+        brief: 'One day of lead time. Still concrete, still unambiguous — just further than you can see from here.',
+        seeds: ['Tomorrow’s meeting will run over.', 'It will rain before noon tomorrow.'] },
+  3:  { theme: 'a few days out', h: 3,
+        brief: 'Far enough that the picture can change on you. Call it anyway.',
+        seeds: ['The package arrives by Thursday.', 'That story everyone’s discussing will have moved on within three days.'] },
+  4:  { theme: 'your own behavior, near term', h: 1,
+        brief: 'Now the subject is you. Predict what you will actually do — not what you intend, what you’ll do.',
+        seeds: ['I will actually be in bed before midnight tomorrow.', 'I’ll cook tomorrow instead of ordering in.'] },
+  5:  { theme: 'your own behavior, this week', h: 7,
+        brief: 'A week of yourself. The gap between the planner and the person is where the learning is.',
+        seeds: ['I’ll practice on at least three of the next seven days.', 'I will finish the thing I keep moving to tomorrow.'] },
+  6:  { theme: 'how you’ll feel', h: 3,
+        brief: 'Predict a feeling — enjoyment, dread, relief. We’re famously bad at this; find out how bad.',
+        seeds: ['I’ll enjoy the dinner more than I expect to right now.', 'The dread about Thursday won’t survive contact with Thursday.'] },
+  7:  { theme: 'other people', h: 7,
+        brief: 'A call about someone else’s choice or reaction. Kind ones only — this is practice in seeing people clearly, not betting on them.',
+        seeds: ['She’ll say yes.', 'He won’t bring it up unless I do.'] },
+  8:  { theme: 'two weeks out', h: 14,
+        brief: 'Two weeks is where confident stories start to outrun evidence. Write one down and let the fortnight grade it.',
+        seeds: ['I’ll still be using the new routine in two weeks.', 'That deadline will slip.'] },
+  9:  { theme: 'a month out', h: 30,
+        brief: 'A month of drift, mood, and events you can’t see yet. Long-range calls are humbling on purpose.',
+        seeds: ['I’ll have kept the habit going a month from now.', 'This month’s biggest worry will look small from thirty days away.'] },
+  10: { theme: 'a month out, your inner weather', h: 30,
+        brief: 'The summit: a call about what you will want, feel, or still care about a month from now. The hardest thing to see clearly is your own future mind.',
+        seeds: ['What I’m sure I want today, I’ll still want in a month.', 'The thing I’m avoiding now will still be the thing I’m avoiding.'] },
+};
+function levelTheme(lvl) { return (LEVELS[lvl] || LEVELS[1]).theme; }
+
+// Resolve-by choices. Value = days from now; label shown in the select.
+const DUE_CHOICES = [
+  { d: 0,  label: 'tonight' },
+  { d: 1,  label: 'tomorrow' },
+  { d: 3,  label: 'in three days' },
+  { d: 7,  label: 'in a week' },
+  { d: 14, label: 'in two weeks' },
+  { d: 30, label: 'in a month' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// One small localStorage blob. Predictions are short one-line statements — they
+// grow slowly (a few hundred bytes each) and never hold anything but the user's
+// own words plus numbers.
+const state = {
+  v: 1,
+  level: 1,
+  streak: 0,        // consecutive information-carrying calls (for the 2-up/1-down staircase)
+  predictions: [],  // [{ id, text, conf, madeTs, due:'YYYY-MM-DD', level, status:'open'|'resolved'|'void', outcome?, resolvedTs?, brier? }]
+};
+
+function sanitizePrediction(p) {
+  if (!p || typeof p.text !== 'string' || !p.text.trim()) return null;
+  const conf = Math.round(Number(p.conf));
+  if (!isFinite(conf) || conf < 1 || conf > 99) return null;
+  const out = {
+    id: typeof p.id === 'string' ? p.id : 'p' + Math.random().toString(36).slice(2, 10),
+    text: p.text.slice(0, 240),
+    conf: conf,
+    madeTs: typeof p.madeTs === 'number' ? p.madeTs : Date.now(),
+    due: (typeof p.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.due)) ? p.due : hcDayKey(),
+    level: Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(Number(p.level) || 1))),
+    status: (p.status === 'resolved' || p.status === 'void') ? p.status : 'open',
+  };
+  if (out.status === 'resolved') {
+    out.outcome = !!p.outcome;
+    out.resolvedTs = typeof p.resolvedTs === 'number' ? p.resolvedTs : Date.now();
+    out.brier = typeof p.brier === 'number' ? p.brier : Math.pow(out.conf / 100 - (out.outcome ? 1 : 0), 2);
+  }
+  if (out.status === 'void') out.resolvedTs = typeof p.resolvedTs === 'number' ? p.resolvedTs : Date.now();
+  return out;
+}
+function load() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  if (!raw || typeof raw !== 'object') raw = {};
+  if (typeof raw.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(raw.level)));
+  if (typeof raw.streak === 'number') state.streak = raw.streak;
+  if (Array.isArray(raw.predictions)) state.predictions = raw.predictions.map(sanitizePrediction).filter(Boolean);
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+}
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+// hcDayKey is the canonical zero-padded key the hub reads — never reuse another
+// app's date helper here (their month formats differ on purpose).
+function hcDayKey(d = new Date()) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+let loggedThisLoad = false;   // one "practiced today" flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  if (window.HCUsage) HCUsage.mark('foresee');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
+}
+
+// ── Derived helpers ──────────────────────────────────────────────────────────
+function openCalls()     { return state.predictions.filter(p => p.status === 'open'); }
+function resolvedCalls() { return state.predictions.filter(p => p.status === 'resolved'); }
+function dueCalls()      { const today = hcDayKey(); return openCalls().filter(p => p.due <= today); }
+function isDue(p)        { return p.due <= hcDayKey(); }
+
+// Fold a resolved call to the side the person backed: a 30% call that didn't
+// happen is a correct 70% call on the "no" side. Standard calibration folding.
+function folded(p) {
+  const yesSide = p.conf >= 50;
+  return { said: yesSide ? p.conf : 100 - p.conf, hit: yesSide ? p.outcome : !p.outcome };
+}
+
+// ── The 2-up / 1-down staircase ──────────────────────────────────────────────
+// A resolved call "clears" when its Brier score beats a coin flip (< 0.25) —
+// i.e. the stated confidence pointed the right way, so the call carried real
+// information. Two clears in a row step the level up; one miss steps it down.
+// This converges on ~71% information-carrying calls — the same psychophysics
+// result every ladder in the suite uses to hold you at your learning edge
+// (Levitt 1971). "Can't say" is a void: honest, and it never moves the ladder.
+function resolveCall(id, kind) {   // kind: 'yes' | 'no' | 'void'
+  const p = state.predictions.find(x => x.id === id && x.status === 'open');
+  if (!p) return null;
+  const result = { voided: false, success: false, leveledUp: false, leveledDown: false };
+
+  if (kind === 'void') {
+    p.status = 'void';
+    p.resolvedTs = Date.now();
+    result.voided = true;
+    save();
+    return result;
+  }
+
+  p.status = 'resolved';
+  p.outcome = (kind === 'yes');
+  p.resolvedTs = Date.now();
+  p.brier = Math.pow(p.conf / 100 - (p.outcome ? 1 : 0), 2);
+  result.success = p.brier < 0.25;
+
+  if (result.success) {
+    state.streak++;
+    if (state.streak >= 2) {
+      if (state.level < LVL_MAX) { state.level++; result.leveledUp = true; }
+      state.streak = 0;
+    }
+  } else {
+    if (state.level > LVL_MIN) { state.level--; result.leveledDown = true; }
+    state.streak = 0;
+  }
+  save();
+  return result;
+}
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const practiceView   = document.getElementById('practice-view');
+const openView       = document.getElementById('open-view');
+const progressView   = document.getElementById('progress-view');
+const homePanel      = document.getElementById('home-panel');
+const composePanel   = document.getElementById('compose-panel');
+const committedPanel = document.getElementById('committed-panel');
+const importFile     = document.getElementById('import-file');
+const predInput      = document.getElementById('pred-input');
+const confSlider     = document.getElementById('conf-slider');
+const dueSelect      = document.getElementById('due-select');
+
+// ── Rendering: home ────────────────────────────────────────────────────────────
+function renderLadder() {
+  const ladder = document.getElementById('ladder');
+  ladder.innerHTML = '';
+  for (let i = 1; i <= LVL_MAX; i++) {
+    const r = document.createElement('div');
+    r.className = 'rung' + (i < state.level ? ' climbed' : i === state.level ? ' current' : '');
+    r.style.height = (16 + i * 3) + 'px';     // gently rising rungs — a little hill to climb
+    ladder.appendChild(r);
+  }
+}
+function renderHome() {
+  renderLadder();
+  document.getElementById('home-level').textContent = state.level;
+  document.getElementById('home-theme').textContent = levelTheme(state.level);
+  const res = resolvedCalls().length, open = openCalls().length;
+  document.getElementById('home-stats').textContent = (res || open)
+    ? `${res} ${res === 1 ? 'call' : 'calls'} resolved · ${open} open`
+    : 'no calls made yet';
+  const due = dueCalls().length;
+  const dueBtn = document.getElementById('home-due');
+  if (due) {
+    dueBtn.classList.remove('none');
+    dueBtn.textContent = due === 1 ? '1 call is due a verdict →' : `${due} calls are due a verdict →`;
+  } else {
+    dueBtn.classList.add('none');
+    dueBtn.textContent = open ? 'nothing due yet — reality is still deciding' : '';
+  }
+  renderOpenTab();
+}
+function renderOpenTab() {
+  const tab = document.getElementById('open-tab');
+  const due = dueCalls().length;
+  tab.innerHTML = due ? `Open <span class="due-n">·${due}</span>` : 'Open';
+}
+
+// ── Rendering: composer ────────────────────────────────────────────────────────
+function renderConfHint() {
+  const v = Number(confSlider.value);
+  document.getElementById('conf-num').textContent = v;
+  const hint = document.getElementById('conf-hint');
+  const commit = document.getElementById('commit-btn');
+  if (v === 50) {
+    hint.textContent = '50% is a coin flip — no judgment to train on. Lean one way, even slightly.';
+    hint.classList.add('coin');
+    commit.disabled = true;
+  } else {
+    hint.innerHTML = v < 50
+      ? 'Below 50% means you’re calling it <em>unlikely</em> — that counts too.'
+      : (v >= 90 ? 'Nine times in ten. Reserve this for near-certainty — it’s where overconfidence hides.'
+                 : 'Honest beats bold. The ladder rewards knowing your own accuracy, not bravado.');
+    hint.classList.remove('coin');
+    commit.disabled = false;
+  }
+}
+function showCompose() {
+  const lv = LEVELS[state.level] || LEVELS[1];
+  document.getElementById('c-level-tag').textContent = 'level ' + state.level;
+  document.getElementById('c-title').textContent = lv.theme;
+  document.getElementById('c-brief').textContent = lv.brief;
+  document.getElementById('c-seeds').innerHTML = '';
+  lv.seeds.forEach(s => {
+    const div = document.createElement('div');
+    div.textContent = '“' + s + '”';
+    document.getElementById('c-seeds').appendChild(div);
+  });
+  // resolve-by options, level default preselected
+  dueSelect.innerHTML = '';
+  DUE_CHOICES.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.d; o.textContent = c.label;
+    if (c.d === lv.h) o.selected = true;
+    dueSelect.appendChild(o);
+  });
+  predInput.value = '';
+  confSlider.value = 75;
+  renderConfHint();
+  swapPanel(composePanel);
+}
+function commitCall() {
+  const text = predInput.value.trim();
+  const conf = Number(confSlider.value);
+  if (!text || conf === 50) return;
+  const days = Number(dueSelect.value) || 0;
+  const d = new Date(); d.setDate(d.getDate() + days);
+  state.predictions.unshift({
+    id: 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
+    text: text, conf: conf, madeTs: Date.now(), due: hcDayKey(d),
+    level: state.level, status: 'open',
+  });
+  markUsage();                                  // committing a call is the practice moment
+  save();
+  const chosen = DUE_CHOICES.find(c => c.d === days);
+  document.getElementById('committed-sub').innerHTML =
+    `You said <b>${conf}%</b>. It resolves ${chosen ? chosen.label : 'soon'} — come back then and let reality grade it. Until then, nothing to do but live toward the answer.`;
+  renderOpenTab();
+  swapPanel(committedPanel);
+}
+
+// ── Rendering: open calls ──────────────────────────────────────────────────────
+function fmtMade(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function fmtDue(due) {
+  const today = hcDayKey();
+  if (due < today) return 'was due ' + new Date(due + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (due === today) return 'due today';
+  return 'resolves ' + new Date(due + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function renderOpen() {
+  const list = document.getElementById('open-list');
+  const empty = document.getElementById('open-empty');
+  list.innerHTML = '';
+  const open = openCalls().slice().sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : b.madeTs - a.madeTs);
+  empty.classList.toggle('hidden', open.length > 0);
+  open.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'pred-card' + (isDue(p) ? ' due' : '');
+    const meta = document.createElement('div'); meta.className = 'pred-meta';
+    const conf = document.createElement('span'); conf.className = 'pred-conf';
+    conf.textContent = 'you said ' + p.conf + '%';
+    const when = document.createElement('span'); when.className = 'pred-when';
+    when.innerHTML = 'made ' + fmtMade(p.madeTs) + ' · ' + (isDue(p) ? '<span class="duebit">' + fmtDue(p.due) + '</span>' : fmtDue(p.due));
+    meta.append(conf, when);
+    const text = document.createElement('div'); text.className = 'pred-text';
+    text.textContent = p.text;
+    const actions = document.createElement('div'); actions.className = 'pred-actions';
+    [['yes', 'It happened'], ['no', 'It didn’t'], ['void', 'Can’t say']].forEach(([kind, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'verdict-btn ' + kind; b.textContent = label;
+      b.addEventListener('click', () => onVerdict(p.id, kind));
+      actions.appendChild(b);
+    });
+    card.append(meta, text, actions);
+    list.appendChild(card);
+  });
+  renderOpenTab();
+}
+function onVerdict(id, kind) {
+  const res = resolveCall(id, kind);
+  if (!res) return;
+  markUsage();                                  // recording a verdict is practice too
+  const line = document.getElementById('verdict-line');
+  if (res.voided) {
+    line.innerHTML = 'Fair enough — not every call resolves cleanly. The ladder holds at <b>level ' + state.level + '</b>.';
+  } else if (res.leveledUp) {
+    line.innerHTML = 'Two calls in a row that carried real information. Stepping up to <b>level ' + state.level + '</b> — ' + levelTheme(state.level) + '.';
+  } else if (res.success && state.streak === 1) {
+    line.innerHTML = 'Your confidence pointed the right way. One more like that and you’ll climb a rung.';
+  } else if (res.success) {
+    line.innerHTML = 'That call carried information. Holding at <b>level ' + state.level + '</b>.';
+  } else if (res.leveledDown) {
+    line.innerHTML = 'The world went the other way — that’s the tuition, and it’s exactly the data this practice runs on. Easing back to <b>level ' + state.level + '</b>: shorter horizons, firmer ground.';
+  } else {
+    line.innerHTML = 'The world went the other way. No shame in it — a surprise recorded honestly is worth more than a win. Holding at <b>level ' + state.level + '</b>.';
+  }
+  line.classList.add('show');
+  renderOpen();
+}
+
+// ── Calibration view ──────────────────────────────────────────────────────────
+const CAL_BINS = [
+  { lo: 50, hi: 59, label: '~55%' },
+  { lo: 60, hi: 69, label: '~65%' },
+  { lo: 70, hi: 79, label: '~75%' },
+  { lo: 80, hi: 89, label: '~85%' },
+  { lo: 90, hi: 99, label: '90%+' },
+];
+function renderCalibration() {
+  const resolved = resolvedCalls();
+  document.getElementById('p-level').textContent    = state.level;
+  document.getElementById('p-resolved').textContent = resolved.length;
+  document.getElementById('p-open').textContent     = openCalls().length;
+
+  const rowsEl = document.getElementById('cal-rows');
+  const calEmpty = document.getElementById('cal-empty');
+  const calSmall = document.getElementById('cal-small');
+  rowsEl.innerHTML = '';
+  calSmall.textContent = '';
+  calEmpty.classList.toggle('hidden', resolved.length > 0);
+
+  if (resolved.length) {
+    const folds = resolved.map(folded);
+    let shown = 0;
+    CAL_BINS.forEach(bin => {
+      const inBin = folds.filter(f => f.said >= bin.lo && f.said <= bin.hi);
+      if (!inBin.length) return;
+      shown++;
+      const said = Math.round(inBin.reduce((a, f) => a + f.said, 0) / inBin.length);
+      const real = Math.round(100 * inBin.filter(f => f.hit).length / inBin.length);
+      const row = document.createElement('div'); row.className = 'cal-row';
+      const lineEl = document.createElement('div'); lineEl.className = 'cal-line';
+      const saidEl = document.createElement('span'); saidEl.className = 'cal-said'; saidEl.textContent = bin.label;
+      const nEl = document.createElement('span'); nEl.className = 'cal-n';
+      nEl.textContent = inBin.length + (inBin.length === 1 ? ' call' : ' calls');
+      lineEl.append(saidEl, nEl);
+      const bars = document.createElement('div'); bars.className = 'cal-bars';
+      [['said', said], ['real', real]].forEach(([cls, v]) => {
+        const bar = document.createElement('div'); bar.className = 'cal-bar ' + cls;
+        const fill = document.createElement('i'); fill.style.width = Math.max(2, v) + '%';
+        bar.appendChild(fill); bars.appendChild(bar);
+      });
+      const cap = document.createElement('div'); cap.className = 'cal-caption';
+      cap.innerHTML = 'You said <b>' + said + '%</b> · it happened <b>' + real + '%</b> of the time';
+      row.append(lineEl, bars, cap);
+      rowsEl.appendChild(row);
+    });
+    if (resolved.length < 10) {
+      calSmall.textContent = 'Small samples wobble — the curve starts meaning something around ten resolved calls. Keep going.';
+    } else if (shown) {
+      // one honest summary sentence: the average gap between said and happened
+      const gap = Math.round(folds.reduce((a, f) => a + Math.abs(f.said - (f.hit ? 100 : 0)), 0) / folds.length);
+      calSmall.textContent = 'Not a score to chase — just a mirror. Perfect calibration isn’t the goal; noticing which direction you lean is. (Most people find their 90s behave like 70s.)';
+      void gap; // deliberately not surfaced as a number — the bars say it without making it a target
+    }
+  }
+
+  // history — resolved + void, newest first, grouped by resolution day
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  list.innerHTML = '';
+  const done = state.predictions.filter(p => p.status !== 'open')
+    .slice().sort((a, b) => (b.resolvedTs || 0) - (a.resolvedTs || 0));
+  empty.classList.toggle('hidden', done.length > 0);
+  let lastDay = null, group = null;
+  done.forEach(p => {
+    const d = new Date(p.resolvedTs || p.madeTs);
+    const k = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    if (k !== lastDay) {
+      lastDay = k;
+      group = document.createElement('div'); group.className = 'hist-day';
+      const head = document.createElement('div'); head.className = 'hist-day-h';
+      const now = new Date();
+      const todayK = now.getFullYear() + '-' + now.getMonth() + '-' + now.getDate();
+      const yd = new Date(now.getTime() - 86400000);
+      const ydK = yd.getFullYear() + '-' + yd.getMonth() + '-' + yd.getDate();
+      head.textContent = k === todayK ? 'Today' : k === ydK ? 'Yesterday'
+        : d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      group.appendChild(head);
+      list.appendChild(group);
+    }
+    const row = document.createElement('div'); row.className = 'hist-row';
+    const dot = document.createElement('span'); dot.className = 'hist-dot';
+    dot.style.background = p.status === 'void' ? 'rgba(255,255,255,0.22)'
+      : (p.brier < 0.25 ? 'hsl(58,68%,64%)' : 'hsl(210,55%,66%)');
+    const title = document.createElement('span'); title.className = 'hist-title';
+    title.textContent = p.text;
+    const oc = document.createElement('span'); oc.className = 'hist-outcome';
+    oc.textContent = p.status === 'void' ? 'couldn’t say'
+      : (p.outcome ? 'happened' : 'didn’t') + ' · said ' + p.conf + '%';
+    row.append(dot, title, oc);
+    group.appendChild(row);
+  });
+}
+
+// ── Panel + view switching ──────────────────────────────────────────────────────
+function swapPanel(panel) {
+  [homePanel, composePanel, committedPanel].forEach(p => p.classList.add('hidden'));
+  panel.classList.remove('hidden');
+  panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
+}
+function switchView(v) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  practiceView.classList.toggle('hidden', v !== 'practice');
+  openView.classList.toggle('hidden', v !== 'open');
+  progressView.classList.toggle('hidden', v !== 'progress');
+  if (v !== 'open') document.getElementById('verdict-line').classList.remove('show');
+  if (v === 'practice') { renderHome(); swapPanel(homePanel); }
+  else if (v === 'open') renderOpen();
+  else renderCalibration();
+}
+
+// ── Export / import (your data is yours) ────────────────────────────────────────
+function exportData() {
+  const payload = { app: 'foresee', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `foresee-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.predictions)) throw new Error('not a Foresee export');
+    if (typeof incoming.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(incoming.level)));
+    if (typeof incoming.streak === 'number') state.streak = incoming.streak;
+    state.predictions = incoming.predictions.map(sanitizePrediction).filter(Boolean);
+    save();
+    switchView('progress');
+    alert('Imported your Foresee record.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.getElementById('new-call-btn').addEventListener('click', showCompose);
+document.getElementById('compose-back-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
+document.getElementById('commit-btn').addEventListener('click', commitCall);
+document.getElementById('another-call-btn').addEventListener('click', showCompose);
+document.getElementById('done-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
+document.getElementById('home-due').addEventListener('click', () => { if (dueCalls().length) switchView('open'); });
+confSlider.addEventListener('input', renderConfHint);
+// Corner data menu — open/close, close on outside-click or Esc.
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+switchView('practice');
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (the ladder + every prediction). Sign-in / unlock live
+// at the hub; this app only registers its store, shows status, and pushes on
+// save. Nothing transmits until sync is unlocked and the initial pull arms.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                      // remote-apply path — deliberately NOT through save()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'practice');
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'foresee' });
+}
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>
