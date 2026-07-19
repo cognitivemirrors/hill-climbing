@@ -118,6 +118,7 @@
     .card.nourish  { --accent: hsl(150,45%,60%); --accent-soft: hsla(150,43%,58%,0.45); --accent-glow: hsla(150,52%,46%,0.16); }
     .card.savor    { --accent: hsl(322,64%,68%); --accent-soft: hsla(322,58%,64%,0.45); --accent-glow: hsla(322,64%,56%,0.16); }
     .card.levity   { --accent: hsl(348,78%,72%); --accent-soft: hsla(348,72%,68%,0.45); --accent-glow: hsla(348,78%,60%,0.16); }
+    .card.foresee  { --accent: hsl(58,68%,64%);  --accent-soft: hsla(58,62%,60%,0.45);  --accent-glow: hsla(58,68%,50%,0.14); }
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
@@ -163,6 +164,7 @@
     .dash-row.nourish  { --accent: hsl(150,45%,60%); }
     .dash-row.savor    { --accent: hsl(322,64%,68%); }
     .dash-row.levity   { --accent: hsl(348,78%,72%); }
+    .dash-row.foresee  { --accent: hsl(58,68%,64%); }
     .dash-row.climb    { --accent: hsl(230,65%,72%); }
     .dash-row.train    { --accent: hsl(20,72%,66%); }
     .dash-row.erp      { --accent: hsl(120,30%,56%); }
@@ -217,6 +219,7 @@
     .ns-go.nourish  { --accent: hsl(150,45%,60%); }
     .ns-go.savor    { --accent: hsl(322,64%,68%); }
     .ns-go.levity   { --accent: hsl(348,78%,72%); }
+    .ns-go.foresee  { --accent: hsl(58,68%,64%); }
     .ns-go.climb    { --accent: hsl(230,65%,72%); }
     .ns-go.train    { --accent: hsl(20,72%,66%); }
     .ns-alt {
@@ -587,6 +590,17 @@
       <p>Learn to be funny, one bit at a time.</p>
     </a>
 
+    <a class="card foresee" href="foresee.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 24c5.5-8.5 11.5-12.5 18-12.5S36.5 15.5 42 24c-5.5 8.5-11.5 12.5-18 12.5S11.5 32.5 6 24Z"/>
+          <circle cx="24" cy="24" r="5"/>
+        </svg>
+      </span>
+      <h2>Foresee</h2>
+      <p>Learn how much to trust your own judgment.</p>
+    </a>
+
     <a class="card climb" href="climb.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -677,6 +691,11 @@
       <span class="dash-label">Levity</span>
       <span class="dash-strip" data-strip="levity" aria-hidden="true"></span>
       <span class="dash-count" data-count="levity">·</span>
+    </div>
+    <div class="dash-row foresee">
+      <span class="dash-label">Foresee</span>
+      <span class="dash-strip" data-strip="foresee" aria-hidden="true"></span>
+      <span class="dash-count" data-count="foresee">·</span>
     </div>
     <div class="dash-row climb">
       <span class="dash-label">Climb</span>
@@ -885,7 +904,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'erp', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train'];
+    const APPS = ['meditate', 'breathe', 'erp', 'reflect', 'nourish', 'savor', 'levity', 'foresee', 'climb', 'train'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -981,7 +1000,7 @@
     function weekIsActive(weekKeys, sets) {
       let n = 0;
       for (const k of weekKeys) {
-        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.erp.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.savor.has(k) || sets.levity.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.erp.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.savor.has(k) || sets.levity.has(k) || sets.foresee.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
       }
       return n >= STREAK_MIN_DAYS;
     }
@@ -1041,6 +1060,7 @@
         nourish:  logDaySet(log, 'nourish'),
         savor:    logDaySet(log, 'savor'),
         levity:   logDaySet(log, 'levity'),
+        foresee:  logDaySet(log, 'foresee'),
         climb:    logDaySet(log, 'climb'),
         train:    logDaySet(log, 'train'),
       };
@@ -1066,20 +1086,30 @@
       nourish:  'Cook one real thing tonight.',
       savor:    'A small tasting at your own counter.',
       levity:   'Notice one funny thing and write it down.',
+      foresee:  'Make one small call about tomorrow, and say how sure you are.',
       climb:    'Pick up a hill and take one small step.',
       train:    'Move your body, even briefly.',
     };
     // Which invitations fit the hour, in order. Same hour → same order.
     function nsInviteOrder(h) {
       if (h < 5)  return ['reflect', 'meditate'];
-      if (h < 11) return ['breathe', 'meditate', 'reflect', 'train'];
+      if (h < 11) return ['breathe', 'meditate', 'reflect', 'foresee', 'train'];
       if (h < 14) return ['climb', 'train', 'savor', 'meditate', 'reflect'];
       if (h < 17) return ['climb', 'train', 'meditate', 'levity', 'savor'];
-      if (h < 21) return ['nourish', 'savor', 'reflect', 'breathe', 'levity'];
+      if (h < 21) return ['nourish', 'savor', 'reflect', 'foresee', 'breathe', 'levity'];
       return ['reflect', 'meditate', 'breathe'];
     }
     function nsReadJSON(key) {
       try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+    }
+    // Foresee predictions whose resolve-by day has arrived (open, due <= today).
+    function nsForeseeDueCount() {
+      const fs = nsReadJSON('hill-climbing-foresee');
+      if (!fs || !Array.isArray(fs.predictions)) return 0;
+      const today = hcDayKey(new Date());
+      return fs.predictions.filter(function (p) {
+        return p && p.status === 'open' && typeof p.due === 'string' && p.due <= today;
+      }).length;
     }
     // Build the full ordered candidate list. Items: { text, app?, href?, go? }.
     // All text is rendered via textContent (user-authored goal/step titles are
@@ -1103,6 +1133,12 @@
       if (savor && savor.current) out.push({ text: 'You’re mid-tasting in Savor — the counter is still set.', app: 'savor', href: 'savor.html', go: 'Continue tasting' });
       const train = nsReadJSON('hill-climbing-train');
       if (train && train.active) out.push({ text: 'A workout is still open in Train.', app: 'train', href: 'train.html', go: 'Back to it' });
+      const nsForeseeDue = nsForeseeDueCount();
+      if (nsForeseeDue) out.push({
+        text: nsForeseeDue === 1 ? 'A call in Foresee has come due — reality has voted; record it.'
+                                 : nsForeseeDue + ' calls in Foresee have come due — reality has voted; record them.',
+        app: 'foresee', href: 'foresee.html', go: 'Record the verdict',
+      });
 
       // 2 — enough is allowed to be enough.
       if (!late && activeToday.length >= 2) out.push({ text: 'You’ve already come back to yourself twice today. Enough is allowed to be enough.' });
@@ -1189,7 +1225,7 @@
     const NS_SCHEMA = {
       type: 'object',
       properties: {
-        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'climb', 'train', 'rest'] },
+        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'savor', 'levity', 'foresee', 'climb', 'train', 'rest'] },
         text: { type: 'string' },
       },
       required: ['app', 'text'],
@@ -1197,7 +1233,7 @@
     };
     const NS_SYSTEM = [
       'You are the companion from Hill Climbing — a small suite of contemplative practice apps',
-      '(Meditate, Breathe, Reflect journal, Nourish cooking, Savor tasting, Levity comedy, Climb goals, Train workouts).',
+      '(Meditate, Breathe, Reflect journal, Nourish cooking, Savor tasting, Levity comedy, Foresee calibration, Climb goals, Train workouts).',
       'The person has just arrived at the hub. Suggest exactly ONE next step, in 1–2 short, warm sentences.',
       'Rules, which reflect the suite’s binding constraints:',
       '- Rest is a first-class answer. Late at night, or when today already held practice, "enough is enough" or rest (app: "rest") is often the best suggestion.',
@@ -1219,7 +1255,7 @@
       const now = new Date();
       const lines = ['Local time: ' + now.toDateString() + ', ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0')];
       const today = hcDayKey(now);
-      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish', savor: 'Savor', levity: 'Levity', climb: 'Climb', train: 'Train' };
+      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish', savor: 'Savor', levity: 'Levity', foresee: 'Foresee (calibration)', climb: 'Climb', train: 'Train' };
       const last14 = [];
       for (let i = 0; i < 14; i++) { const d = new Date(now); d.setDate(now.getDate() - i); last14.push(hcDayKey(d)); }
       lines.push('Practice in the last 14 days (day counts; "today" marked):');
@@ -1238,6 +1274,8 @@
       if (savor && savor.current) open.push('a tasting mid-way in Savor');
       const train = nsReadJSON('hill-climbing-train');
       if (train && train.active) open.push('an open workout in Train');
+      const foreseeDue = nsForeseeDueCount();
+      if (foreseeDue) open.push(foreseeDue + ' prediction' + (foreseeDue === 1 ? '' : 's') + ' due a verdict in Foresee');
       if (open.length) lines.push('Left mid-way: ' + open.join('; ') + '.');
       const climb = nsReadJSON('hill-climbing-climb');
       if (climb && climb.focusId && climb.goals && climb.goals[climb.focusId] && typeof climb.goals[climb.focusId].title === 'string') {
