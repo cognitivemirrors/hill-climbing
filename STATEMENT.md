@@ -1,11 +1,19 @@
-# Hill Climbing — Statement
+# Governance, the Game
 
-**A public-data art project. A contested competition of families. No winner, by design.**
+*The title the work goes by — an art project grown from the Hill Climbing repository.*
+
+**Public-data seed. A contested competition of families, played out under a governance that
+distributes, votes on, and periodically dissolves its own power. No winner, by design.**
 
 This began as a suite of private, on-device contemplative practice tools. It is now an **art
-project**, and its earlier product-era governance (the privacy standard in `REQUIREMENTS.md`, the
-consent and crypto machinery, the two-person world's hard gates) describes a framing the project
-has moved past. See "The pivot," below.
+project — _Governance, the Game_** — in which the governance apparatus is not scaffolding around
+the work but its **medium**: the layered AI rule-aggregation, the voted token budgets, and the
+power that resets on a cadence (`GOVERNANCE.md`) are the material the piece is made of. The name
+also closes an arc — *Hill Climbing* was an optimization metaphor, greedy ascent to a single peak;
+this is the work that refuses the single peak (the curve, not the score; no permanent winner;
+power that dissolves before it can summit). Its earlier product-era governance (the privacy
+standard in `REQUIREMENTS.md`, the consent and crypto machinery, the two-person world's hard gates)
+describes a framing the project has moved past. See "The pivot," below.
 
 ## The work
 
