@@ -205,7 +205,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div id="version-label">v0.1 · anime</div>
+<div id="version-label">v0.2 · anime</div>
 
 <header>
   <h1>Anime</h1>
@@ -281,6 +281,7 @@
   analysed — the drawing is made and thrown away frame by frame, on your machine.
 </footer>
 
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 
@@ -295,7 +296,7 @@
 //   6. optional bloom via canvas filter blur  → the dreamy glow
 // No models, no network, no dependencies. Frames are never kept.
 
-const VERSION = 'v0.1 · anime';
+const VERSION = 'v0.2 · anime';
 document.getElementById('version-label').textContent = VERSION;
 
 // ── Presets ────────────────────────────────────────────────────────────────
@@ -613,27 +614,38 @@ function syncSliders() {
     document.getElementById(vid).textContent = fmt(P[key]);
   }
 }
-for (const [key, sid, vid, fmt] of SLIDERS) {
+// moving a slider (by hand or programmatically) means we've left the exact preset
+function setParam(name, value) {
+  const entry = SLIDERS.find(s => s[0] === name);
+  if (!entry) throw new Error('unknown param "' + name + '"');
+  const [key, sid, vid, fmt] = entry;
   const el = document.getElementById(sid);
-  el.addEventListener('input', () => {
-    P[key] = Number(el.value);
-    document.getElementById(vid).textContent = fmt(P[key]);
-    // moving a slider means we've left the exact preset — clear the active chip
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    if (running) setStatus('On-device · custom');
-  });
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < Number(el.min) || num > Number(el.max)) {
+    throw new Error(name + ' must be within ' + el.min + '..' + el.max);
+  }
+  P[key] = num;
+  el.value = num;
+  document.getElementById(vid).textContent = fmt(P[key]);
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  if (running) setStatus('On-device · custom');
+}
+for (const [key, sid] of SLIDERS) {
+  const el = document.getElementById(sid);
+  el.addEventListener('input', () => { setParam(key, el.value); });
 }
 
+function setPreset(presetKey) {
+  const preset = PRESETS[presetKey];
+  if (!preset) return false;
+  P = Object.assign({}, preset);
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.preset === presetKey));
+  syncSliders();
+  if (running) setStatus('On-device · ' + activePresetName());
+  return true;
+}
 document.querySelectorAll('.chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    const preset = PRESETS[chip.dataset.preset];
-    if (!preset) return;
-    P = Object.assign({}, preset);
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
-    syncSliders();
-    if (running) setStatus('On-device · ' + activePresetName());
-  });
+  chip.addEventListener('click', () => { setPreset(chip.dataset.preset); });
 });
 
 startBtn.addEventListener('click', startCamera);
@@ -680,6 +692,45 @@ function stamp() {
 
 // draw initial slider labels
 syncSliders();
+
+if (window.HC) HC.register({
+  app: 'anime',
+  version: VERSION,
+  title: 'Anime',
+  description: 'A webcam cel-shading/rotoscope toy — draws you as a cel-shaded character in real time; snapshot or record a clip.',
+  stores: [],
+  actions: {
+    startCamera: {
+      description: 'Enable the webcam and begin the live cel-shading render, same as the Enable camera button.',
+      params: {},
+      handler: async () => { await startCamera(); return { ok: true }; },
+    },
+    snapshot: {
+      description: 'Save the current frame as a PNG download, same as the Snapshot button. No-ops if the camera is not running.',
+      params: {},
+      handler: () => { snapshot(); return { ok: true }; },
+    },
+    toggleRecording: {
+      description: 'Start or stop recording a clip, same as the Record clip button.',
+      params: {},
+      handler: () => { toggleRecording(); return { ok: true }; },
+    },
+    setPreset: {
+      description: 'Switch to a named look preset, same as clicking a preset chip.',
+      params: { key: "'cel'|'shoujo'|'ghibli'|'manga'|'neon' — required" },
+      handler: (p) => {
+        if (!setPreset(p && p.key)) throw new Error('unknown preset "' + (p && p.key) + '"');
+        return { ok: true };
+      },
+    },
+    setParam: {
+      description: 'Set one filter parameter, same as dragging its slider — mutates in-memory filter params only.',
+      params: { name: "'smooth'|'levels'|'ink'|'sat'|'warm'|'glow' — required", value: 'number within the slider’s min/max — required' },
+      handler: (p) => { setParam(p && p.name, p && p.value); return { ok: true }; },
+    },
+  },
+  notes: 'An experiment; nothing persists — frames are made and thrown away; snapshot/record download files, they do not store state.',
+});
 </script>
 </body>
 </html>

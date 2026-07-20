@@ -240,7 +240,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · echo</div>
+<div class="corner" id="version-label">v0.2 · echo</div>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -310,11 +310,12 @@
 
 </main>
 
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.1 · echo';
+const VERSION   = 'v0.2 · echo';
 const STATE_KEY = 'hill-climbing-echo';
 
 // The five stones, left to right — A-minor pentatonic, low to high.
@@ -639,6 +640,34 @@ document.getElementById('version-label').textContent = VERSION;
 load();
 renderHome();
 if (audioBroken) revealNoAudioNote();
+
+if (window.HC) HC.register({
+  app: 'echo',
+  version: VERSION,
+  title: 'Echo',
+  description: 'A listening memory game: five stones voice a growing pentatonic-bell phrase that you tap back.',
+  stores: [
+    { key: STATE_KEY, kind: 'localStorage', description: 'Longest phrase held, sit count, last played timestamp.', sensitivity: 'practice', schema: '{v, longest, sits, lastTs}' },
+  ],
+  actions: {
+    begin: {
+      description: 'Start a phrase run, same as tapping BEGIN — plays the opening note and opens the play panel.',
+      params: {},
+      handler: () => { begin(); return { ok: true }; },
+    },
+    tapStone: {
+      description: 'Tap a stone exactly as a touch does; completing a phrase records it through the same path a human tap does.',
+      params: { idx: 'integer 0-4 — which stone to strike, required' },
+      handler: (p) => {
+        const idx = Number(p && p.idx);
+        if (!Number.isInteger(idx) || idx < 0 || idx > 4) throw new Error('idx must be an integer 0-4');
+        tapStone(idx);
+        return { ok: true };
+      },
+    },
+  },
+  notes: 'A game, deliberately outside sync and the usage dashboard — the only record is the farthest phrase held; there is nothing to optimise on the person’s behalf.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
