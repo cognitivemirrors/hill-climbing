@@ -6,7 +6,7 @@
    Nothing here touches the network, and nothing records where a write came
    from: a snapshot produced through this interface is indistinguishable from
    one produced through the UI. That symmetry is the point (see REQUIREMENTS
-   §1.5). Apps call HC.register(manifest) at the end of their main script so
+   §1.4). Apps call HC.register(manifest) at the end of their main script so
    action handlers close over internal functions.
    Load order: classic script, after hc-sync.js / hc-usage.js. */
 (function () {
