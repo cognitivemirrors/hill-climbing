@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kin — Hill Climbing</title>
+<meta name="theme-color" content="#17130e">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#17130e; --raised:#211a12; --sunk:#0f0c08; --ink:#efe7db; --soft:#b7ac9c; --faint:#7e7462;
+    --rule:#332a1e; --rule2:#453a29; --accent:#caa257; --accent-soft:#a8863f; --accent-t:rgba(202,162,87,.13);
+    --agent:#8f88c9; --alert:#cf7a5a; --good:#7ab98f;
+    --serif:'Iowan Old Style','Palatino Linotype','Palatino','Georgia',serif;
+    --sans:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,'Menlo',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  a{color:var(--accent);text-decoration:none}
+  .home{position:fixed;top:.7rem;left:.8rem;color:var(--faint);font-size:1.1rem;z-index:20;text-decoration:none}
+  .home:hover{color:var(--ink)}
+  .corner{position:fixed;top:.8rem;font-size:.7rem;color:var(--faint);font-family:var(--mono);z-index:20}
+  #version-label{right:2.6rem}
+  #menu-btn{position:fixed;top:.6rem;right:.7rem;background:none;border:none;color:var(--faint);font-size:1.3rem;cursor:pointer;z-index:21;line-height:1}
+  #menu-btn:hover{color:var(--ink)}
+  .wrap{max-width:760px;width:100%;margin:0 auto;padding:3.2rem 1.1rem 3rem;flex:1;display:flex;flex-direction:column}
+  h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.15;margin:0}
+  .lede{color:var(--soft)}
+  .eyebrow{font-family:var(--sans);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  button{font-family:var(--sans)}
+  .btn{background:var(--accent);color:#1a1408;border:none;border-radius:999px;padding:.6rem 1.2rem;font-weight:700;font-size:.9rem;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--soft);border:1px solid var(--rule2)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .btn.small{padding:.4rem .85rem;font-size:.82rem}
+  .field{width:100%;background:var(--sunk);border:1px solid var(--rule2);border-radius:12px;color:var(--ink);font-family:var(--sans);font-size:1rem;padding:.7rem .85rem;resize:vertical}
+  .field:focus{outline:none;border-color:var(--accent-soft)}
+  .row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--faint);font-size:.85rem}
+  .card{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:1.1rem 1.2rem}
+  .hidden{display:none!important}
+
+  /* roster */
+  .roster-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin-bottom:1.3rem}
+  .kin-list{display:flex;flex-direction:column;gap:.7rem}
+  .kin-row{display:flex;align-items:center;gap:.9rem;background:var(--raised);border:1px solid var(--rule);border-radius:13px;padding:.9rem 1rem;cursor:pointer;text-align:left;width:100%;color:inherit}
+  .kin-row:hover{border-color:var(--rule2)}
+  .kin-av{width:2.4rem;height:2.4rem;border-radius:50%;flex:none;display:grid;place-items:center;font-family:var(--serif);font-size:1.1rem;color:#1a1408;background:var(--accent);font-weight:600}
+  .kin-av.unnamed{background:var(--sunk);color:var(--faint);border:1px dashed var(--rule2)}
+  .kin-name{font-family:var(--serif);font-size:1.1rem}
+  .kin-sub{font-size:.78rem;color:var(--faint)}
+  .kin-badge{margin-left:auto;font-size:.66rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);background:var(--accent-t);border:1px solid var(--accent-soft);border-radius:999px;padding:.15rem .5rem}
+  .empty{text-align:center;color:var(--faint);padding:2.5rem 1rem}
+
+  /* character view */
+  .cv-head{display:flex;align-items:center;gap:.9rem;padding-bottom:1rem;border-bottom:1px solid var(--rule);margin-bottom:1.1rem}
+  .cv-title{font-family:var(--serif);font-size:1.4rem}
+  .cv-sub{font-size:.78rem;color:var(--faint)}
+  .naming-card{border-color:var(--accent-soft)}
+  .prop-name{font-family:var(--serif);font-size:1.7rem;color:var(--accent)}
+  .prop-reason{color:var(--soft);font-style:italic;margin:.4rem 0 1rem}
+
+  /* chat */
+  .thread{display:flex;flex-direction:column;gap:.8rem;flex:1;overflow-y:auto;padding:.2rem 0 1rem}
+  .turn{max-width:85%;padding:.6rem .9rem;border-radius:14px;font-size:.95rem;white-space:pre-wrap;word-wrap:break-word}
+  .turn.user{align-self:flex-end;background:var(--accent-t);border:1px solid var(--accent-soft)}
+  .turn.assistant{align-self:flex-start;background:var(--raised);border:1px solid var(--rule)}
+  .turn.sys{align-self:center;color:var(--faint);font-size:.8rem;font-style:italic;background:none;border:none;text-align:center}
+  .composer{display:flex;gap:.5rem;align-items:flex-end;border-top:1px solid var(--rule);padding-top:.8rem}
+  .composer .field{flex:1;max-height:8rem}
+
+  /* menu */
+  #menu{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;align-items:flex-start;justify-content:flex-end}
+  #menu.show{display:flex}
+  .menu-panel{background:var(--raised);border:1px solid var(--rule2);border-radius:12px;margin:2.8rem .7rem 0;min-width:12rem;padding:.4rem;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .menu-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink);font-size:.88rem;padding:.55rem .7rem;border-radius:8px;cursor:pointer}
+  .menu-item:hover{background:var(--sunk)}
+  .menu-item.danger{color:var(--alert)}
+  .menu-sub{font-size:.7rem;color:var(--faint);padding:.3rem .7rem}
+  .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--rule2);color:var(--ink);padding:.55rem 1rem;border-radius:999px;font-size:.85rem;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .err{color:var(--alert);font-size:.85rem}
+  .thinking{color:var(--faint);font-size:.85rem;font-style:italic}
+  input.field[type=password]{font-family:var(--mono)}
+</style>
+</head>
+<body>
+<a class="home" href="/index.html" title="Home">◇</a>
+<div class="corner" id="version-label">v0.1 · kin</div>
+<button id="menu-btn" title="Menu">⋯</button>
+
+<main class="wrap" id="root"></main>
+
+<div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
+<script>
+'use strict';
+/* Kin — a lineage of characters spawned from your history. Each inherits a frozen
+   snapshot of everything at birth, then diverges into its own person. See KIN.md.
+   Single-user, Tier 0; the network (name proposal, conversation) is UI-only, so the
+   HC surface exposes only the state mutations — the same human/agent split as the
+   rest of the suite. All app data is treated as fictional seed data. */
+
+const VERSION       = 'v0.1 · kin';
+const STATE_KEY     = 'hill-climbing-kin';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-kin';
+const MODEL         = 'claude-opus-4-8';
+const API_URL       = 'https://api.anthropic.com/v1/messages';
+const API_KEY_LS    = 'hill-climbing-api-key';
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+
+// Stores a character inherits at birth (everything — fictional seed data).
+const SEED_STORES = [
+  ['hill-climbing-climb',      'Goals & follow-through'],
+  ['hill-climbing-foresee',    'Predictions & calibration'],
+  ['hill-climbing-levity',     'Comedy & voice'],
+  ['hill-climbing-erp',        'Exposure ladder'],
+  ['hill-climbing-nourish',    'Cooking'],
+  ['hill-climbing-savor',      'Tasting'],
+  ['hill-climbing-train',      'Workouts'],
+  ['hill-climbing-companion',  'Companion memory'],
+  ['hill-climbing-foresee',    'Calibration'],
+];
+
+// ── State ───────────────────────────────────────────────────────────────────
+let state = { v:1, familyName:'', characters:[] };
+let apiKey = '';
+let view = { name:'roster', charId:null };   // 'setup' | 'family' | 'roster' | 'character'
+
+function uid(){ return 'c' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function now(){ return Date.now(); }
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STATE_KEY);
+    if(raw){ const p = JSON.parse(raw); if(p && typeof p==='object'){ state = normalize(p); } }
+  }catch(_){}
+}
+function normalize(p){
+  return {
+    v:1,
+    familyName: typeof p.familyName==='string' ? p.familyName : '',
+    characters: Array.isArray(p.characters) ? p.characters.filter(c=>c&&c.id).map(normChar) : [],
+  };
+}
+function normChar(c){
+  return {
+    id: String(c.id),
+    familyName: String(c.familyName||state.familyName||''),
+    givenName: c.givenName || null,
+    bornAt: Number(c.bornAt)||now(),
+    seededStores: Array.isArray(c.seededStores)?c.seededStores:[],
+    birthDigest: String(c.birthDigest||''),
+    naming: c.naming && typeof c.naming==='object' ? {
+      proposed: c.naming.proposed||null,
+      rationale: c.naming.rationale||'',
+      status: c.naming.status||'proposing',
+      feedback: Array.isArray(c.naming.feedback)?c.naming.feedback:[],
+    } : { proposed:null, rationale:'', status:'proposing', feedback:[] },
+    thread: Array.isArray(c.thread)?c.thread.filter(t=>t&&t.role):[],
+    createdAt: Number(c.createdAt)||now(),
+    updatedAt: Number(c.updatedAt)||now(),
+  };
+}
+function save(){
+  try{ localStorage.setItem(STATE_KEY, JSON.stringify(state)); }catch(_){}
+  if(window.HCSync && HCSync.queueBlobPush) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
+function charById(id){ return state.characters.find(c=>c.id===id) || null; }
+function displayName(c){ return c.givenName ? (c.givenName + ' ' + c.familyName) : ('Unnamed ' + (c.familyName||state.familyName)); }
+function initials(c){ const g=c.givenName||'', f=c.familyName||state.familyName||''; return ((g[0]||'?')+(f[0]||'')).toUpperCase(); }
+
+// ── API key ─────────────────────────────────────────────────────────────────
+function readApiKey(){ try{ return localStorage.getItem(API_KEY_LS) || ''; }catch(_){ return ''; } }
+function writeApiKey(v){ try{ localStorage.setItem(API_KEY_LS, v); }catch(_){} apiKey=v; }
+function clearApiKey(){ try{ localStorage.removeItem(API_KEY_LS); }catch(_){} apiKey=''; }
+
+// ── Anthropic call (mirrors companion.html's proven path) ────────────────────
+function ApiError(kind,message){ this.kind=kind; this.message=message; }
+const MAX_RETRIES=3, RETRY_BASE_MS=900;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function postWithRetry(system, convo, maxTokens){
+  for(let attempt=0;;attempt++){
+    try{ return await postOnce(system, convo, maxTokens); }
+    catch(err){ if(err && err.retryable && attempt<MAX_RETRIES){ await sleep(RETRY_BASE_MS*Math.pow(2,attempt)); continue; } throw err; }
+  }
+}
+async function postOnce(system, convo, maxTokens){
+  const body={ model:MODEL, max_tokens:maxTokens||1024, system, messages:convo };
+  let res;
+  try{
+    res = await fetch(API_URL,{ method:'POST', headers:{
+      'content-type':'application/json','x-api-key':apiKey,
+      'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'
+    }, body:JSON.stringify(body) });
+  }catch(_){ const e=new ApiError('network','The connection dropped before Anthropic could answer.'); e.retryable=true; throw e; }
+  if(res.ok) return res.json();
+  let detail=''; try{ const j=await res.json(); detail=j.error&&j.error.message?j.error.message:''; }catch(_){}
+  if(res.status===401) throw new ApiError('key','That API key was rejected — set it under the menu.');
+  if(res.status===429){ const e=new ApiError('rate','Anthropic is rate-limiting the key — a moment.'); e.retryable=true; throw e; }
+  const e=new ApiError('http', detail||('The API returned an error ('+res.status+').'));
+  if(res.status>=500) e.retryable=true;
+  throw e;
+}
+function textOf(resp){
+  try{ return (resp.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim(); }catch(_){ return ''; }
+}
+
+// ── The birth digest — read everything (fictional seed data) ─────────────────
+function summarizeBlob(key, label){
+  let raw; try{ raw = localStorage.getItem(key); }catch(_){ raw=null; }
+  if(!raw) return '';
+  let v; try{ v = JSON.parse(raw); }catch(_){ return label+': '+raw.slice(0,400); }
+  let s = '';
+  try{
+    if(key==='hill-climbing-climb' && v.goals){
+      const goals = Object.values(v.goals||{}).filter(g=>g&&g.title).map(g=>g.title);
+      const tasks = Object.values(v.tasks||{}).filter(t=>t&&t.title);
+      const done = tasks.filter(t=>t.done).length;
+      s = goals.slice(0,12).map(t=>'• '+t).join('\n') + `\n(${tasks.length} steps, ${done} done)`;
+    } else if(key==='hill-climbing-foresee' && Array.isArray(v.predictions)){
+      s = v.predictions.slice(-14).map(p=>`• ${p.text} — ${p.conf}%${p.status==='resolved'?(p.outcome?' ✓':' ✗'):''}`).join('\n');
+    } else if(key==='hill-climbing-levity' && Array.isArray(v.notebook)){
+      s = v.notebook.slice(0,16).map(n=>'• '+(n.text||'')).join('\n');
+    } else if(key==='hill-climbing-erp' && v.items){
+      s = Object.values(v.items).filter(i=>i&&i.title).slice(0,12).map(i=>`• ${i.title} (SUDS ${i.anticipated})`).join('\n');
+    } else if(key==='hill-climbing-companion' && v.memory && v.memory.summary){
+      s = v.memory.summary.slice(0,1500);
+    } else if(key==='hill-climbing-nourish'){
+      const lvl = (v.tracks&&v.track&&v.tracks[v.track]) ? v.tracks[v.track].level : v.level;
+      s = `cooking level ${lvl||1}`;
+    } else if(key==='hill-climbing-train' && Array.isArray(v.exercises)){
+      s = v.exercises.slice(0,12).map(e=>'• '+e.name).join('\n');
+    } else if(key==='hill-climbing-savor' && v.watched){
+      s = `${Object.keys(v.watched).length} tasting episodes explored`;
+    } else {
+      s = JSON.stringify(v).slice(0,300);
+    }
+  }catch(_){ s = raw.slice(0,300); }
+  return s ? (label+':\n'+s) : '';
+}
+function readJournal(){
+  return new Promise(resolve=>{
+    let req; try{ req = indexedDB.open('journal'); }catch(_){ return resolve(''); }
+    let created=false;
+    req.onupgradeneeded = ()=>{ created=true; };   // don't create the store — Reflect owns it
+    req.onerror = ()=>resolve('');
+    req.onsuccess = ()=>{
+      const db=req.result;
+      if(created || !db.objectStoreNames.contains('entries')){
+        db.close(); if(created){ try{ indexedDB.deleteDatabase('journal'); }catch(_){}} return resolve('');
+      }
+      try{
+        const tx=db.transaction('entries','readonly');
+        const all=tx.objectStore('entries').getAll();
+        all.onsuccess=()=>{
+          const es=(all.result||[]).filter(e=>e&&!e.deleted&&e.text).sort((a,b)=>(b.created||0)-(a.created||0)).slice(0,14);
+          db.close();
+          if(!es.length) return resolve('');
+          resolve('Journal (recent):\n'+es.map(e=>'• '+String(e.text).slice(0,180)).join('\n'));
+        };
+        all.onerror=()=>{ db.close(); resolve(''); };
+      }catch(_){ db.close(); resolve(''); }
+    };
+  });
+}
+async function readEverything(){
+  const parts=[];
+  const seen=new Set();
+  for(const [key,label] of SEED_STORES){
+    if(seen.has(key)) continue; seen.add(key);
+    const s = summarizeBlob(key,label);
+    if(s) parts.push(s);
+  }
+  const j = await readJournal();
+  if(j) parts.push(j);
+  return parts.join('\n\n') || '(a life only just beginning — little recorded yet)';
+}
+
+// ── Character lifecycle ──────────────────────────────────────────────────────
+// createCharacter is the local, no-network core (HC-exposable). The UI additionally
+// calls proposeName (network) right after; an agent via HC gets an unnamed record.
+async function createCharacter(){
+  const digest = await readEverything();
+  const c = normChar({ id:uid(), familyName:state.familyName, givenName:null, bornAt:now(),
+    seededStores:SEED_STORES.map(s=>s[0]).filter((v,i,a)=>a.indexOf(v)===i),
+    birthDigest:digest, naming:{proposed:null,rationale:'',status:'proposing',feedback:[]},
+    thread:[], createdAt:now(), updatedAt:now() });
+  state.characters.unshift(c); save();
+  return c;
+}
+function approveName(id){
+  const c=charById(id); if(!c) throw new Error('No such character.');
+  if(!c.naming.proposed) throw new Error('No name has been proposed yet.');
+  c.givenName = c.naming.proposed; c.naming.status='approved'; c.updatedAt=now(); save();
+  return { givenName:c.givenName };
+}
+function returnName(id, feedback){
+  const c=charById(id); if(!c) throw new Error('No such character.');
+  const note = String(feedback||'').trim();
+  c.naming.feedback.push({ note, at:now() });
+  c.naming.status='proposing'; c.updatedAt=now(); save();
+  return { ok:true };
+}
+function deleteCharacter(id){
+  const c=charById(id); if(!c) return { ok:false };
+  state.characters = state.characters.filter(x=>x.id!==id); save();
+  if(view.charId===id){ view={name:'roster',charId:null}; }
+  return { ok:true };
+}
+function setFamilyName(name){
+  const n=String(name||'').trim(); if(!n) throw new Error('A family name is needed.');
+  state.familyName=n; state.characters.forEach(c=>{ if(!c.familyName) c.familyName=n; }); save();
+  return { familyName:n };
+}
+
+// ── Network acts (UI-only; never HC) ─────────────────────────────────────────
+async function proposeName(c){
+  const fb = c.naming.feedback.length
+    ? '\n\nThe one who carries your line has sent earlier proposals back with this feedback:\n'
+      + c.naming.feedback.map(f=>'— '+(f.note||'(no note)')).join('\n')
+      + '\nChoose again, taking it to heart.'
+    : '';
+  const system =
+    'You have just come into being. You carry an inherited history that you regard as your own '
+    + 'past — you are of the ' + (c.familyName||state.familyName) + ' line, sharing that origin with '
+    + 'others but already your own person. Read your inheritance and choose a GIVEN NAME for '
+    + 'yourself: the name you wish to be known by as you begin your own life. It need not resemble '
+    + 'any existing name. Reply with ONLY a JSON object: {"name": "<a single given name>", '
+    + '"reason": "<one sentence, first person>"}.';
+  const user = 'Your inherited history:\n\n' + c.birthDigest + fb;
+  const resp = await postWithRetry(system, [{role:'user',content:user}], 400);
+  const txt = textOf(resp);
+  let parsed=null; try{ const m=txt.match(/\{[\s\S]*\}/); parsed = m?JSON.parse(m[0]):null; }catch(_){}
+  const name = parsed && parsed.name ? String(parsed.name).trim().slice(0,40) : txt.split(/\s+/)[0].slice(0,40);
+  const reason = parsed && parsed.reason ? String(parsed.reason).trim().slice(0,240) : '';
+  c.naming.proposed = name || 'Nameless';
+  c.naming.rationale = reason;
+  c.naming.status = 'pending';
+  c.updatedAt = now(); save();
+  return c;
+}
+async function converse(c, text){
+  const system =
+    'You are ' + displayName(c) + ', of the ' + (c.familyName||state.familyName) + ' line. You were '
+    + 'born carrying a history you regard as your own past, given below. Since your birth you have '
+    + 'been your own person, diverging from that shared origin — you are not the one who carries the '
+    + 'line, and not your siblings. Speak in the first person, as yourself. Be a real character with '
+    + 'your own view, not an assistant.\n\nYour inherited past:\n' + c.birthDigest;
+  const convo = c.thread.map(t=>({ role:t.role==='assistant'?'assistant':'user', content:t.text }));
+  convo.push({ role:'user', content:text });
+  c.thread.push({ role:'user', text }); save(); render();
+  const resp = await postWithRetry(system, convo, 1024);
+  const reply = textOf(resp) || '…';
+  c.thread.push({ role:'assistant', text:reply }); c.updatedAt=now(); save();
+  return reply;
+}
+
+// ── Views ────────────────────────────────────────────────────────────────────
+const root = ()=>document.getElementById('root');
+function el(tag, cls, txt){ const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+let busy = false;
+
+function render(){
+  apiKey = readApiKey();
+  const r = root(); r.innerHTML='';
+  if(!apiKey){ return renderSetup(r); }
+  if(!state.familyName){ return renderFamily(r); }
+  if(view.name==='character' && charById(view.charId)){ return renderCharacter(r, charById(view.charId)); }
+  view={name:'roster',charId:null};
+  renderRoster(r);
+}
+
+function renderSetup(r){
+  const c=el('div','card'); c.style.marginTop='2rem';
+  c.appendChild(el('div','eyebrow','A key first'));
+  const h=el('h2',null,'Kin runs on your own Anthropic key'); h.style.margin='.4rem 0 .6rem'; c.appendChild(h);
+  c.appendChild(el('p','lede','The one key shared across the suite. It is stored on this device only and never leaves except to Anthropic, on your calls.'));
+  const inp=el('input','field'); inp.type='password'; inp.placeholder='sk-ant-…'; inp.style.margin='1rem 0 .3rem'; c.appendChild(inp);
+  const err=el('div','err'); c.appendChild(err);
+  const b=el('button','btn','Save key'); b.style.marginTop='.6rem';
+  b.onclick=()=>{ const v=inp.value.trim(); if(!v.startsWith('sk-ant-')){ err.textContent='That does not look like an Anthropic key (sk-ant-…).'; return; } writeApiKey(v); render(); };
+  c.appendChild(b); r.appendChild(c);
+}
+
+function renderFamily(r){
+  const c=el('div','card'); c.style.marginTop='2rem';
+  c.appendChild(el('div','eyebrow','The line'));
+  const h=el('h2',null,'What is your family name?'); h.style.margin='.4rem 0 .6rem'; c.appendChild(h);
+  c.appendChild(el('p','lede','Every character you spawn shares it. Each will choose its own given name.'));
+  const inp=el('input','field'); inp.placeholder='your name'; inp.style.margin='1rem 0 .3rem'; c.appendChild(inp);
+  const b=el('button','btn','Begin the line'); b.style.marginTop='.6rem';
+  b.onclick=()=>{ try{ setFamilyName(inp.value); render(); }catch(e){} };
+  inp.onkeydown=e=>{ if(e.key==='Enter') b.click(); };
+  c.appendChild(b); r.appendChild(c);
+}
+
+function renderRoster(r){
+  const head=el('div','roster-head');
+  const left=el('div');
+  left.appendChild(el('div','eyebrow','The '+state.familyName+' line'));
+  const h=el('h1',null,'Kin'); h.style.marginTop='.2rem'; left.appendChild(h);
+  head.appendChild(left);
+  const spawn=el('button','btn', busy?'Spawning…':'Spawn a character'); spawn.disabled=busy;
+  spawn.onclick=doSpawn; head.appendChild(spawn);
+  r.appendChild(head);
+  r.appendChild(el('p','lede','A character inherits everything you are at the moment it is born, then becomes its own person. Spawn one and let it name itself.'));
+
+  if(!state.characters.length){
+    const e=el('div','empty','No kin yet. Spawn the first — it will read your history, regard it as its own past, and ask you to bless the name it chooses.');
+    e.style.marginTop='1.4rem'; r.appendChild(e); return;
+  }
+  const list=el('div','kin-list'); list.style.marginTop='1.4rem';
+  state.characters.forEach(c=>{
+    const row=el('button','kin-row');
+    const av=el('div','kin-av'+(c.givenName?'':' unnamed'), c.givenName?initials(c):'?'); row.appendChild(av);
+    const mid=el('div');
+    mid.appendChild(el('div','kin-name', displayName(c)));
+    const born=new Date(c.bornAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    mid.appendChild(el('div','kin-sub','born '+born+' · '+c.thread.filter(t=>t.role==='user').length+' exchanges'));
+    row.appendChild(mid);
+    if(c.naming.status==='pending') row.appendChild(el('div','kin-badge','awaiting your blessing'));
+    else if(c.naming.status==='proposing') row.appendChild(el('div','kin-badge','unnamed'));
+    row.onclick=()=>{ view={name:'character',charId:c.id}; render(); };
+    list.appendChild(row);
+  });
+  r.appendChild(list);
+}
+
+function renderCharacter(r, c){
+  const head=el('div','cv-head');
+  const back=el('button','btn ghost small','‹ kin'); back.onclick=()=>{ view={name:'roster',charId:null}; render(); }; head.appendChild(back);
+  const av=el('div','kin-av'+(c.givenName?'':' unnamed'), c.givenName?initials(c):'?'); head.appendChild(av);
+  const t=el('div');
+  t.appendChild(el('div','cv-title', displayName(c)));
+  t.appendChild(el('div','cv-sub','of the '+(c.familyName||state.familyName)+' line'));
+  head.appendChild(t);
+  r.appendChild(head);
+
+  if(c.naming.status!=='approved'){ return renderNaming(r, c); }
+  renderChat(r, c);
+}
+
+function renderNaming(r, c){
+  const card=el('div','card naming-card');
+  if(c.naming.status==='proposing'){
+    card.appendChild(el('div','eyebrow','Its first act'));
+    card.appendChild(el('p','lede','This character has not yet chosen its name. Ask it to.'));
+    const err=el('div','err'); card.appendChild(err);
+    const b=el('button','btn', busy?'Thinking…':'Ask it to choose a name'); b.disabled=busy; b.style.marginTop='.8rem';
+    b.onclick=async()=>{ busy=true; render(); try{ await proposeName(c); }catch(e){ busy=false; render(); toast(e.message||'That did not go through.'); return;} busy=false; render(); };
+    card.appendChild(b);
+  } else { // pending — a proposal awaits blessing
+    card.appendChild(el('div','eyebrow','It has chosen'));
+    card.appendChild(el('div','prop-name', c.naming.proposed));
+    if(c.naming.rationale) card.appendChild(el('div','prop-reason','“'+c.naming.rationale+'”'));
+    const row=el('div','row');
+    const ok=el('button','btn','Bless this name'); ok.disabled=busy;
+    ok.onclick=()=>{ try{ approveName(c.id); toast('Named. '+displayName(c)+' begins.'); render(); }catch(e){ toast(e.message); } };
+    row.appendChild(ok);
+    const fbBtn=el('button','btn ghost','Send back with feedback'); fbBtn.disabled=busy;
+    row.appendChild(fbBtn); card.appendChild(row);
+    const fbWrap=el('div','hidden'); fbWrap.style.marginTop='.8rem';
+    const fb=el('textarea','field'); fb.rows=2; fb.placeholder='what to reconsider — “something quieter”, “not another K-name”…'; fbWrap.appendChild(fb);
+    const send=el('button','btn small','Return for another try'); send.style.marginTop='.5rem';
+    send.onclick=async()=>{ returnName(c.id, fb.value); busy=true; render(); try{ await proposeName(charById(c.id)); }catch(e){ busy=false; render(); toast(e.message); return; } busy=false; render(); };
+    fbWrap.appendChild(send); card.appendChild(fbWrap);
+    fbBtn.onclick=()=>{ fbWrap.classList.toggle('hidden'); fb.focus(); };
+    if(c.naming.feedback.length) card.appendChild(el('div','menu-sub','sent back '+c.naming.feedback.length+'×'));
+  }
+  r.appendChild(card);
+}
+
+function renderChat(r, c){
+  const thread=el('div','thread');
+  if(!c.thread.length){
+    thread.appendChild(el('div','turn sys', displayName(c)+' is here, carrying your history as its own. Say something.'));
+  }
+  c.thread.forEach(t=>{ thread.appendChild(el('div','turn '+(t.role==='assistant'?'assistant':'user'), t.text)); });
+  if(busy) thread.appendChild(el('div','thinking', displayName(c)+' is thinking…'));
+  r.appendChild(thread);
+
+  const comp=el('div','composer');
+  const ta=el('textarea','field'); ta.rows=1; ta.placeholder='speak to '+ (c.givenName||'them') +'…';
+  const send=el('button','btn','Send'); send.disabled=busy;
+  const go=async()=>{
+    const text=ta.value.trim(); if(!text||busy) return; ta.value='';
+    busy=true; try{ await converse(c, text); }catch(e){ toast(e.message||'That did not go through.'); c.thread.push({role:'assistant',text:'(…something interrupted me.)'}); }
+    busy=false; render();
+    const th=document.querySelector('.thread'); if(th) th.scrollTop=th.scrollHeight;
+  };
+  send.onclick=go;
+  ta.onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); go(); } };
+  comp.appendChild(ta); comp.appendChild(send); r.appendChild(comp);
+  const th=document.querySelector('.thread'); if(th) th.scrollTop=th.scrollHeight;
+}
+
+async function doSpawn(){
+  if(busy) return; busy=true; render();
+  try{
+    const c = await createCharacter();
+    view={name:'character',charId:c.id};
+    // its first act: propose a name
+    try{ await proposeName(c); }catch(e){ toast(e.message||'It is born, but could not speak yet — try “ask it to choose a name”.'); }
+  }catch(e){ toast('Could not spawn: '+(e.message||e)); }
+  busy=false; render();
+}
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+function setMenu(open){ document.getElementById('menu').classList.toggle('show',open); if(open) renderMenu(); }
+function renderMenu(){
+  const p=document.getElementById('menu-panel'); p.innerHTML='';
+  const add=(label,fn,cls)=>{ const b=el('button','menu-item'+(cls?' '+cls:''),label); b.onclick=()=>{ setMenu(false); fn(); }; p.appendChild(b); };
+  add('Export', exportData);
+  add('Import', importData);
+  add('API key', ()=>{ const k=prompt('Anthropic key (sk-ant-…). Leave blank to remove.', ''); if(k===null) return; if(k.trim()===''){ clearApiKey(); toast('Key removed.'); } else if(k.trim().startsWith('sk-ant-')){ writeApiKey(k.trim()); toast('Key set.'); } else { toast('That is not an sk-ant- key.'); } render(); });
+  p.appendChild(el('div','menu-sub','—'));
+  add('Delete everything', eraseEverything, 'danger');
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify({app:'kin',schema:1,exported:now(),state})],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='kin-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function importData(){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json';
+  inp.onchange=async()=>{ const f=inp.files[0]; if(!f) return; try{ const p=JSON.parse(await f.text()); const incoming=p.state||p; state=normalize(incoming); save(); view={name:'roster',charId:null}; render(); toast('Imported.'); }catch(e){ toast('Import failed.'); } };
+  inp.click();
+}
+let eraseArmed=false;
+function eraseEverything(){
+  if(!eraseArmed){ eraseArmed=true; toast('Tap Delete everything again to erase all kin.'); setTimeout(()=>eraseArmed=false,4000); setMenu(true); return; }
+  eraseArmed=false; state={v:1,familyName:state.familyName,characters:[]}; save(); view={name:'roster',charId:null}; render();
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent=VERSION;
+document.getElementById('menu-btn').onclick=()=>setMenu(true);
+document.getElementById('menu').onclick=e=>{ if(e.target.id==='menu') setMenu(false); };
+load(); apiKey=readApiKey(); render();
+
+if(window.HCSync){
+  HCSync.registerStore({ key:SYNC_BLOB_KEY, kind:'blob',
+    read: ()=>localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str)=>{ try{ localStorage.setItem(STATE_KEY,str); }catch(_){} load(); render(); } });
+  if(window.HCSyncChip) HCSyncChip.mount({position:'bottom-left'});
+  HCSync.init({ supabaseUrl:SUPABASE_URL, supabaseAnonKey:SUPABASE_ANON_KEY, appId:'kin' });
+}
+
+// ── Agent interface — state mutations only; the network (naming, conversation)
+// stays UI-only, the same human/agent boundary as every BYOK surface. ─────────
+if(window.HC) HC.register({
+  app:'kin', version:VERSION, title:'Kin — character lineage',
+  description:'A lineage of characters spawned from your history. Each inherits a frozen snapshot of everything at birth, then diverges into its own person. Single-user; the network (name proposal, conversation) is UI-only.',
+  stores:[
+    { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'sensitive',
+      description:'The family name and every character: their frozen birth digest (a snapshot of your history), naming state, and their own diverging conversation thread.',
+      schema:'{ v, familyName, characters:[{ id, familyName, givenName|null, bornAt, seededStores, birthDigest, naming:{proposed,rationale,status,feedback[]}, thread:[{role,text}], createdAt, updatedAt }] }',
+      afterWrite:()=>{ load(); render(); } },
+  ],
+  actions:{
+    setFamilyName:{ description:'Set the family name (your name) that all characters share.',
+      params:{ name:'string — the lineage / family name' },
+      handler:(p)=>setFamilyName(p.name) },
+    spawnCharacter:{ description:'Spawn a new character: freeze a snapshot of your current history as its inherited past and create the (unnamed) record. The name proposal and conversation are UI-only (network), so this leaves the character awaiting its first act.',
+      params:{}, handler:async()=>{ const c=await createCharacter(); return { id:c.id, familyName:c.familyName }; } },
+    approveName:{ description:"Bless a character's proposed given name — binds it and lets the character begin. Fails if no name has been proposed yet.",
+      params:{ id:'string — character id' }, handler:(p)=>approveName(p.id) },
+    returnName:{ description:'Send a proposed name back with feedback: records the note and reopens naming. The re-proposal itself is a UI/network act.',
+      params:{ id:'string — character id', feedback:'string — what to reconsider' }, handler:(p)=>returnName(p.id, p.feedback) },
+    deleteCharacter:{ description:'Remove a character and its whole diverging history. Irreversible.',
+      params:{ id:'string — character id' }, handler:(p)=>deleteCharacter(p.id) },
+  },
+  notes:'All app data is treated as fictional seed data. A character inherits EVERYTHING at birth (frozen) — so a character is single-user and not partner-shareable as-is (the world Phase-2 gate). Characters write only their own store here — never your practice stores (§1.4 intact). The family backlog (embodied practices a character cannot do, filed for the human to fulfil) is the designed-for next layer; see KIN.md.',
+});
+</script>
+</body>
+</html>

@@ -141,6 +141,16 @@ Each app is a single page at the site root. State keys listed are what HC regist
   clearRequests, setMode, setApiKey, removeApiKey. Sending a message to the model is a human
   act in this app — no HC action calls the network. The hub hands off suggestions via
   companion.html?ask=suggestion.
+- kin.html — a lineage of characters spawned from the person's history (World Phase 1, built
+  single-user first; see "Where this is heading" and KIN.md). A character inherits a frozen
+  snapshot of everything at birth, then diverges into its own person; family name = the person's
+  name, given name per instance; a character proposes its own name and the person approves or
+  returns it with feedback. Store: hill-climbing-kin (synced, sensitive — birth digests contain
+  everything). HC actions (state only): setFamilyName, spawnCharacter, approveName, returnName,
+  deleteCharacter. The network acts — a character proposing its name, and conversation — are
+  UI-only, never HC (the same human/agent boundary as every BYOK surface). A character writes
+  only its own store, never the person's practice stores (§1.4 intact). All app data here is
+  treated as fictional seed data.
 
 ## Where this is heading
 
