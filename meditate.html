@@ -1039,7 +1039,7 @@
     <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">♪</button>
     <button id="reframe-btn" title="Reposition camera" aria-label="Reposition camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <button id="report-link" title="Report something that didn't feel right" aria-label="Report concern">!</button>
-    <p id="version-label">v1.78</p>
+    <p id="version-label">v1.79</p>
     <div id="debug">
       raw    <b id="d-raw">—</b><br>
       floor  <b id="d-floor">—</b><br>
@@ -1059,6 +1059,7 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 // ─────────────────────────────────────────────
@@ -2838,12 +2839,17 @@ modeTimedBtn.addEventListener('click', () => {
   syncTimedPills();
 });
 
+function setTimedMinutes(n) {
+  if (![5, 10, 20, 30, 45].includes(n)) return; // the only lengths the pills offer
+  timedMinutes = n;
+  try { localStorage.setItem(TIMED_MINUTES_KEY, String(timedMinutes)); } catch {}
+  syncTimedPills();
+}
+
 timedPills.addEventListener('click', e => {
   const pill = e.target.closest('.timed-pill');
   if (!pill) return;
-  timedMinutes = parseInt(pill.dataset.minutes, 10);
-  try { localStorage.setItem(TIMED_MINUTES_KEY, String(timedMinutes)); } catch {}
-  syncTimedPills();
+  setTimedMinutes(parseInt(pill.dataset.minutes, 10));
 });
 
 // Tear down a timed sit cleanly: stop the loop, fade audio via the
@@ -2905,7 +2911,7 @@ function timedLoop() {
   }
 }
 
-timedBeginBtn.addEventListener('click', () => {
+function beginTimedSit() {
   meditationMode = 'timed';
 
   // iOS audio unlock on this gesture (mirror the stillness flow). No camera.
@@ -2953,7 +2959,9 @@ timedBeginBtn.addEventListener('click', () => {
   roundTimer.textContent = fmtSecs(timedDurationSecs);
   timedRunning = true;
   requestAnimationFrame(timedLoop);
-});
+}
+
+timedBeginBtn.addEventListener('click', beginTimedSit);
 
 // ─────────────────────────────────────────────
 // Mute toggle
@@ -2994,13 +3002,14 @@ if (SAFETY.responsibilityCopy) {
 if (SAFETY.showSafetyModal && !localStorage.getItem('hill-combing-acknowledged-v1')) {
   safetyModal.classList.add('show');
 }
+function acknowledgeSafety() {
+  localStorage.setItem('hill-combing-acknowledged-v1', '1');
+  safetyModal.classList.remove('show');
+}
 // Re-bind the acknowledge button each time we open (innerHTML swap loses it)
 function bindAcknowledge() {
   const btn = document.getElementById('acknowledge-btn');
-  if (btn) btn.onclick = () => {
-    localStorage.setItem('hill-combing-acknowledged-v1', '1');
-    safetyModal.classList.remove('show');
-  };
+  if (btn) btn.onclick = acknowledgeSafety;
 }
 bindAcknowledge();
 safetyLink.addEventListener('click', () => safetyModal.classList.add('show'));
@@ -3112,8 +3121,8 @@ reportLink.addEventListener('click', () => {
   setTimeout(() => reportText.focus(), 100);
 });
 reportCancel.addEventListener('click', () => reportModal.classList.remove('show'));
-reportSubmit.addEventListener('click', () => {
-  const text = reportText.value.trim();
+function submitReport(rawText) {
+  const text = String(rawText ?? '').trim();
   if (text) {
     // Store locally; at Tier ≥ 2 a server POST would also fire here.
     const stored = JSON.parse(localStorage.getItem('hill-combing-reports') || '[]');
@@ -3135,10 +3144,11 @@ reportSubmit.addEventListener('click', () => {
   reportModal.classList.remove('show');
   // Brief acknowledgment
   if (text) stateText.textContent = 'Thank you. Your note has been recorded.';
-});
+}
+reportSubmit.addEventListener('click', () => submitReport(reportText.value));
 
 // Dynamic tier label so the version-label updates when TIER changes
-document.getElementById('version-label').textContent = `v1.78 · t${TIER}`;
+document.getElementById('version-label').textContent = `v1.79 · t${TIER}`;
 
 // ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
 // One localStorage blob: the staircase (timeLimit, requiredRate, wins, round,
@@ -3174,6 +3184,89 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'meditate' });
 }
+
+// ── Agent interface (window.HC; see hc-agent.js) — every action routes
+// through the same function the UI handler calls. ────────────────────────────
+if (window.HC) HC.register({
+  app: 'meditate',
+  version: `v1.79 · t${TIER}`,
+  title: 'Meditate',
+  description: 'A quiet timed sit: pick a length, a bell opens and closes it, with a soft ambient sound underneath. No score, no streaks — just the time set aside.',
+  stores: [
+    {
+      key: 'stillness-game', kind: 'localStorage', sensitivity: 'practice',
+      syncKey: SYNC_BLOB_KEY,
+      description: 'Staircase state belonging to the hidden camera Stillness mode — still live, synced state even though that mode is currently unreachable in the UI.',
+      schema: '{timeLimit, requiredRate, wins, best, round, totalWins, todayKey, todaySecs, todayWins}',
+    },
+    {
+      key: 'hill-climbing-timed-minutes', kind: 'localStorage', sensitivity: 'practice',
+      description: 'Selected timed-sit length in minutes.',
+      schema: "raw string integer, one of '5'|'10'|'20'|'30'|'45'",
+    },
+    {
+      key: 'hill-combing-last-trajectory', kind: 'localStorage', sensitivity: 'personal',
+      description: 'Motion/audio trace of the last recorded camera-mode round (for replay); on-device only, never synced.',
+      schema: '{timestamp, mode, timeLimit, capacity, held, won, samples[]}',
+    },
+    {
+      key: 'hill-combing-acknowledged-v1', kind: 'localStorage', sensitivity: 'practice',
+      description: 'Safety-notice acknowledgment flag.',
+      schema: "raw string '1'",
+    },
+    {
+      key: 'hill-climbing-introduced-v1', kind: 'localStorage', sensitivity: 'practice',
+      description: 'First-run onboarding-seen flag.',
+      schema: "raw string '1'",
+    },
+    {
+      key: 'hill-combing-reports', kind: 'localStorage', sensitivity: 'sensitive',
+      description: 'Free-text concern reports with a small state snapshot; deliberately never synced — they stay on this device.',
+      schema: '[{t, text, snapshot: {round, timeLimit, requiredRate, todaySecs, phase, tier}}] (cap 50)',
+    },
+  ],
+  actions: {
+    setTimedMinutes: {
+      description: 'Choose the timed-sit length — the same five pills the start screen offers.',
+      params: { minutes: 'number — one of 5|10|20|30|45, required' },
+      handler: (p) => { setTimedMinutes(parseInt(p.minutes, 10)); return { ok: true, minutes: timedMinutes }; },
+    },
+    beginTimedSit: {
+      description: 'Start a timed sit at the selected length. Marks today active exactly as a human start; requires a working AudioContext, as it does for a human.',
+      params: {},
+      handler: () => {
+        if (timedRunning) return { ok: false, reason: 'a sit is already running' };
+        beginTimedSit();
+        return { ok: true, minutes: timedMinutes };
+      },
+    },
+    endTimedSit: {
+      description: 'End the running sit early — same as the ■ stop button; the real elapsed time is recorded as practice.',
+      params: {},
+      handler: () => {
+        if (!timedRunning) return { ok: false, reason: 'no sit is running' };
+        endTimedSit('Ended. Rest a moment.');
+        return { ok: true };
+      },
+    },
+    finishOnboarding: {
+      description: 'Dismiss the first-run introduction (sets the introduced flag).',
+      params: {},
+      handler: () => { finishOnboarding(); return { ok: true }; },
+    },
+    acknowledgeSafety: {
+      description: 'Acknowledge the safety notice (sets the flag, closes the modal).',
+      params: {},
+      handler: () => { acknowledgeSafety(); return { ok: true }; },
+    },
+    submitReport: {
+      description: 'File a concern report ("this didn\'t feel right") — always-on, on-device; never leaves the device at Tier 0.',
+      params: { text: 'string — the concern, required (empty is a no-op); trimmed and capped at 2000 chars' },
+      handler: (p) => { submitReport(p.text); return { ok: true }; },
+    },
+  },
+  notes: 'Timed sits record real elapsed time only — there is nothing to optimise. The camera Stillness mode is hidden (code intact) and deliberately outside the action surface; its stores remain seedable via HC.import for both parties.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
