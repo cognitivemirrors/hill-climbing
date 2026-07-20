@@ -1,8 +1,10 @@
 # Hill Climbing — World Architecture
 
-**Status:** Draft for founder review. Describes a direction, not shipped code. The binding
-documents (`CONSTRAINTS.md`, `REQUIREMENTS.md`) are amended *for ratification* to match this
-direction — see §9. Precedence is unchanged: CONSTRAINTS > REQUIREMENTS > this doc.
+**Status:** Draft for founder review, revised after a four-lens adversarial review
+(values/governance, privacy-crypto, technical feasibility, relational safety). Describes a
+direction, not shipped code. The binding documents (`CONSTRAINTS.md`, `REQUIREMENTS.md`) are
+amended *for ratification* to match this direction — see §9. Precedence is unchanged:
+CONSTRAINTS > REQUIREMENTS > this doc.
 
 Companion document: **`WORLD_ROADMAP.md`** (the phased plan). This doc is the *what and why of
 the shape*; the roadmap is the *order of building*.
@@ -12,68 +14,75 @@ the shape*; the roadmap is the *order of building*.
 ## 1. The shift in intention
 
 Hill Climbing began as a suite of **solo, on-device contemplative practice tools**. It is
-becoming a **private, values-constrained digital world** that two people — and, through them,
-agent-characters grounded in their own profiles — inhabit and play in together.
+becoming a **private, two-person, values-constrained digital world** that two people — and,
+through them, agent-characters grounded in their own profiles — inhabit and play in together.
 
 The practices do not go away. They become the world's **geography and verbs**: a page is a
-place, the things you can do on that page are what you can do in that place, and the state you
-leave behind is what the place remembers. The organizing purpose moves from *"tools I use
-alone"* to *"a shared world we build and play in, that still refuses engagement mechanics and
-still distributes power."*
+place, and the state you leave behind is what the place remembers. The organizing purpose moves
+from *"tools I use alone"* to *"a shared world we build and play in, that still refuses
+engagement mechanics and still distributes power."*
 
-Three things this conversation established, which the architecture is built to honor:
+Three things this conversation established, which the architecture honors:
 
-- **Parity solves embodiment.** Because a programmatic action is indistinguishable from a human
-  one (REQUIREMENTS §1.4), a character can *do anything a person can do* in the world, natively,
-  through the same functions. This half of "based off our profiles" is already solved.
-- **The profile solves characterization.** *Who* a character is — voice, judgment, the feel of
-  "that's so them" — comes from their owner's profile as context. For a world you play in
-  together, the target is **recognizable and delightful, not forensic**; that is the easy tier,
-  and it is the right target. A high-fidelity replica would be the wrong thing to build.
-- **The permission model is the consent model.** "Who may enter this room, and what they may
-  leave here" is the same mechanism as "how may I be represented, by whom, seeded from which of
-  my own stores." These are not two systems. They are one.
+- **Parity solves embodiment — for world actions.** A programmatic action is indistinguishable
+  from a human one (REQUIREMENTS §1.4), so a character can act in the world natively. **Honest
+  narrowing (revision):** characters act with full parity on **room/world** actions and never
+  mutate practice stores (journal, ERP, Foresee, goals) — see §5. "A character can do anything a
+  person can do" means *in the world*, not *to your private records*.
+- **The profile solves characterization — from a minimized digest, not a raw dump.** *Who* a
+  character is comes from a **redacted, per-store-opt-in digest** of its owner's stores (§5), not
+  a raw `HC.export`. The target is **recognizable and delightful, not forensic** — the easy tier,
+  and the right one.
+- **Permission and consent are one record — but consent is two-sided and continuous.** "Who may
+  enter this room and what they may leave" is the same mechanism as "how may I be represented."
+  The review corrected an omission: consent is not only *input-side* (which stores seed me) but
+  *output-side* (I can review, repudiate, and remove what my character said in my name), and it
+  is **continuous, not one-time** — see §7.
 
 ---
 
 ## 2. Mental model
 
-> The existing suite is the world's **geography and physics**. The new work is a thin ring of
-> **identity, rooms, and sharing** around it — and every bit of that ring bolts onto the one
-> seam we already built: `window.HC`.
+> The existing suite is the world's **geography and physics**. The new work is a ring of
+> **identity, rooms, sharing, and consent** around it — most of which attaches to the one seam we
+> already built, `window.HC`, though the ring is genuinely new enforcement infrastructure, not
+> free reuse (§3 Layer 3, §10).
 
-Nothing below replaces the practice apps. The world *wraps* them. `HC.describe()` already
-answers *"what can be done in this place";* `HC.invoke()` already *does* it through the app's own
-functions; the stores already hold *what the place remembers.* The world adds *who is acting,
-where they are allowed to be, and what is shared.*
+Nothing below replaces the practice apps. The world *wraps* them. But be precise about what the
+seam can and cannot do: `HC.invoke` is the **agent** path; a human's UI click calls the same
+internal function *directly*, so the authorization ring gates agent actions and room access — it
+does **not** gate a human editing their own data (§3 Layer 3). Earlier drafts claimed "every
+action funnels through one chokepoint"; that is false and has been removed.
 
 ---
 
 ## 3. The layer stack
 
-Layers 0–1 exist or are trivial additions; 2–4 are the substance; 5–6 are the payoff, with 6
-deferred (see the roadmap).
+Layers 0–1 exist or are small; 2–4 are the substance; 5 is the payoff; 6 is deferred (roadmap
+Phase 4).
 
 ### Layer 0 — Substrate *(exists)*
 The practice suite + `hc-agent.js` (`window.HC`). Pages are places; `describe/read/export` read
-the world; `invoke` changes it; `hc-sync.js` persists it (opt-in, zero-knowledge). This layer is
-done and verified (108/108 parity checks).
+the world; `invoke` changes it; `hc-sync.js` persists it (opt-in, zero-knowledge). Done and
+verified (108/108 parity checks).
 
-### Layer 1 — Identity *(small addition)*
-Introduce **actors**. An actor is a typed subject of action:
+### Layer 1 — Identity *(new: actors + PKI)*
+Introduce **actors** and, with them, **public-key identity** — which is *new infrastructure*, not
+a reuse of `hc-sync.js` (that engine is entirely symmetric today; no public keys exist anywhere).
 
 ```
 Actor = {
-  id:      string,            // stable id
-  kind:    'human' | 'agent', // who is at the controls
-  owner:   humanId,           // the person this actor belongs to / answers to
-  label:   string,            // "Kevin", "Kevin's character", …
+  id:      string,
+  kind:    'human' | 'agent',
+  owner:   humanId,           // the person this actor answers to
+  label:   string,
+  pubkey:  ed25519PublicKey,  // NEW: identity/signing key; the private half is credential-class
 }
 ```
 
-Actors are the **authors of world artifacts** and the **subjects of permissions**. Critically,
-identity is a *world-layer* concept: **practice-store records stay provenance-free** (§1.4 is
-preserved — see §5). Authorship lives on *world artifacts*, never retrofitted onto your journal.
+Each human holds a long-term **identity keypair**. It does two jobs: signing world artifacts
+(§5) and the out-of-band-verified key agreement for shared rooms (§6). The private key is
+**credential-class** — excluded from `HC.read`/`HC.export` exactly like `hill-climbing-api-key`.
 
 The HC contract gains one optional argument, default-compatible so nothing changes today:
 
@@ -89,75 +98,101 @@ Room = {
   id:       string,
   place:    pageRef,          // initially an existing page; later, new places too
   policy:   Policy,           // who may enter / act / leave (Layer 3)
-  artifacts: RoomStore,       // notes, objects, events actors deposit — the "leave behind"
+  artifacts: RoomStore,       // the ONLY store character-authored content lands in (§5)
 }
 ```
 
-Rooms wrap existing pages first; later a room may be a *new* place. The hub becomes the **map**.
-The room's `artifacts` store is the one genuinely new store type — everything an actor "leaves"
-(a letter, an object, a turn in an adventure) lands here, authored and timestamped **at the
-world layer**.
+The room's `artifacts` store is the one genuinely new store type, and it is where **all
+character-authored content lives** — signed, authored, timestamped at the world layer. A
+character never writes into a practice store (§5). Rooms wrap existing pages first; the hub
+becomes the **map**. (Reading room membership across the suite's per-page closures is done via a
+small shared storage record — see §10 / roadmap I6.)
 
-### Layer 3 — Authorization *(the HC ring — the elegant part)*
-The permission model is a thin layer over `HC.invoke` / `HC.read` / `HC.export`, keyed by
+### Layer 3 — Authorization *(the HC ring — scoped honestly)*
+A thin check over the **agent** entry points and over **room access for all actors**, keyed by
 **(actor × room × action)**:
 
 ```
 HC.invoke(action, params, { as: actor })
-   └─ policy(actor, room, action)  →  allow | refuse      // one chokepoint
+   └─ policy(actor, room, action)  →  allow | refuse
 ```
 
-Because every action already funnels through HC, authorization has exactly one place to live.
-Refusals are **first-class**: a character can be *in* a room and still be unable to do X. A
-policy is small and legible:
+Its enforcement authority is **explicitly scoped**, because it cannot be universal:
+
+- It gates **agent actions** (anything with `{ as: character }`) and **room enter/read/leave for
+  every actor**. This is exactly what §7 needs — the thing that must be gated is *portrayal*
+  (an agent act) and *room access*.
+- It does **not** gate a human's own UI edits to their own practice stores — those call the app's
+  internal function directly and are the human's own data by construction. The earlier "one place
+  to live / every action funnels through HC" claim was false and is deleted.
+
+Refusals are **first-class**: a character can be *in* a room and still be unable to do X.
 
 ```
 Policy = {
-  enter:  actorId[] ,         // may read the room + its artifacts
-  act:    { [actionName]: actorId[] },   // may invoke this action here
-  leave:  actorId[] ,         // may write to the room's artifact store
+  enter:  actorId[],                    // may read the room + its artifacts
+  act:    { [actionName]: actorId[] },  // agents that may invoke this action here
+  leave:  actorId[],                    // may write to the room's artifact store
 }
 ```
 
-This ring adds **no provenance to practice state** — it gates access; it does not stamp your
-journal. World artifacts carry authorship because the world needs it; practice records do not,
-because §1.4 says they must not.
+### Layer 4 — Sharing *(cross-user; new PKI, not free reuse)*
+Two people means **cross-account shared rooms**, which today's sync does not do. A shared room
+gets its own key shared between the two owners — but *only after out-of-band verification* (§6),
+without which operator-mediated key delivery is a textbook man-in-the-middle. The reuse table
+(below) is corrected: the identity keypair and the shared-room key exchange are **new PKI**, not
+an extension of the symmetric sync engine.
 
-### Layer 4 — Sharing *(cross-user)*
-Two people means **cross-account shared rooms**, which today's sync does not do (it shares *one*
-account across *its own* devices). A shared room gets **its own key**, shared between the two
-owners via a wrapped-key handshake, so both can read and write the room's artifacts while the
-operator still cannot decrypt anything. See §6.
+The boundary is deliberate but **soft, not structural** (§5, §7): practice stores stay
+single-account and private; only *rooms* are shared. The honest caveat is that a character seeded
+from your stores is itself a sanctioned bridge from private data into the shared surface — which
+is why seeding is minimized and ERP is excluded entirely (§5).
 
-The boundary is deliberate: **practice stores stay single-account and private; only *rooms* are
-shared surfaces.** Sharing a room shares the room — not your journal.
-
-### Layer 5 — Characters *(agents)*
+### Layer 5 — Characters *(agents; write only to the world)*
 A **character** is an agent bound to an actor identity, given:
 
-1. a **profile digest** — `HC.export` of the stores *its owner chose to expose* (the
-   characterization fuel; gated by that owner's consent — §7), and
+1. a **minimized, redacted profile digest** — **not** a raw `HC.export`. Per-store opt-in;
+   sensitive stores excluded **by default**; **ERP excluded entirely** (consistent with the
+   L39(d) clinical boundary and the L40 hub-suggest posture). The digest is model-facing context,
+   and the instruction "paraphrase, never quote private-store content verbatim into shared
+   artifacts" is a **soft, prompt-level guardrail** — the same class as the L30 web-query and L40
+   guardrails, honestly labelled, not a hard filter.
 2. an **action budget** scoped by the permission model.
 
-It acts through `HC.invoke(action, params, { as: character })`. Its traces land in room and
-practice stores exactly as a human's do (parity), with authorship recorded at the world layer.
-Turn-based first: **a character acts when a human runs a turn.**
+It acts through `HC.invoke(action, params, { as: character })`, and — the load-bearing rule —
+**character-authored content lands only in the room's `artifacts` store, never in a practice
+store.** This single rule (adopted from the review as the spine of the design) does four things
+at once: it keeps §1.4's practice-store parity **literally true**; it removes the ERP
+clinical-boundary collision *by construction* (no agent-written exposure logs can exist); it
+gives `{as}` a clean place to land; and it makes signed authorship tractable. Turn-based first:
+**a character acts when a human runs a turn.**
 
-### Layer 6 — Autonomy *(deferred — see roadmap Phase 4)*
-Autonomous play is characters taking turns **without a human present.** This is the only layer
-that needs a **runtime** — a process that steps the world. The values-consistent options:
+World artifacts carry **cryptographically signed authorship** (signed by the author's identity
+key, verified on read against the pinned fingerprint). An unsigned `author` field in a shared,
+byte-faithful (`HC.import`-restorable) store is forgeable — either partner's character could
+otherwise fabricate an artifact attributed to the other person.
 
-- **(a) Local runner** on one partner's machine — still on-device, their own key, no operator
-  backend. *Preferred.*
-- **(b) Scheduled runner** — a cron-style job advancing turns periodically (the Web-Push sender
-  is the existing precedent for this shape).
-- **(c) Operator backend** — *rejected by default*: it breaks "no backend of our own," and to
-  act on real content it would need keys, breaking zero-knowledge.
+### Layer 6 — Autonomy *(deferred — roadmap Phase 4)*
+Autonomous play is characters taking turns **without a human present** — the only layer needing a
+**runtime**. Two corrections from the review:
 
-Autonomy ships behind explicit, revocable, **per-character consent**, a **turn budget**, a
-**"nothing irreversible while unattended"** rule, and a **visible ledger** of what characters did
-while you were away. It runs the *same core logic* as the turn-based path — which is why Phase 1
-must build that path cleanly.
+- **It must be a browser runtime *at the origin*** (a left-open tab or a headless browser on the
+  owner's machine), because the turn logic is DOM-coupled today and a plain Node cron cannot read
+  origin-scoped `localStorage`/`IndexedDB` or run app logic. The Web-Push sender is **not** a
+  precedent for *executing* turns (it only sends a notification); it is at most the same
+  *scheduling shape*. Genuinely DOM-free autonomy requires first extracting the turn logic into
+  document-free modules — a real refactor, scheduled in roadmap Phase 3.
+- **Each character runs only on a runtime holding its own owner's key.** Because each person keys
+  their own character, **no partner ever runs the other's character.** "Unattended shared" play
+  means each side's character advances independently on its owner's runner, merging through the
+  shared room.
+
+Autonomy ships behind explicit, revocable **per-character consent**, a **turn budget**, a
+**"nothing irreversible while unattended"** rule (destructive actions wait for a human), a
+**pull-only ledger** (§8), and **digest-at-rest handling** (§6): the materialized digest the
+runner needs is minimized, encrypted at rest under the owner's key, retention-bounded, and
+**purged the instant the grant is revoked** (revocation halts the runner *and* destroys the
+persisted digest). Any party's exit **auto-disables** autonomy (§7).
 
 ---
 
@@ -166,125 +201,199 @@ must build that path cleanly.
 | Layer | Reuses | Genuinely new |
 |---|---|---|
 | 0 Substrate | everything | — |
-| 1 Identity | HC contract | the `Actor` type; optional `{as}` on invoke |
-| 2 Rooms | pages, the hub-as-map | the room artifact store |
-| 3 Authorization | the single HC seam | the `(actor × room × action)` policy check |
-| 4 Sharing | hc-sync's E2EE machinery | per-room shared keys (cross-account) |
-| 5 Characters | HC.export (fuel), HC.invoke (action), parity | the agent loop + digest assembly |
-| 6 Autonomy | the turn logic from Layer 5 | a runtime + autonomy guardrails |
+| 1 Identity | HC contract | the `Actor` type; **identity keypair / PKI**; optional `{as}` on invoke |
+| 2 Rooms | pages, the hub-as-map | the room artifact store; a room-context binding |
+| 3 Authorization | the HC agent entry points | the `(actor × room × action)` policy check (agent + room-access scope only) |
+| 4 Sharing | hc-sync's ciphertext transport | **per-room shared keys + out-of-band verification (new PKI)** |
+| 5 Characters | HC.invoke (action), parity | the agent loop; a **minimized** digest; signed world-artifact authorship |
+| 6 Autonomy | the turn logic from Layer 5 | a **browser** runtime at origin; autonomy guardrails; digest-at-rest |
 
 ---
 
-## 5. Provenance: §1.4 preserved, reframed
+## 5. Provenance: §1.4 preserved literally
 
-§1.4 guarantees that two *practice-state* snapshots — one from a human, one from an agent — are
-indistinguishable. The world **needs** authorship ("whose character left this letter?"), which
-looks like a contradiction. It is not, if scoped precisely:
+§1.4 guarantees two *practice-state* snapshots — one human, one agent — are indistinguishable.
+The world needs authorship ("whose character left this?"). The review resolved the apparent
+conflict cleanly, and it is now the spine of the design:
 
-- **Practice stores remain provenance-free.** No `origin` / `by` / `agent` field is ever added
-  to a journal entry, a goal, a prediction. The parity guarantee is untouched *there*.
-- **World artifacts carry authorship.** The room's `artifacts` store — a separate surface —
-  records which actor deposited what, and when. This is a *new* store class, not a modification
-  of the old ones.
+- **Agents never write practice stores.** No journal entry, goal, prediction, or ERP log is ever
+  agent-authored. §1.4's practice-store parity is therefore **preserved literally, unchanged** —
+  not "reworded," not "narrowed." (The earlier draft's "§1.4 becomes a property of the practice
+  stores" wording overstated a change that, under this rule, isn't one; §9 flags it for founder
+  read-through regardless, since it touched binding wording.)
+- **World artifacts carry signed authorship** in a *new* store **outside §1.4's scope.** This is
+  additive, not a modification of the parity guarantee.
 
-So §1.4 becomes, precisely: *a property of the practice stores.* The world layer adds an
-authorship envelope **around** them, at the artifact granularity, on purpose. This distinction
-is the single most important thing to keep straight as the world grows; getting it wrong
-(stamping provenance onto practice records) would quietly break the parity guarantee.
-
----
-
-## 6. Cross-user sharing — the crypto sketch *(needs review before real content)*
-
-Today: a random per-document DEK encrypts each store; the DEK is wrapped by the user's passphrase
-and recovery code; the server holds only ciphertext + wrapped keys (zero-knowledge). This is
-**single-account.**
-
-A shared room needs a **room key** that two accounts can both use:
-
-- Generate a per-room key `RK`.
-- Owner A wraps `RK` for Owner B using a key-agreement handshake (e.g. B publishes a public key;
-  A wraps `RK` to it), and vice-versa. The server stores only the wrapped `RK` blobs and the
-  room ciphertext.
-- Both parties can now decrypt the room's artifacts; the operator still cannot decrypt anything.
-- **Revocation** rotates `RK` and re-wraps for the remaining members — a real design point, not
-  an afterthought.
-
-This is a **genuine extension of the zero-knowledge design and must get a security review before
-it touches real content** (a Tier-1-style prerequisite). Until then, Phase 1 runs both actors on
-one device (no cross-account sharing), so the world is playable long before the crypto is built.
+Keeping this boundary is the single most important discipline as the world grows: the moment an
+agent is allowed to write a practice store, §1.4 breaks and the ERP clinical boundary is
+crossed. The rule is "agents write the world, humans write their practice."
 
 ---
 
-## 7. Consent, expressed as permission *(the ethical spine)*
+## 6. Cross-user sharing — the crypto, honestly *(security review before any real content)*
 
-A character portraying a partner — seeded from *their* journal, *their* beliefs — is the most
-tender surface in the whole idea. The architecture handles it by making **consent and permission
-the same record:**
+Today's sync is **single-account**: a random per-doc DEK encrypts each store, wrapped by the
+user's passphrase and recovery code; the server holds only ciphertext + wrapped keys.
 
-- Each person **owns their own actor(s)** and **holds their own key.** No one else can create,
-  seed, or run a character that portrays them.
-- The **portrayal grant** is explicit and revocable: *which of my stores* seed my character,
-  *how much latitude* it has, *which rooms* it may enter, *what it may do and leave there.* That
-  grant IS the permission policy for that actor.
-- Nothing about a person is characterized without that person's actor-owner granting it —
-  enforced at the HC ring, not merely promised in copy.
+A shared room needs a **room key `RK`** two accounts can both use. The review found the naive
+handshake insecure and the "operator cannot decrypt" claim overstated; corrected design:
 
-This is the power-distribution constraint (CONSTRAINTS §3) expressed as a feature: authorship is
-distributed, each person governs their own representation, and there is no central operator over
-the shared space.
+- **Out-of-band verification is mandatory, not optional.** "B publishes a public key; A wraps
+  `RK` to it" routes public keys through the operator (Supabase) with no authentication — a
+  textbook key-substitution MITM (the operator serves A its own key labelled "B," decrypts, and
+  re-wraps to real B undetectably). So: each owner holds a long-term identity key (Layer 1);
+  **before any `RK` is wrapped, the two people compare a short safety-number/fingerprint over a
+  trusted channel** (in person or a call — trivial for two people) and pin it (TOFU).
+  *Operator-mediated key delivery without fingerprint verification is not zero-knowledge.*
+- **Wrap `RK` under each owner's random account DEK**, not the passphrase-derived key, so
+  shared-room confidentiality doesn't hinge on passphrase strength (M1).
+- **Metadata linkage is real and must be disclosed.** Two `user_id`s referencing one room doc,
+  and two wrapped-`RK` rows pointing at it, tell the operator the **two accounts are linked — the
+  existence of the relationship itself** — plus co-access cadence and artifact sizes. Enumerate
+  this; either mitigate (pad sizes, decouple wrapped-`RK` rows from `user_id`) or accept-and-
+  disclose. Fold into the L31 pre-Tier-1 metadata review.
+- **Forward secrecy is limited.** `RK` is long-lived; revocation-by-rotation protects **future**
+  artifacts only — the operator retains prior ciphertext and prior wrapped-`RK` blobs, so anyone
+  who ever held `RK` recovers all past shared content, and real deletion depends on operator
+  cooperation. State the threat model; decide if acceptable for a two-person artifact, or spec a
+  per-epoch ratchet.
+
+This is a **genuine extension of the zero-knowledge design and must pass a security review before
+it touches real content** — a prerequisite gating **Phase 2** (not later). Until then, Phase 1
+runs both actors on one device (no cross-account sharing), so the world is playable long before
+the crypto exists.
 
 ---
 
-## 8. Values reconciliation
+## 7. Consent, expressed as permission — two-sided, continuous, with an exit
 
-A "digital world with adventures" sounds like exactly the engagement product the constraints
-reject. It is not — **if it is built as a private relationship artifact rather than a product**,
-and the anti-engagement discipline extends *into* the world rather than relaxing at its border:
+A character portraying a partner — seeded from *their* stores, speaking in *their* name — is the
+most tender surface in the whole idea. The review found the first draft's consent model
+**input-side only** and missing the rupture case. Corrected:
 
-- **No scores, levels, streaks, DAU/retention optimization, or time-in-world targets.** The
-  world inherits the posture that admitted Echo and Garden as *play* (outside sync + the usage
-  dashboard, no records to maximize) — generalized under the same discipline.
-- **No using the characters to nudge or retain the humans.** A character exists for delight and
-  companionship, never as a retention mechanic pointed back at its players.
-- **No other users to perform for.** It is private, for two people. That is a feature, not a
-  limitation to grow out of.
+**Input-side (which the draft had):** each person owns their own actor(s) and holds their own
+key; no one else can create, seed, or run a character portraying them; the portrayal grant names
+which (minimized) stores seed the character, how much latitude, which rooms, what it may leave.
 
-Power distribution is **strengthened**, not threatened: each partner owns their character and
-key; the permission model distributes authorship; no operator sits over the shared space.
+**Output-side (added):** the *portrayed* person can (i) **review** a feed of everything their
+character has said/left, (ii) **repudiate/remove** any artifact, and (iii) hold tender-room
+artifacts in an **approval queue that does not sync until they confirm** — so the irreversible
+cross-device step is consent-gated *before* it happens, not apologized for after. Seeding consent
+is **necessary but not sufficient**; portrayal consent is **continuous.**
 
-The honest amendment — the thing that is genuinely the founder's to ratify — is that the
-**project's center of gravity moves** from *"contemplative practice tools"* to *"a
-values-constrained personal world that contains practices."* That is why the changes to
-`CONSTRAINTS.md` and `REQUIREMENTS.md` are drafted for ratification, not applied unilaterally.
+**Latitude default (resolved):** because the harm lands on the *other* partner, real-partner
+portrayal is **conservative by default**, with generosity opt-in per room — not the earlier
+"generous latitude."
+
+**Rupture and exit (§7 new):** either party can **unilaterally and immediately** halt all
+portrayal of themselves and freeze/kill any character-of-them (including a running autonomous
+one); shared-room artifacts default to **each party retaining their own copy, with neither able
+to lock the other out** of co-authored history (this replaces §6's "re-wrap for the remaining
+members," which would let one partner lock the other out); a character of you must not keep
+speaking as you after you exit (enforced at the ring); autonomy auto-disables on any exit.
+
+**Adjudication:** the portrayed person holds a **unilateral veto** over their own depiction — no
+adjudication is needed to remove your own portrayal. Genuine two-party disputes require both
+partners' consent, and **either partner's objection is dispositive (a veto, not a vote)**. This
+explicitly is **not** "a founder sign-off," because the founder is one of the two interested
+parties.
+
+**Drift (M2):** journal-sourced digests over-weight recent affect (a "you-from-a-bad-week").
+Give the portrayed person a refreshable, correctable **"this is the current picture of you your
+character projects"** view.
+
+---
+
+## 8. Values reconciliation — honest about the new engagement surfaces
+
+A "digital world with adventures" *is* the shape of the engagement products the constraints
+reject. It can avoid being one **only** if built as a private relationship artifact *and* the
+anti-engagement discipline extends into it — and the review corrected two false premises the
+first draft leaned on:
+
+- **"No other users to perform for" was false.** There is exactly one — an intimate partner —
+  and that is the **strongest** engagement force there is (reciprocity, guilt at an unfinished
+  shared turn). A waiting partner is a loss-aversion loop stronger than any streak. Mitigations,
+  stated as hard guardrails: **no turn-timers, no "your partner is waiting" prompts, no
+  unfinished-adventure reminders, no completion pressure.**
+- **Two more new engagement surfaces the ban-list missed:** Phase 4's autonomy ledger must be
+  **pull-only — never pushed or notified, framed as review, not a feed** (a what-you-missed feed
+  is a return-trigger by construction); Phase 3's accreting shared history must carry **no
+  collection/completion mechanics and no counts designed to grow.**
+- **The Echo/Garden analogy was unsound and is dropped.** CONSTRAINTS §5 contains no games
+  carve-out; the games' "play" status lives in the founder decision at KNOWN_RISKS L43, not
+  binding text. And the games were safe *because* they are outside sync, zero-egress, tiny
+  non-personal state, no accreting records — the world is the opposite on **every** axis. So the
+  world cannot borrow safety-by-construction it structurally lacks; it needs its **own stricter,
+  enforced guardrails**, and the §5 change is a **new** amendment (§9), not a widening of an
+  existing carve-out.
+
+**"Not a product" tripwire (added).** The whole defense hinges on "private relationship artifact,
+not product," and nothing structural keeps it one. Enumerate the conditions that mean it *has
+become* a product — a third+ participant, any public/shareable surface, any metric or record
+designed to grow, any onboarding funnel, any monetization — and require crossing **any** of them
+to re-run the full values reconciliation as a fresh amendment. Correspondingly, **"two only" is
+binding** (§10 Q4): adding anyone is a product-shape change gated by re-ratification.
+
+**Power distribution — accepted asymmetry, not "eliminated."** The first draft's "no central
+operator" was false: the repo/GitHub-Pages deploy and the Supabase project are founder-
+provisioned (per CLAUDE.md), so one person controls the code both characters run on and the sync
+backend, and any hosted runtime concentrates power in whoever operates it. For a two-person
+private artifact this asymmetry is **accepted and disclosed, not eliminated.** What the design
+*can* guarantee: **either partner can halt the shared world, and neither can unilaterally change
+the code the other's character runs under** (that routes through the amendment/consent path).
 
 ---
 
 ## 9. Binding-document impact (drafted for ratification)
 
-- **CONSTRAINTS.md** — §5 (anti-engagement) extends its "play" carve-out from the two games to
-  "a private world," with the guardrails in §8 above made explicit. §3 (power distribution)
-  gains the consent-as-permission expression. A short statement of the widened intention (§1).
-- **REQUIREMENTS.md** — a new section for the world layer's data practices: the room artifact
-  store, cross-user shared-room keys (with the security-review prerequisite), autonomy
-  guardrails, and the reaffirmation that practice stores stay provenance-free and private. §1.4
-  reworded to *"a property of the practice stores."*
-- **KNOWN_RISKS.md** — new entries for: relational-consent / partner-portrayal (the deepest),
-  cross-user key sharing, autonomous-agent action, and the provenance-boundary discipline.
+The review's most important structural finding: **relational/psychological harm is a new harm
+class the existing safety apparatus does not reach**, and under CONSTRAINTS T1 ("safety binds
+first") it cannot be filed as a non-binding KNOWN_RISKS note. So the binding impact is larger
+than the first draft admitted:
 
-These are **proposals**. Nothing in CONSTRAINTS/REQUIREMENTS is treated as decided until you say
-so.
+- **CONSTRAINTS.md — new §2 safety clause (relational harm).** Name relational/psychological harm
+  as a first-class safety concern — a character wounding in a partner's voice, parasocial
+  attachment to a character of someone you love, a portrayal that feels like a violation — and
+  the operator obligations it creates. Plus: §5 gains a **new** anti-engagement amendment for the
+  world (not a games-carve-out widening); §3 gains the consent-as-permission expression and the
+  accepted-asymmetry disclosure.
+- **REQUIREMENTS.md — new relational adverse-event surface + a world-data section.** A "this hurt
+  the relationship" capture path analogous to the existing "this didn't feel right" (§3 runbook);
+  the room artifact store, shared-room keys with the security-review prerequisite, and autonomy
+  guardrails in the data standard; the reaffirmation that practice stores stay provenance-free
+  and private. §1.4 stays literally true under §5's no-agent-writes-to-practice rule; flag the
+  earlier "reword" language for founder read-through.
+- **KNOWN_RISKS.md — new entries** for: partner-portrayal / relational-consent (the deepest,
+  cross-referencing the new binding clause); the character as an intentional **private→shared
+  exfiltration path**; cross-user key sharing (MITM-without-fingerprints, metadata linkage,
+  forward-secrecy); autonomous-agent action; and character/person drift.
+- **Tier prerequisite:** the **relational-safety review gates Phase 2**, not Phase 4 — portrayal
+  harm is live the moment a partner-seeded character can leave an artifact.
+
+These are **proposals**. Nothing in CONSTRAINTS/REQUIREMENTS is decided until the founder ratifies
+it through the §6 amendment process.
 
 ---
 
 ## 10. Open questions for the founder
 
-1. **The digest boundary.** By default, which stores seed a character? (Recommendation: opt-in
-   per store, nothing sensitive by default — the owner adds journal/ERP/etc. deliberately.)
-2. **How much latitude** should a character have to *reinterpret* vs. *stay faithful to* its
-   profile? (This is a dial, per §1 — recognizable-and-fun argues for generous latitude.)
-3. **Autonomy consent granularity** — per character, per room, per session, or all three?
-4. **Shared-room membership** — strictly the two of you, ever more? (Recommendation: design for
-   two; don't build for N until there's a real third person.)
-5. **Is the world a mode of this app, or a new surface that imports the HC machinery?**
-   (Recommendation: a mode/ring over the existing suite — reuse maximally; see the roadmap.)
+Resolved by the review (recorded here, ratification still yours):
+
+- **Digest boundary (was Q1) → resolved:** seed from a **minimized, per-store-opt-in** digest,
+  sensitive stores off by default, **ERP excluded entirely.** Adopt as a hard rule.
+- **Latitude (was Q2) → resolved:** **conservative by default** for real-partner portrayal,
+  generosity opt-in per room.
+- **Membership (was Q4) → resolved:** **two only, binding**; adding anyone is a product-shape
+  change requiring re-ratification.
+
+Still genuinely open:
+
+1. **Autonomy consent granularity** — per character, per room, per session, or all three?
+2. **Is the world a mode of this app, or a new surface importing the HC machinery?**
+   (Recommendation: a ring over the existing suite — but note §3/roadmap I6: even the "ring" is
+   real new enforcement infrastructure, not free reuse.)
+3. **Forward-secrecy stance** for shared rooms — accept the long-lived-`RK` threat model for a
+   two-person artifact, or invest in a per-epoch ratchet?
+4. **Metadata linkage** — mitigate (padding, decoupling wrapped-key rows) or accept-and-disclose
+   that the operator learns the relationship exists?
