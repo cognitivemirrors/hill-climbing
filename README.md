@@ -48,6 +48,10 @@ There is **no analytics, telemetry, advertising, or third-party tracking** anywh
 
 Every page defines **`window.HC`** (from `hc-agent.js`) — one programmatic surface, used the same way by you (in the browser console) and by an agent driving your browser on your behalf: `HC.describe()` (stores, schemas, actions), `HC.read()`, `HC.export()` / `HC.import(payload, {confirm: true})` (verbatim, timestamps and ids included — either party can seed history), and `HC.invoke(action, params)` — every action routes through **the same internal function the UI button calls**, and nothing records which of you acted, so state produced by an agent is indistinguishable from state produced by hand. The interface itself makes **no network calls** and exposes no action that does; your API key is excluded from read/export. A static **`llms.txt`** at the site root documents the suite for agents, including binding ground rules (never fabricate practice; ERP is transcription-only; destructive operations need your explicit approval). The standard is **`REQUIREMENTS.md §1.4`**.
 
+## Where this is heading
+
+There's a drafted direction — not yet built, pending founder ratification — for the suite to grow into a private, two-person digital world: each person could have an agent-character, grounded in their own profile, that goes on adventures with the other's. Turn-based first; autonomous play, if it's ever built, is the eventual destination, not the starting point. The existing practices would become the world's rooms, built on the `window.HC` layer described above so a character can act with the same parity a human already has. A permission model for who may enter a room and what they may leave would double as the consent model for how each person is portrayed. None of this changes anything today — the suite is unchanged and still Tier 0. See `WORLD_ARCHITECTURE.md` (the shape and why) and `WORLD_ROADMAP.md` (the phased plan) for the full, ratification-pending design.
+
 ## Tier
 
 The suite runs at **Tier 0** (solo / developer). The `TIER` constant at the top of the JS in `meditate.html` gates escalating safety features (pre-screening, responsibility-forward copy, backend report submission, age gating). See `REQUIREMENTS.md §4` for the criteria each tier requires.
@@ -60,6 +64,8 @@ The suite runs at **Tier 0** (solo / developer). The `TIER` constant at the top 
 | `REQUIREMENTS.md` | Auditable requirements. Data practices are stated **standard-first** (value → consent-scaled-to-audience → controls-proportional-to-risk); the full per-item data inventory is Appendix A. Also: adverse-event runbook, tier-transition criteria, verification. (Binding.) |
 | `BACKLOG.md` | Work tracking. Bugs, features, tuning, experiments, design questions, completed versions. |
 | `KNOWN_RISKS.md` | Self-flagged uncertainties, ranked by user-safety severity. |
+| `WORLD_ARCHITECTURE.md` | Draft direction for a possible private, two-person digital world built on the practice suite — the shape and why. Not shipped; pending founder ratification. |
+| `WORLD_ROADMAP.md` | Companion to `WORLD_ARCHITECTURE.md` — the phased plan for building it, if ratified. |
 | `CLAUDE.md` | Agent handoff for AI assistants working on this project. |
 
 ## Versioning

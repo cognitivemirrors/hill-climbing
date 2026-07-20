@@ -142,6 +142,22 @@ Each app is a single page at the site root. State keys listed are what HC regist
   act in this app — no HC action calls the network. The hub hands off suggestions via
   companion.html?ask=suggestion.
 
+## Where this is heading
+
+Hill Climbing is evolving, in intention, toward a private, two-person, values-constrained
+digital world: pages becoming "rooms," each person able to have an agent-character grounded in
+their own profile that goes on adventures with the other, under a permission model that doubles
+as the consent model for how each person is represented. This is a documented **direction**,
+drafted and pending founder ratification — **not built**. The window.HC contract above is what
+exists today; nothing world-related has shipped. Details: `WORLD_ARCHITECTURE.md` and
+`WORLD_ROADMAP.md` at the repo root.
+
+One ground rule already fixed for when it lands, because it matters to any agent reading this
+file: **agents write the world, never a person's practice.** Character-authored content will
+land only in a new room-artifact store — never in journal, ERP, Foresee, or goals. That boundary
+is what keeps the parity guarantee above (and the ERP clinical boundary) true by construction,
+not by convention.
+
 ## Governance
 
 The repo (github.com/cognitivemirrors/hill-climbing) carries the binding documents:

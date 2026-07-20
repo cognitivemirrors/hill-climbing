@@ -75,6 +75,8 @@ S6. **Adverse-event monitoring as a continuous obligation.** Quarterly publicati
 
 S7. **Crisis pathway.** Visible link in the product to local emergency resources (988 in US; localized at Tier 3); easy "pause for two weeks" mode; warm-handoff option for users who explicitly request connection to therapy services.
 
+S8. **[DRAFTED FOR RATIFICATION — the world direction] Relational and psychological harm from character portrayal.** The two-person world (`WORLD_ARCHITECTURE.md`) introduces a harm class the commitments above — built for solo contemplative practice (dissociation, trance, meditation adverse events) — do not reach: **relational and psychological harm from an agent-character portraying an intimate.** A character can wound in a partner's voice; a person can form a parasocial attachment to a character of someone they love; a portrayal can simply feel like a violation. This is a first-class safety concern under §2.1 (psychological harm), not a product-quality nicety, and it carries operator obligations: **(a)** the portrayed person holds *continuous, revocable* control over their own depiction — review, per-artifact repudiate/remove, an approval queue that withholds tender artifacts from sync until they confirm, and a unilateral halt/exit that stops all portrayal of them immediately; **(b)** a *relational* adverse-event capture path — a "this hurt the relationship" report analogous to the existing "this didn't feel right" (REQUIREMENTS §3); **(c)** adjudication is **bilateral** — either party's objection to a shared depiction is dispositive (a veto, not a vote), and no single party, founder included, adjudicates another's portrayal of themselves; **(d)** the relational-safety review gates the *two-person* phase (roadmap Phase 2), because portrayal harm is live the moment a partner-seeded character can leave an artifact — not deferred to autonomy. *Drafted; binds only upon founder ratification via §6.*
+
 ### 2.3 Bindable metrics
 
 | Metric | Target |
@@ -134,6 +136,8 @@ P9. **External accountability board with publication authority.** Independent et
 
 P10. **Investor concentration ceiling.** No single investor holds more than **[DECISION: 20%?]** of economic interest. Diverse funding stack required by charter.
 
+P11. **[DRAFTED FOR RATIFICATION — the world direction] Authorship is distributed; representation is self-governed.** In the two-person world (`WORLD_ARCHITECTURE.md`), the permission model *is* the consent model: each person owns their own actor(s) and holds their own key, no one can create or run a character portraying another without that person's grant, and each governs their own representation continuously (S8). This distributes authorship rather than concentrating it. **Honest limit:** power is only as distributed as *infrastructure* control, and the repo/deploy and the sync backend are founder-provisioned — so for a two-person private artifact this operator asymmetry is **accepted and disclosed, not eliminated.** What the design does guarantee: either partner can halt the shared world, and neither can unilaterally change the code the other's character runs under (that routes through the amendment/consent path). *Drafted; binds only upon founder ratification via §6.*
+
 ### 3.3 Bindable metrics
 
 | Metric | Target |
@@ -184,6 +188,15 @@ The following patterns are common in tech and explicitly off-limits regardless o
 - **Advertising revenue.** Even "ethical" advertising. Even "well-targeted." No.
 - **Capability-arms-race pressure shaping safety decisions.** "We have to ship before competitor X" is not a justification for relaxing a safety threshold.
 - **Founder-CEO indefinite tenure.** Term limits on the CEO role: **[DECISION: 7 years?]** with renewable approval from governing body.
+
+**[DRAFTED FOR RATIFICATION — the world direction] World-specific anti-patterns.** The two-person world (`WORLD_ARCHITECTURE.md`) is the *shape* of the engagement products this section rejects, and it does not inherit the two games' safety-by-construction — the games are safe *because* they are outside sync, zero-egress, tiny non-personal state, with no accreting records; the world is the opposite on every axis (cross-user egress, the most sensitive stores as character fuel, an accreting shared history, an eventual autonomous runtime). So it earns **no carve-out** and instead takes on its own stricter, enforced guardrails. Additionally off-limits inside the world:
+
+- **The intimate-partner turn loop as a pull.** A waiting partner is the strongest engagement force there is (reciprocity, guilt at an unfinished shared turn) — stronger than any streak. No turn-timers, no "your partner is waiting" prompts, no unfinished-adventure reminders, no completion pressure.
+- **A "what you missed" feed.** The autonomy ledger (what characters did while you were away) is **pull-only, never pushed or notified** — a review surface, not a return-trigger.
+- **Collection or completion mechanics** in the accreting shared history — no counts designed to grow, no progression to fill.
+- **Becoming a product.** The world's values defense holds only while it is a *private artifact for two people*. A third+ participant, any public or shareable surface, any metric or record designed to grow, any onboarding funnel, or any monetization means it **has become a product**, and crossing any of these requires re-running the full values reconciliation as a fresh amendment. *"Two only" is binding; adding anyone is a product-shape change gated by re-ratification.*
+
+*Drafted; binds only upon founder ratification via §6.*
 
 ---
 
