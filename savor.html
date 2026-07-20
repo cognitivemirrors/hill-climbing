@@ -374,7 +374,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.3 · savor</div>
+<div class="corner" id="version-label">v0.4 · savor</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="watch">Watch</button>
   <button class="mode-btn"        data-view="lessons">Lessons</button>
@@ -548,12 +548,13 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.3 · savor';
+const VERSION   = 'v0.4 · savor';
 const STATE_KEY = 'hill-climbing-savor';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-savor';   // this app's registered E2E-sync doc (see hc-sync.js)
 
@@ -1082,10 +1083,10 @@ function openEpisode(id, resume = false) {
   setStage(resume && state.current && state.current.ep === id && state.current.stage === 'taste' ? 'taste' : 'intro');
 }
 
-function finishEpisode(withNote) {
+function finishEpisode(withNote, noteText) {
   const ep = player.ep;
   if (!ep) return;
-  const text = (document.getElementById('pn-input').value || '').trim();
+  const text = ((noteText != null ? noteText : document.getElementById('pn-input').value) || '').trim();
   // mark watched (first time only keeps the original timestamp)
   if (!state.watched[ep.id]) state.watched[ep.id] = Date.now();
   if (withNote && text) {
@@ -1150,31 +1151,44 @@ function openContribute() {
   showSection('contribute');
   window.scrollTo(0, 0);
 }
-function saveContribution(e) {
-  e.preventDefault();
-  const msg = document.getElementById('contrib-msg');
-  const title = document.getElementById('cf-title').value.trim();
-  const idea  = document.getElementById('cf-idea').value.trim();
-  const stepsRaw = document.getElementById('cf-steps').value.trim();
-  const steps = stepsRaw.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!title) { msg.textContent = 'Give it a title.'; return; }
-  if (!idea)  { msg.textContent = 'Add a sentence on what it teaches the tongue.'; return; }
-  if (!steps.length) { msg.textContent = 'Add at least one tasting step.'; return; }
+function addLesson({ title, taste, host, idea, steps, aha }) {
+  title = String(title || '').trim().slice(0, 80);
+  idea  = String(idea || '').trim().slice(0, 400);
+  const stepList = (Array.isArray(steps) ? steps : []).map(s => String(s)).join('\n').slice(0, 700)
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  if (!title) throw new Error('Give it a title.');
+  if (!idea)  throw new Error('Add a sentence on what it teaches the tongue.');
+  if (!stepList.length) throw new Error('Add at least one tasting step.');
 
   const lesson = normalizeLesson({
     id: 'm' + Date.now(),
     title: title,
-    taste: document.getElementById('cf-taste').value.trim(),
-    host: document.getElementById('cf-host').value.trim(),
+    taste: String(taste || '').trim().slice(0, 40),
+    host: String(host || '').trim().slice(0, 60),
     idea: idea,
-    steps: steps,
-    aha: document.getElementById('cf-aha').value.trim(),
+    steps: stepList,
+    aha: String(aha || '').trim().slice(0, 300),
     hostNote: '',
     grab: [],
     created: Date.now(),
   });
   state.myLessons.push(lesson);
   save();
+  return lesson;
+}
+function saveContribution(e) {
+  e.preventDefault();
+  const msg = document.getElementById('contrib-msg');
+  try {
+    addLesson({
+      title: document.getElementById('cf-title').value,
+      taste: document.getElementById('cf-taste').value,
+      host: document.getElementById('cf-host').value,
+      idea: document.getElementById('cf-idea').value,
+      steps: document.getElementById('cf-steps').value.split('\n'),
+      aha: document.getElementById('cf-aha').value,
+    });
+  } catch (err) { msg.textContent = err.message; return; }
   // reset the form
   document.getElementById('contrib-form').reset();
   switchView('lessons');
@@ -1287,7 +1301,7 @@ document.getElementById('player-back').addEventListener('click', () => switchVie
 document.getElementById('pi-start').addEventListener('click', () => setStage('taste'));
 document.getElementById('pt-back').addEventListener('click', () => setStage('intro'));
 document.getElementById('pt-done').addEventListener('click', () => setStage('notice', false));
-document.getElementById('pn-save').addEventListener('click', () => finishEpisode(true));
+document.getElementById('pn-save').addEventListener('click', () => finishEpisode(true, document.getElementById('pn-input').value));
 document.getElementById('pn-skip').addEventListener('click', () => finishEpisode(false));
 document.getElementById('pc-done').addEventListener('click', () => switchView('watch'));
 
@@ -1351,6 +1365,89 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'savor' });
 }
+
+// ── Agent interface (window.HC) — same functions the UI handlers call ─────────
+if (window.HC) HC.register({
+  app: 'savor',
+  version: VERSION,
+  title: 'Savor',
+  description: 'Learn to cook by learning to taste — a ten-episode season of small at-the-counter tastings (salt · acid · fat · the five tastes · aroma), plus community guest lessons and a tasting notebook.',
+  stores: [{
+    key: STATE_KEY,
+    kind: 'localStorage',
+    description: 'Watched episodes (first-tasted timestamps), tasting notes, your contributed lessons, and the in-progress tune-in pointer. E2E-sync-eligible.',
+    sensitivity: 'personal',
+    schema: '{v, watched{epId→firstWatchedTs}, notes[{id,ep,epTitle,taste,text,created}], myLessons[lesson], current|null}',
+    syncKey: SYNC_BLOB_KEY,
+    afterWrite: () => {
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'watch');
+    },
+  }],
+  actions: {
+    openEpisode: {
+      description: 'Open an episode in the player — core season, community, or a contributed lesson. Tuning in persists the resume pointer exactly as the UI does.',
+      params: {
+        id: "string — episode id (e.g. 'c4', 'g2', or an 'm…' contributed-lesson id); required",
+        resume: "boolean — optional; when true and this episode is the saved in-progress tasting, reopen at the taste stage (as the pick-up-where-you-left-off card does)",
+      },
+      handler: (p) => {
+        const ep = episodeById(p && p.id);
+        if (!ep) throw new Error('No episode with id "' + (p && p.id) + '".');
+        openEpisode(ep.id, p.resume === true);
+        return { ok: true, id: ep.id, title: ep.title };
+      },
+    },
+    setStage: {
+      description: 'Move the open episode between its intro and taste stages (persists the resume pointer, as the UI navigation does).',
+      params: { stage: "'intro'|'taste' — required" },
+      handler: (p) => {
+        if (!player.ep) throw new Error('No episode is open — invoke openEpisode first.');
+        if (p.stage !== 'intro' && p.stage !== 'taste') throw new Error("stage must be 'intro' or 'taste'.");
+        setStage(p.stage);
+        return { ok: true };
+      },
+    },
+    finishEpisode: {
+      description: "Finish the open episode as tasted — record only what the person reports having tasted (never invent it). Marks it watched (first-watch timestamp kept), logs today's usage for the hub, clears the resume pointer, and saves a notebook note when one is given.",
+      params: { note: "string — optional tasting note in the person's own words; empty or absent just marks the episode tasted" },
+      handler: (p) => {
+        if (!player.ep) throw new Error('No episode is open — invoke openEpisode first.');
+        const note = typeof (p && p.note) === 'string' ? p.note : '';
+        const id = player.ep.id;
+        finishEpisode(note.trim() !== '', note);
+        return { ok: true, id: id };
+      },
+    },
+    deleteNote: {
+      description: 'Delete one tasting note by id. Destructive for that note.',
+      params: { id: "string — the note's id; required" },
+      handler: (p) => {
+        if (!state.notes.some(n => n.id === (p && p.id))) throw new Error('No note with id "' + (p && p.id) + '".');
+        deleteNote(p.id);
+        return { ok: true };
+      },
+    },
+    addLesson: {
+      description: 'Add a contributed taste lesson to the community shelf — same validation as the form; device-local until the person shares the export file. Note: lessons have no delete (an inherited gap, mirrored here).',
+      params: {
+        title: 'string — required',
+        taste: 'string — what it trains (a word or two); optional',
+        idea: 'string — a sentence or two on what it teaches the tongue; required',
+        steps: 'string[] — tasting steps, one per entry; at least one required',
+        host: 'string — who taught it; optional',
+        aha: 'string — the takeaway; optional',
+      },
+      handler: (p) => {
+        const lesson = addLesson(p || {});
+        return { ok: true, id: lesson.id };
+      },
+    },
+  },
+  urlParams: { '#<episodeId>': 'hash deep-link — opens that episode directly (e.g. savor.html#c4; how Nourish links to a paired taste lesson)' },
+  notes: "Episodes are content, not a score — watched marks keep only the first-tasted timestamp; never optimise for completion. finishEpisode records that the person reports having tasted; never invent a tasting. Contributed lessons have no delete in the UI (an inherited gap, deliberately mirrored here). The kitchen bridge reads Nourish's store read-only — that store belongs to Nourish.",
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

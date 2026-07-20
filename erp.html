@@ -326,7 +326,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · erp</div>
+<div class="corner" id="version-label">v0.2 · erp</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="ladder">Ladder</button>
   <button class="mode-btn"        data-view="progress">Progress</button>
@@ -375,6 +375,7 @@
 
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 // ── ERP — a companion to Exposure and Response Prevention ───────────────────
@@ -385,7 +386,7 @@
 // framing — distress is never a score to maximise, and lower numbers are not
 // the goal (see the Guide + KNOWN_RISKS).
 
-const VERSION = 'v0.1 · erp';
+const VERSION = 'v0.2 · erp';
 const STATE_KEY = 'hill-climbing-erp';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-erp';
 const SUPABASE_URL = 'https://eztapprkcnwoebnfdebb.supabase.co';
@@ -463,6 +464,83 @@ function load() {
 function save() {
   try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) { /* quota */ }
   if (window.HCSync && HCSync.queueBlobPush) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
+
+// ── mutations (ladder + record) ─────────────────────────────────────────────
+function addItem(fields) {
+  fields = fields || {};
+  const title = String(fields.title || '').trim().slice(0, 200);
+  if (!title) throw new Error('A step needs a short name.');
+  const nid = uid();
+  state.items[nid] = {
+    id: nid,
+    title: title,
+    situation: String(fields.situation || '').trim().slice(0, 2000),
+    obsession: String(fields.obsession || '').trim().slice(0, 2000),
+    ritual: String(fields.ritual || '').trim().slice(0, 2000),
+    anticipated: clampSUDS(fields.anticipated),
+    status: 'active',
+    order: Object.keys(state.items).length,
+    created: now(),
+    updated: now(),
+  };
+  save(); render();
+  return nid;
+}
+function editItem(id, fields) {
+  const it = state.items[id];
+  if (!it) throw new Error('No step with that id.');
+  fields = fields || {};
+  if (fields.title !== undefined) {
+    const title = String(fields.title).trim().slice(0, 200);
+    if (!title) throw new Error('A step needs a short name.');
+    it.title = title;
+  }
+  if (fields.situation !== undefined) it.situation = String(fields.situation).trim().slice(0, 2000);
+  if (fields.obsession !== undefined) it.obsession = String(fields.obsession).trim().slice(0, 2000);
+  if (fields.ritual !== undefined) it.ritual = String(fields.ritual).trim().slice(0, 2000);
+  if (fields.anticipated !== undefined) it.anticipated = clampSUDS(fields.anticipated);
+  it.updated = now();
+  save(); render();
+  return id;
+}
+function toggleRest(id) {
+  const it = state.items[id];
+  if (!it) return null;
+  it.status = it.status === 'resting' ? 'active' : 'resting';
+  it.updated = now();
+  save(); render();
+  return it.status;
+}
+function deleteItem(id) {
+  delete state.items[id];
+  state.sessions = state.sessions.filter(function (s) { return s.itemId !== id; });
+  ui.expanded.delete(id);
+  save(); render();
+}
+function logExposure(itemId, f) {
+  const it = state.items[itemId];
+  if (!it) throw new Error('No step with that id.');
+  f = f || {};
+  const mins = parseInt(f.minutes, 10);
+  const sess = {
+    id: uid(), itemId: it.id, ts: now(),
+    preSUDS: f.preSUDS == null ? null : clampSUDS(f.preSUDS),
+    peakSUDS: f.peakSUDS == null ? null : clampSUDS(f.peakSUDS),
+    endSUDS: f.endSUDS == null ? null : clampSUDS(f.endSUDS),
+    resisted: (f.resisted === 'full' || f.resisted === 'partial' || f.resisted === 'none') ? f.resisted : null,
+    expected: String(f.expected || '').trim().slice(0, 2000),
+    happened: String(f.happened || '').trim().slice(0, 2000),
+    note: String(f.note || '').trim().slice(0, 2000),
+    minutes: (isFinite(mins) && mins > 0) ? mins : null,
+    created: now(),
+  };
+  state.sessions.push(sess);
+  ui.expanded.add(it.id);
+  save();
+  if (window.HCUsage) HCUsage.mark('erp');   // the moment the practice actually happens
+  render();
+  return sess.id;
 }
 
 // ── ladder view ─────────────────────────────────────────────────────────────
@@ -683,19 +761,16 @@ function openItemSheet(id) {
   wireSUDS();
   sheetBody.querySelector('#f-save').addEventListener('click', function () {
     const titleEl = sheetBody.querySelector('#f-title');
-    const title = titleEl.value.trim();
-    if (!title) { titleEl.focus(); return; }
-    const anticipated = clampSUDS(sheetBody.querySelector('#f-anticipated').value);
-    const situation = sheetBody.querySelector('#f-situation').value.trim();
-    const obsession = sheetBody.querySelector('#f-obsession').value.trim();
-    const ritual = sheetBody.querySelector('#f-ritual').value.trim();
-    if (it) {
-      it.title = title; it.situation = situation; it.obsession = obsession; it.ritual = ritual; it.anticipated = anticipated; it.updated = now();
-    } else {
-      const nid = uid();
-      state.items[nid] = { id: nid, title: title, situation: situation, obsession: obsession, ritual: ritual, anticipated: anticipated, status: 'active', order: Object.keys(state.items).length, created: now(), updated: now() };
-    }
-    save(); closeSheet(); render(); toast(it ? 'Saved.' : 'Step added.');
+    if (!titleEl.value.trim()) { titleEl.focus(); return; }
+    const fields = {
+      title: titleEl.value,
+      situation: sheetBody.querySelector('#f-situation').value,
+      obsession: sheetBody.querySelector('#f-obsession').value,
+      ritual: sheetBody.querySelector('#f-ritual').value,
+      anticipated: sheetBody.querySelector('#f-anticipated').value,
+    };
+    if (it) editItem(it.id, fields); else addItem(fields);
+    closeSheet(); toast(it ? 'Saved.' : 'Step added.');
   });
 }
 
@@ -735,23 +810,17 @@ function openLogSheet(id) {
     grp.querySelectorAll('.ch').forEach(function (x) { x.classList.toggle('sel', x === b); });
   });
   sheetBody.querySelector('#l-save').addEventListener('click', function () {
-    const minsRaw = parseInt(sheetBody.querySelector('#l-minutes').value, 10);
-    state.sessions.push({
-      id: uid(), itemId: it.id, ts: now(),
-      preSUDS: clampSUDS(sheetBody.querySelector('#l-pre').value),
-      peakSUDS: clampSUDS(sheetBody.querySelector('#l-peak').value),
-      endSUDS: clampSUDS(sheetBody.querySelector('#l-end').value),
+    logExposure(it.id, {
+      preSUDS: sheetBody.querySelector('#l-pre').value,
+      peakSUDS: sheetBody.querySelector('#l-peak').value,
+      endSUDS: sheetBody.querySelector('#l-end').value,
       resisted: chosen,
-      expected: sheetBody.querySelector('#l-expected').value.trim(),
-      happened: sheetBody.querySelector('#l-happened').value.trim(),
-      note: sheetBody.querySelector('#l-note').value.trim(),
-      minutes: (isFinite(minsRaw) && minsRaw > 0) ? minsRaw : null,
-      created: now(),
+      expected: sheetBody.querySelector('#l-expected').value,
+      happened: sheetBody.querySelector('#l-happened').value,
+      note: sheetBody.querySelector('#l-note').value,
+      minutes: sheetBody.querySelector('#l-minutes').value,
     });
-    ui.expanded.add(it.id);
-    save();
-    if (window.HCUsage) HCUsage.mark('erp');   // the moment the practice actually happens
-    closeSheet(); render(); toast('Logged. That took something.');
+    closeSheet(); toast('Logged. That took something.');
   });
 }
 
@@ -775,14 +844,12 @@ mainEl.addEventListener('click', function (e) {
   else if (act === 'edit-item') openItemSheet(id);
   else if (act === 'log') openLogSheet(id);
   else if (act === 'toggle-detail') { if (ui.expanded.has(id)) ui.expanded.delete(id); else ui.expanded.add(id); render(); }
-  else if (act === 'rest-item') { const it = state.items[id]; if (it) { it.status = it.status === 'resting' ? 'active' : 'resting'; it.updated = now(); save(); render(); } }
+  else if (act === 'rest-item') toggleRest(id);
   else if (act === 'del-item') {
     if (ui.confirmKey === 'del:' + id) {
       ui.confirmKey = null;
-      delete state.items[id];
-      state.sessions = state.sessions.filter(function (s) { return s.itemId !== id; });
-      ui.expanded.delete(id);
-      save(); render(); toast('Step removed.');
+      deleteItem(id);
+      toast('Step removed.');
     } else { ui.confirmKey = 'del:' + id; render(); }
   }
   else if (act === 'goto') { ui.view = b.dataset.view; ui.confirmKey = null; render(); }
@@ -923,6 +990,86 @@ if (window.HCSync) {
   HCSync.subscribe(updateSyncUI);
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'erp' });
 }
+
+// ── agent interface (window.HC — see hc-agent.js) ───────────────────────────
+if (window.HC) HC.register({
+  app: 'erp',
+  version: VERSION,
+  title: 'ERP',
+  description: 'A companion to exposure and response prevention — a place to hold an exposure ladder and the record of facing it. It works alongside therapist-guided ERP, not in place of it.',
+  stores: [{
+    key: STATE_KEY,
+    kind: 'localStorage',
+    description: 'The whole ladder and record — situations, the fears underneath, what’s held off, and every logged exposure. Journal-grade sensitive prose.',
+    sensitivity: 'sensitive',
+    schema: '{v, items{id→{title, situation, obsession, ritual, anticipated 0-100, status: active|resting, order, created, updated}}, sessions[{id, itemId, ts, preSUDS, peakSUDS, endSUDS (0-100 or null), resisted: full|partial|none|null, expected, happened, note, minutes, created}]}',
+    syncKey: SYNC_BLOB_KEY,
+    afterWrite: function () { load(); if (!overlay.classList.contains('hidden')) closeSheet(); render(); },
+  }],
+  actions: {
+    addItem: {
+      description: 'Add a step to the ladder — a situation the person has chosen to work toward facing. Record only what they’ve asked to add; never propose or push exposure content — what to face, and in what order, is theirs to judge, ideally with their therapist.',
+      params: {
+        title: 'string — a short name for it, required, ≤200 chars',
+        situation: 'string — the situation they face, optional, ≤2000',
+        obsession: 'string — the fear underneath, optional, ≤2000',
+        ritual: 'string — the compulsion or avoidance they’ll hold off, optional, ≤2000',
+        anticipated: 'number 0–100 — how much distress they expect (their estimate, not a target)',
+      },
+      handler: function (p) { return { id: addItem(p) }; },
+    },
+    editItem: {
+      description: 'Edit a step as the person asks. Fields left out are left alone; same bounds as adding.',
+      params: {
+        id: 'string — the step id, required',
+        title: 'string — optional, non-empty if given, ≤200',
+        situation: 'string — optional, ≤2000',
+        obsession: 'string — optional, ≤2000',
+        ritual: 'string — optional, ≤2000',
+        anticipated: 'number 0–100 — optional',
+      },
+      handler: function (p) { return { id: editItem(p.id, p) }; },
+    },
+    toggleRest: {
+      description: 'Rest a step — set it aside without deleting it — or bring a resting one back. Nothing is lost either way.',
+      params: { id: 'string — the step id, required' },
+      handler: function (p) {
+        if (!state.items[p.id]) throw new Error('No step with that id.');
+        return { status: toggleRest(p.id) };
+      },
+    },
+    deleteItem: {
+      description: 'Delete a step, and with it every exposure logged against that step — the record cascades away with the step. The UI asks twice before this; here it commits at once, so only on the person’s clear request.',
+      params: { id: 'string — the step id, required' },
+      handler: function (p) {
+        if (!state.items[p.id]) throw new Error('No step with that id.');
+        deleteItem(p.id);
+        return { ok: true };
+      },
+    },
+    logExposure: {
+      description: 'Log an exposure the person reports they actually did — never invent, infer, or embellish one. Distress numbers are a mirror, not a score: lower is not the goal, and nothing here is something to optimise.',
+      params: {
+        itemId: 'string — the ladder step it belongs to, required',
+        preSUDS: 'number 0–100 — distress before starting, optional',
+        peakSUDS: 'number 0–100 — peak distress during, optional',
+        endSUDS: 'number 0–100 — distress by the end, optional',
+        resisted: "'full' | 'partial' | 'none' — whether they held off the compulsion, optional",
+        expected: 'string — what they expected would happen, optional, ≤2000',
+        happened: 'string — what actually happened, optional, ≤2000',
+        note: 'string — anything they learned or want to remember, optional, ≤2000',
+        minutes: 'positive integer — how long, optional',
+      },
+      handler: function (p) { return { id: logExposure(p.itemId, p) }; },
+    },
+    deleteEverything: {
+      description: 'Erase the ladder and the whole record, and sync the erasure. Gone for real — only on the person’s explicit, current request.',
+      params: {},
+      handler: function () { eraseEverything(); return { ok: true }; },
+    },
+  },
+  notes: 'A companion to therapist-guided ERP, not a replacement. Exposures enter the record only as the person’s own report of something they actually did; an agent must never propose, sequence, or push exposure content. Anti-gamification is deliberate: no points, levels, or streaks, and distress is never a score to maximise — or minimise.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

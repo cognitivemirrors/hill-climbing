@@ -490,7 +490,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.14 · companion</div>
+<div class="corner" id="version-label">v0.15 · companion</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-mode="companion">Companion</button>
   <button class="mode-btn"         data-mode="council">Council</button>
@@ -582,6 +582,7 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 
@@ -613,7 +614,7 @@
 // only). The one shared status chip reports sync state for the whole app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VERSION_NUM = 'v0.14';
+const VERSION_NUM = 'v0.15';
 const MODEL       = 'claude-opus-4-8';
 const API_URL     = 'https://api.anthropic.com/v1/messages';
 const MODE_LS     = 'hill-climbing-cc-mode';   // device-local; last-used mode (never synced)
@@ -1977,20 +1978,25 @@ function renderSetup() {
   const err = el('key-err');
   input.focus();
   el('key-save').addEventListener('click', () => {
-    const v = input.value.trim();
-    if (!v.startsWith('sk-ant-')) { err.textContent = 'That doesn’t look like an Anthropic key (they start with sk-ant-).'; return; }
-    apiKey = v;
-    writeApiKey(v);
+    try { setApiKey(input.value); }
+    catch (e) { err.textContent = e.message; return; }
     setView('home');
     if (mode === 'companion') msgBox.focus();
   });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') el('key-save').click(); });
   const rm = el('key-remove');
-  if (rm) rm.addEventListener('click', () => {
-    apiKey = '';
-    clearApiKey();
-    renderSetup();   // re-render the gate in its keyless form
-  });
+  if (rm) rm.addEventListener('click', removeApiKey);
+}
+function setApiKey(v) {
+  v = String(v || '').trim();
+  if (!v.startsWith('sk-ant-')) throw new Error('That doesn’t look like an Anthropic key (they start with sk-ant-).');
+  apiKey = v;
+  writeApiKey(v);
+}
+function removeApiKey() {
+  apiKey = '';
+  clearApiKey();
+  if (currentView === 'setup') renderSetup();   // re-render the gate in its keyless form
 }
 
 // ── About (dispatch by mode) ─────────────────────────────────────────────────
@@ -2028,6 +2034,13 @@ function addRequest(input) {
   saveRequests();
   if (mode === 'companion' && currentView === 'requests') renderRequests();
   return item;
+}
+function deleteRequest(id) {
+  requests.items = requests.items.filter(r => r.id !== id);
+  saveRequests(); renderRequests();
+}
+function clearRequests() {
+  requests.items = []; saveRequests(); renderRequests();
 }
 // The one custom (client-side) tool the Companion carries. Its return string is
 // handed back to the model as the tool_result so it can tell the user naturally.
@@ -2110,7 +2123,7 @@ function renderRequests() {
   });
   el('req-clear').addEventListener('click', () => {
     if (confirm('Remove every saved request from this device? Copy them first if you want to keep them — this can’t be undone.')) {
-      requests.items = []; saveRequests(); renderRequests();
+      clearRequests();
     }
   });
   el('req-back').addEventListener('click', () => setView('home'));
@@ -2124,10 +2137,7 @@ function renderRequests() {
         .catch(() => { copyBtn.textContent = '⌘/Ctrl-C'; });
     });
     const delBtn = wrap.querySelector('.req-del');
-    if (delBtn) delBtn.addEventListener('click', () => {
-      requests.items = requests.items.filter(r => r.id !== wrap.dataset.id);
-      saveRequests(); renderRequests();
-    });
+    if (delBtn) delBtn.addEventListener('click', () => deleteRequest(wrap.dataset.id));
   });
 }
 
@@ -2200,6 +2210,22 @@ function menuItem(id, title, sub) {
     '<span class="menu-item-title">' + esc(title) + '</span>' +
     '<span class="menu-item-sub">' + esc(sub) + '</span></button>';
 }
+function startNewConversation() {
+  active = null; msgBox.value = '';
+  setView('home');
+}
+function clearConversations() {
+  store.conversations = [];
+  store.memory = emptyMemory();
+  active = null;
+  persist();
+  setView('home');
+}
+function clearCouncilSessions() {
+  localStorage.removeItem(LS_HIST);
+  current = null;
+  if (currentView === 'history') renderHistory();
+}
 function renderMenu() {
   const panel = el('menu-panel');
   if (mode === 'companion') {
@@ -2216,19 +2242,14 @@ function renderMenu() {
     el('requests-btn').addEventListener('click', () => { setMenu(false); setView('requests'); });
     el('new-btn').addEventListener('click', () => {
       setMenu(false);
-      active = null; msgBox.value = '';
-      setView('home'); msgBox.focus();
+      startNewConversation(); msgBox.focus();
     });
     el('key-btn').addEventListener('click', () => { setMenu(false); setView('setup'); });
     el('about-btn').addEventListener('click', () => { setMenu(false); setView('about'); });
     el('clear-btn').addEventListener('click', () => {
       setMenu(false);
       if (confirm('Delete every saved conversation, and everything the companion remembers about you? This can’t be undone. (Your API key is kept.)')) {
-        store.conversations = [];
-        store.memory = emptyMemory();
-        active = null;
-        persist();
-        setView('home');
+        clearConversations();
       }
     });
   } else {
@@ -2243,9 +2264,7 @@ function renderMenu() {
     el('clear-btn').addEventListener('click', () => {
       setMenu(false);
       if (confirm('Delete every saved deliberation on this device? This can’t be undone. (Your API key is kept.)')) {
-        localStorage.removeItem(LS_HIST);
-        current = null;
-        if (currentView === 'history') renderHistory();
+        clearCouncilSessions();
       }
     });
   }
@@ -2373,6 +2392,107 @@ const HUB_SEED_LS = 'hill-climbing-hub-suggest-seed';
 })();
 
 maybeUpdateMemory();   // catch up any older conversations left un-distilled last visit
+
+if (window.HC) HC.register({
+  app: 'companion',
+  version: VERSION_NUM,
+  title: 'Companion & Council',
+  description: 'Two modes of one bring-your-own-key AI app: Companion, a continuing conversation that reads your goals, journal, and recent practice and remembers past conversations; and Council, a board of four directors plus a Chair convened on a single decision.',
+  stores: [
+    { key: LS_STORE, kind: 'localStorage',
+      description: 'Saved Companion conversations plus the cross-conversation memory the companion re-reads each reply.',
+      sensitivity: 'sensitive',
+      schema: "{v, conversations:[{id, ts, title, thread:[{role:'user'|'assistant', text, hidden?, awaiting?}], hubRef?:{text,app,ts}}], memory:{summary, folded:{convId: foldedTurnCount}, ts}} — store.memory is the distilled cross-conversation memory; capped at " + CONV_CAP + " conversations",
+      syncKey: SYNC_BLOB_KEY,
+      afterWrite: () => {
+        store = loadStore();
+        if (active) active = store.conversations.find(c => c.id === active.id) || null;
+        if (mode === 'companion') {
+          if (currentView === 'home') { renderThread(); refreshSees(); }
+          else if (currentView === 'history') renderHistory();
+        }
+      } },
+    { key: LS_HIST, kind: 'localStorage',
+      description: 'Saved Council deliberations — the situation, the four directors, the Chair, any continuing thread, and the tester note.',
+      sensitivity: 'sensitive',
+      schema: "[{id, ts, situation, directors:[{id,name,text}], chair, thread:[{role:'user'|'chair', text}], feedback:{clarity,note,flagged,ts}|null}] — a bare array, newest first, capped at " + HIST_CAP,
+      syncKey: SYNC_BLOB_KEY_COUNCIL,
+      afterWrite: () => { if (mode === 'council' && currentView === 'history') renderHistory(); } },
+    { key: LS_REQUESTS, kind: 'localStorage',
+      description: 'Requests to the person building the suite, saved from conversations via the add_request tool.',
+      sensitivity: 'personal',
+      schema: '{v, items:[{id, ts, heading, prompt}]} — newest first, capped at ' + REQUESTS_CAP,
+      syncKey: SYNC_BLOB_KEY_REQUESTS,
+      afterWrite: () => {
+        requests = loadRequests();
+        if (mode === 'companion' && currentView === 'requests') renderRequests();
+      } },
+    { key: MODE_LS, kind: 'localStorage',
+      description: 'Last-used mode. Device-local by design — never synced.',
+      sensitivity: 'practice',
+      schema: "'companion' | 'council' — a raw string" },
+  ],
+  actions: {
+    startNewConversation: {
+      description: 'Leave the open Companion thread and start fresh. No record is created until the first message is actually sent.',
+      params: {},
+      handler: () => { startNewConversation(); return { ok: true }; },
+    },
+    clearConversations: {
+      description: 'DESTRUCTIVE: delete every saved Companion conversation and everything the companion remembers across them (the cross-conversation memory). The API key is kept. The erasure syncs.',
+      params: {},
+      handler: () => { clearConversations(); return { ok: true }; },
+    },
+    clearCouncilSessions: {
+      description: 'DESTRUCTIVE: delete every saved Council deliberation on this device. The API key is kept.',
+      params: {},
+      handler: () => { clearCouncilSessions(); return { ok: true }; },
+    },
+    addRequest: {
+      description: "Save a request about the Hill Climbing suite ITSELF to the on-device Requests list — a heading plus a prompt the builder (or a coding agent) can act on. Only for the apps, never the person's own goals or to-dos, and only what they have actually asked to pass along.",
+      params: {
+        heading: 'string — a short title naming the request, required (kept to 200 chars)',
+        prompt: 'string — the actionable brief: what to build and why, or the questions to answer, required (kept to 4000 chars)',
+      },
+      handler: (p) => { const item = addRequest(p); return { id: item.id }; },
+    },
+    deleteRequest: {
+      description: 'Remove one saved request by id.',
+      params: { id: 'string — the id of the request to remove, required' },
+      handler: (p) => { deleteRequest(String((p && p.id) || '')); return { ok: true }; },
+    },
+    clearRequests: {
+      description: 'DESTRUCTIVE: remove every saved request. The erasure syncs.',
+      params: {},
+      handler: () => { clearRequests(); return { ok: true }; },
+    },
+    setMode: {
+      description: "Switch the app between its two modes (re-themes the page and returns to that mode's home, or the key gate if no key is saved).",
+      params: { mode: "'companion' | 'council' — required" },
+      handler: (p) => {
+        const m = p && p.mode;
+        if (m !== 'companion' && m !== 'council') throw new Error("mode must be 'companion' or 'council'.");
+        setMode(m);
+        return { ok: true };
+      },
+    },
+    setApiKey: {
+      description: "Save the person's own Anthropic API key — the one credential shared across the suite's bring-your-own-key apps. Device-local only, never synced, never exported. Rejected unless it starts with sk-ant-.",
+      params: { key: "string — an Anthropic API key starting with 'sk-ant-', required" },
+      handler: (p) => { setApiKey(String((p && p.key) || '')); return { ok: true }; },
+    },
+    removeApiKey: {
+      description: 'Remove the stored Anthropic API key from this device (legacy per-app copies included).',
+      params: {},
+      handler: () => { removeApiKey(); return { ok: true }; },
+    },
+  },
+  urlParams: {
+    mode: "'companion' | 'council' — open in that mode (overrides the remembered last-used mode)",
+    ask: "'suggestion' — consume the hub's hand-off seed into a new Companion conversation (the seed key is hub-owned, consumed on read)",
+  },
+  notes: 'Actions never call the Anthropic API: sending a Companion message, convening the board, and replying to it are human acts in this app, and no HC action performs or retries them. The shared Anthropic key lives in localStorage hill-climbing-api-key — deliberately outside HC stores/read/export; manage it only through the setApiKey/removeApiKey actions. hill-climbing-hub-suggest-seed is hub-owned and not registered here.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->
