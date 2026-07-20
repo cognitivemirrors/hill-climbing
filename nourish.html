@@ -499,7 +499,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.15 · nourish</div>
+<div class="corner" id="version-label">v0.16 · nourish</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="cook">Cook</button>
   <button class="mode-btn"        data-view="chef">Chef</button>
@@ -737,12 +737,13 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.15 · nourish';
+const VERSION  = 'v0.16 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef settings blob (hill-climbing-nourish-chef) and the shared Anthropic key (hill-climbing-api-key) are deliberately NOT registered — they stay on-device.
 const LVL_MIN = 1;
@@ -2708,6 +2709,13 @@ async function generateRecipe() {
   }
 }
 
+// Off-ladder self-report for a chef-written recipe — history only, never the staircase.
+function logChefOutcome(title, outcomeKey) {
+  if (!OUTCOMES[outcomeKey]) throw new Error('outcome must be one of: ' + Object.keys(OUTCOMES).join(', '));
+  chef.history.push({ title: title || 'a recipe', outcome: outcomeKey, ts: Date.now() });
+  saveChef();
+}
+
 // Build the recipe card (all model text via textContent — never innerHTML).
 function renderRecipe(r) {
   const root = chId('chef-result');
@@ -2811,8 +2819,7 @@ function renderRecipe(r) {
       btn.appendChild(chEl('span', null, oc.label));
       btn.appendChild(chEl('span', 'outcome-sub', oc.sub));
       btn.addEventListener('click', () => {
-        chef.history.push({ title: r.title || 'a recipe', outcome: key, ts: Date.now() });
-        saveChef();
+        logChefOutcome(r.title, key);
         cook.innerHTML = '';
         cook.appendChild(chEl('div', 'rec-ack',
           oc.success ? 'Lovely — that one’s in your hands now.'
@@ -2864,6 +2871,160 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'nourish' });
 }
+
+// ── Agent interface (window.HC — one symmetric surface; see hc-agent.js) ─────
+if (window.HC) HC.register({
+  app: 'nourish',
+  version: VERSION,
+  title: 'Nourish',
+  description: 'Learn to cook through real kitchen challenges on a 2-up/1-down ladder (General and Sushi tracks) with honest self-reported outcomes, plus a shopping list and an optional BYOK chef.',
+  stores: [
+    {
+      key: STATE_KEY, kind: 'localStorage',
+      description: 'Cooking ladder state: per-track progress (level, streak, cleared dishes, history, active cook, recent serves) plus the shared pantry have-marks, extras list, and servings.',
+      sensitivity: 'practice',
+      schema: '{v, track, tracks{general,sushi → {level,streak,cleared,history,active,recent}}, pantry, extras, servings, + top-level working mirror of the active track}',
+      syncKey: SYNC_BLOB_KEY,
+      afterWrite: () => {
+        load();
+        const active = document.querySelector('.mode-btn.active');
+        switchView(active ? active.dataset.view : 'cook');
+      },
+    },
+    {
+      key: CHEF_LS, kind: 'localStorage',
+      description: 'Chef settings + off-ladder recipe outcome log. Device-local by design (never synced) and deliberately excluded from the app’s own export — registered here so full HC snapshots round-trip.',
+      sensitivity: 'personal',
+      schema: '{model, consented, history[{title,outcome,ts}] cap 20}',
+      afterWrite: () => { loadChef(); },
+    },
+  ],
+  actions: {
+    serveChallenge: {
+      description: 'Serve a challenge card. With id: show that exact challenge; without: the app picks one near the current rung (or resumes a mid-cook challenge).',
+      params: { id: 'string — challenge id, optional; must exist in the ladder' },
+      handler: (p) => {
+        if (p && p.id) {
+          const ch = byId(p.id);
+          if (!ch) throw new Error('Unknown challenge id "' + p.id + '".');
+          showChallenge(ch);
+          return { served: ch.id };
+        }
+        newChallenge();
+        return state.active ? { resumedActive: state.active.id } : { served: served ? served.id : null };
+      },
+    },
+    skipChallenge: {
+      description: 'Show another challenge — a neutral reshuffle at the same rung.',
+      params: {},
+      handler: () => { skipChallenge(); return { served: served ? served.id : null }; },
+    },
+    tooEasy: {
+      description: 'Report the served dish as beneath the person: climb one rung and serve a new challenge (no-op at the top of the ladder).',
+      params: {},
+      handler: () => { tooEasy(); return { level: state.level, served: served ? served.id : null }; },
+    },
+    finishCooking: {
+      description: 'Commit to cook the served challenge — marks today\'s usage on the hub exactly as the UI and moves to the record-outcome screen. Requires a served challenge.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No challenge is served — call serveChallenge first.');
+        finishCooking();
+        return { active: state.active.id };
+      },
+    },
+    recordOutcome: {
+      description: 'Record the outcome the person reports for the committed cook (never invent one). \'nailed\' and \'came\' count as a clear; \'struggled\' steps the ladder down.',
+      params: { outcome: "string — 'nailed' | 'came' | 'struggled', required" },
+      handler: (p) => {
+        const key = p && p.outcome;
+        if (!OUTCOMES[key]) throw new Error("outcome must be 'nailed', 'came', or 'struggled'.");
+        if (!state.active) throw new Error('No committed cook to report on — finishCooking first.');
+        const fromLevel = state.level;
+        report(key);
+        return { fromLevel, level: state.level, streak: state.streak };
+      },
+    },
+    leaveCooking: {
+      description: 'Abandon the committed cook without recording an outcome and return home. Nothing moves on the ladder.',
+      params: {},
+      handler: () => { leaveCooking(); return { ok: true }; },
+    },
+    switchTrack: {
+      description: 'Switch the active learning track; each track keeps its own ladder and progress.',
+      params: { track: "string — 'general' | 'sushi', required" },
+      handler: (p) => {
+        const t = p && p.track;
+        if (!TRACKS[t]) throw new Error("track must be 'general' or 'sushi'.");
+        switchTrack(t);
+        return { track: state.track, level: state.level };
+      },
+    },
+    toggleHave: {
+      description: 'Toggle an ingredient\'s have-mark in the shared pantry (the shopping list\'s "on hand" state).',
+      params: { ingredient: 'string — ingredient name as shown in the shopping list, required' },
+      handler: (p) => {
+        const ing = p && typeof p.ingredient === 'string' ? p.ingredient.trim() : '';
+        if (!ing) throw new Error('ingredient is required.');
+        toggleHave(ing);
+        return { ingredient: ing, have: !!state.pantry[ing] };
+      },
+    },
+    addExtra: {
+      description: 'Add an item to the person\'s own shopping list (dedupes case-insensitively; empty names rejected).',
+      params: { name: 'string — item name, required' },
+      handler: (p) => {
+        const added = addExtra(p && p.name);
+        return { added };
+      },
+    },
+    toggleExtra: {
+      description: 'Toggle the have-mark on an item in the person\'s own shopping list.',
+      params: { name: 'string — exact item name, required; must exist' },
+      handler: (p) => {
+        const name = p && p.name;
+        const e = state.extras.find(x => x.name === name);
+        if (!e) throw new Error('No extra named "' + name + '".');
+        toggleExtra(name);
+        return { name, have: e.have };
+      },
+    },
+    removeExtra: {
+      description: 'Remove an item from the person\'s own shopping list.',
+      params: { name: 'string — exact item name, required; must exist' },
+      handler: (p) => {
+        const name = p && p.name;
+        if (!state.extras.some(x => x.name === name)) throw new Error('No extra named "' + name + '".');
+        removeExtra(name);
+        return { ok: true };
+      },
+    },
+    setServings: {
+      description: 'Set the shared serving size that scales recipe and shopping quantities.',
+      params: { n: 'number — 1 | 2 | 4, required' },
+      handler: (p) => {
+        const n = p && p.n;
+        if (![1, 2, 4].includes(n)) throw new Error('n must be 1, 2, or 4.');
+        setServings(n);
+        return { servings: state.servings };
+      },
+    },
+    logChefOutcome: {
+      description: 'Log the outcome the person reports for a chef-written recipe (never invent one) — an off-ladder record in the chef history; never touches the staircase.',
+      params: { title: 'string — recipe title, optional (defaults to "a recipe")', outcome: "string — 'nailed' | 'came' | 'struggled', required" },
+      handler: (p) => {
+        logChefOutcome(p && p.title, p && p.outcome);
+        return { ok: true };
+      },
+    },
+    removeChefKey: {
+      description: 'Destructive: clears the shared Anthropic API key hub-wide (every BYOK surface loses it) and withdraws the chef consent.',
+      params: {},
+      handler: () => { removeChefKey(); return { ok: true }; },
+    },
+  },
+  notes: 'The ladder is a 2-up/1-down staircase (Levitt 1971): two reported clears step the level up, one struggle steps it down, converging near a 71% success rate. The level is a learning edge, not a score — never optimise it, and outcomes are always the person\'s own reports. The chef\'s recipe generation and key/consent settings are human acts in this app: no HC action performs network egress or calls the Anthropic API. The chef reads the shared hill-climbing-api-key, which belongs to Companion and is never registered, read, or exported here. Challenge cards deep-link to the paired Savor taste episode.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

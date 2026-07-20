@@ -926,6 +926,8 @@
   })();
   </script>
 
+  <script src="/hc-agent.js"></script>
+
   <script>
   (function () {
     const USAGE_KEY = 'hill-climbing-usage';
@@ -1226,12 +1228,13 @@
       if (nsIdx >= nsList.length) nsIdx = 0;
       nsShow();
     }
-    const nsAltBtn = document.getElementById('ns-alt');
-    if (nsAltBtn) nsAltBtn.addEventListener('click', function () {
+    function nsCycleSuggestion() {
       if (!nsList.length) return;
       nsIdx = (nsIdx + 1) % nsList.length;
       nsShow();
-    });
+    }
+    const nsAltBtn = document.getElementById('ns-alt');
+    if (nsAltBtn) nsAltBtn.addEventListener('click', nsCycleSuggestion);
 
     // ── Companion suggestion — opt-in, BYOK, refreshed on each return ─────────
     // The companion (the suite's BYOK AI) writes the suggestion instead of the
@@ -1378,16 +1381,16 @@
     function nsCmpRefreshToggle() {
       if (nsCmpToggle) nsCmpToggle.textContent = 'companion: ' + (nsSuggestOn() ? 'on' : 'off');
     }
+    function nsSuggestOff() {                           // turn off immediately — no dialog to leave
+      try { localStorage.setItem(NS_SUGGEST_LS, '0'); } catch (e) {}
+      nsCompanion = null; nsIdx = 0;
+      if (nsSets) renderNextStep(nsSets);
+      nsCmpRefreshToggle();
+      if (nsCmpPanel) nsCmpPanel.classList.remove('show');
+      if (nsCmpToggle) nsCmpToggle.setAttribute('aria-expanded', 'false');
+    }
     if (nsCmpToggle) nsCmpToggle.addEventListener('click', function () {
-      if (nsSuggestOn()) {                              // turn off immediately — no dialog to leave
-        try { localStorage.setItem(NS_SUGGEST_LS, '0'); } catch (e) {}
-        nsCompanion = null; nsIdx = 0;
-        if (nsSets) renderNextStep(nsSets);
-        nsCmpRefreshToggle();
-        nsCmpPanel.classList.remove('show');
-        nsCmpToggle.setAttribute('aria-expanded', 'false');
-        return;
-      }
+      if (nsSuggestOn()) { nsSuggestOff(); return; }
       const open = nsCmpPanel.classList.toggle('show');
       nsCmpToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open && !nsReadKey()) {
@@ -1510,6 +1513,215 @@
     journalDaySet().then(function (js) { reflectSet = js; refresh(); });
     // A remote sync pull that merges new usage records re-renders the dashboard.
     if (window.HCUsage) HCUsage.onMerge = refresh;
+
+    // ── HC agent surface (hc-agent.js) ───────────────────────────────────────
+    // hc-sync.js / hc-usage.js load AFTER this block, so every handler and
+    // store fn below reaches window.HCSync / window.HCUsage lazily, at invoke
+    // time — never captured here.
+    function hcSyncOrThrow() {
+      if (!window.HCSync) throw new Error('hc-sync.js is not loaded.');
+      return window.HCSync;
+    }
+    // hc-usage/records, opened versionless with the SAME guarded discipline as
+    // journalDaySet(): never create a store; if OUR open created the db
+    // (onupgradeneeded fired), delete it again and report it absent —
+    // hc-usage.js owns that schema.
+    function hcUsageDb() {
+      return new Promise(function (resolve) {
+        let settled = false, created = false;
+        const done = function (db) { if (!settled) { settled = true; resolve(db); } };
+        let req;
+        try { req = indexedDB.open('hc-usage'); }
+        catch (e) { return done(null); }
+        req.onupgradeneeded = function () { created = true; /* do NOT create any store */ };
+        req.onerror   = function () { done(null); };
+        req.onblocked = function () { done(null); };
+        req.onsuccess = function () {
+          const db = req.result;
+          try {
+            if (created || !db.objectStoreNames.contains('records')) {
+              db.close();
+              if (created) { try { indexedDB.deleteDatabase('hc-usage'); } catch (e) {} }
+              return done(null);
+            }
+            done(db);
+          } catch (e) { done(null); }
+        };
+      });
+    }
+    function hcUsageAll() {
+      return hcUsageDb().then(function (db) {
+        if (!db) return [];
+        return new Promise(function (resolve) {
+          try {
+            const getAll = db.transaction('records', 'readonly').objectStore('records').getAll();
+            getAll.onsuccess = function () { db.close(); resolve(getAll.result || []); };
+            getAll.onerror = function () { db.close(); resolve([]); };
+          } catch (e) { db.close(); resolve([]); }
+        });
+      });
+    }
+    function hcUsagePut(records) {
+      const recs = (records || []).filter(function (r) { return r && r.id; });
+      return hcUsageDb().then(function (db) {
+        if (!db) throw new Error('The hc-usage records store is unavailable on this device.');
+        return new Promise(function (resolve, reject) {
+          try {
+            const tx = db.transaction('records', 'readwrite'), os = tx.objectStore('records');
+            recs.forEach(function (r) { os.put(r); });
+            tx.oncomplete = function () { db.close(); resolve(); };
+            tx.onerror = function () { db.close(); reject(tx.error || new Error('usage write failed')); };
+          } catch (e) { db.close(); reject(e); }
+        });
+      }).then(function () {
+        // Same push pattern hc-usage.js's own backfill() uses for bulk import.
+        recs.forEach(function (r) {
+          if (window.HCSync && window.HCSync.pushLogRecord) HCSync.pushLogRecord('usage', r);
+        });
+      });
+    }
+    if (window.HC) HC.register({
+      app: 'hub',
+      version: null,   // the hub carries no in-product version label
+      title: 'Hill Climbing — hub',
+      description: 'The suite’s landing page: practice cards, a weekly usage dashboard, and a “next step” suggestion panel — deterministic by default, with an opt-in companion-written (BYOK) layer.',
+      suite: [
+        { title: 'Meditate', href: 'meditate.html' },
+        { title: 'Breathe', href: 'breathe.html' },
+        { title: 'ERP', href: 'erp.html' },
+        { title: 'Reflect', href: 'reflect.html' },
+        { title: 'Nourish', href: 'nourish.html' },
+        { title: 'Savor', href: 'savor.html' },
+        { title: 'Levity', href: 'levity.html' },
+        { title: 'Foresee', href: 'foresee.html' },
+        { title: 'Climb', href: 'climb.html' },
+        { title: 'Train', href: 'train.html' },
+        { title: 'Echo', href: 'echo.html' },
+        { title: 'Garden', href: 'garden.html' },
+        { title: 'Anime', href: 'anime.html' },
+        { title: 'Companion', href: 'companion.html' },
+        { title: 'Council', href: 'companion.html?mode=council' },
+      ],
+      stores: [
+        {
+          key: 'hill-climbing-install-dismissed', kind: 'localStorage', sensitivity: 'practice',
+          description: 'When the PWA install banner was last dismissed; the banner re-shows 5 days later.',
+          schema: 'raw string — epoch-ms of the dismissal',
+        },
+        {
+          key: NS_SUGGEST_LS, kind: 'localStorage', sensitivity: 'practice',
+          description: 'Opt-in flag for the companion-written next-step suggestion; device-local by design, never synced. Importing "1" re-enables the automatic on-arrival BYOK suggestion fetch on next load — the same behavior a person enabling the toggle gets.',
+          schema: "raw string — '1' enabled, '0'/absent disabled",
+        },
+        {
+          key: NS_LOG_LS, kind: 'localStorage', sensitivity: 'personal',
+          description: 'Rolling last-10 snapshots of companion suggestions (digest sent, model, reply) for after-the-fact review; device-local, never synced.',
+          schema: '{ v:1, items:[{ ts, model, reply:{ app, text }, digest }] } (cap 10)',
+        },
+        {
+          key: NS_SEED_LS, kind: 'localStorage', sensitivity: 'personal',
+          description: 'One pending “ask about this” hand-off to a new Companion conversation; consumed on read by companion.html.',
+          schema: '{ v:1, ts, text, show:{ text, app } }',
+        },
+        {
+          key: NS_REQ_LS, kind: 'localStorage', sensitivity: 'personal', syncKey: 'ls:' + NS_REQ_LS,
+          description: 'Requests-to-the-builder store shared with Companion’s add_request tool; the hub’s “didn’t fit?” review flow appends here. E2EE-synced.',
+          schema: '{ v:1, items:[{ id, ts, heading, prompt }] } (cap 100)',
+        },
+        {
+          key: USAGE_KEY, kind: 'localStorage', sensitivity: 'practice',
+          description: 'Legacy per-device usage aggregate (this device only; the aggregate itself is never synced — the per-record log is).',
+          schema: "{ v:1, [app]: { 'YYYY-MM-DD': 1 | { s:seconds, n:sessions } } }",
+        },
+        {
+          key: 'hc-usage/records', kind: 'idb', sensitivity: 'practice',
+          description: "Shared cross-device usage log (db 'hc-usage', store 'records', keyPath 'id'): immutable per-session and per-day-flag records, summed at read time across devices.",
+          schema: "{ id:'<device>:<app>:<day>:<suffix>', device, app, day, s, n, ts }",
+          read: function () { return hcUsageAll(); },
+          exportRead: function () { return hcUsageAll(); },
+          write: function (records) { return hcUsagePut(records); },
+        },
+      ],
+      actions: {
+        suggestOff: {
+          description: 'Turn the companion-written next-step suggestion off (instant; drops the fetched suggestion and reverts to the deterministic one). Same path the toggle’s off branch takes.',
+          params: {},
+          handler: function () { nsSuggestOff(); return { ok: true }; },
+        },
+        cycleSuggestion: {
+          description: 'Advance the “A next step” panel to the next suggestion in the current list — the same cycle as the “another idea” button.',
+          params: {},
+          handler: function () {
+            nsCycleSuggestion();
+            const s = nsList[nsIdx];
+            return { ok: true, showing: s ? s.text : null };
+          },
+        },
+        login: {
+          description: 'Log in to the E2EE sync account. A passphrase unlock (or setup) usually follows.',
+          params: { email: 'string — account email, required', password: 'string — account password, required' },
+          handler: function (p) {
+            const email = String(p.email || '').trim();
+            if (!email || !p.password) throw new Error('email and password are required.');
+            return hcSyncOrThrow().login(email, p.password).then(function () { return { ok: true }; });
+          },
+        },
+        signup: {
+          description: 'Create a sync account. The result may say the person must confirm their email before logging in.',
+          params: { email: 'string — account email, required', password: 'string — account password, min 6 chars, required' },
+          handler: function (p) {
+            const email = String(p.email || '').trim();
+            if (!email || !p.password) throw new Error('email and password are required.');
+            if (String(p.password).length < 6) throw new Error('Password must be at least 6 characters.');
+            return hcSyncOrThrow().signup(email, String(p.password));
+          },
+        },
+        setupEncryption: {
+          description: 'Set the encryption passphrase and turn sync on. Returns { recoveryCode } — show it to the person and have them store it; it is the only way back in if the passphrase is forgotten and is never shown again.',
+          params: { passphrase: 'string — min 8 chars (same guard the form enforces), required' },
+          handler: function (p) {
+            const pass = String(p.passphrase || '');
+            if (pass.length < 8) throw new Error('Use at least 8 characters.');
+            return hcSyncOrThrow().setupEncryption(pass);
+          },
+        },
+        unlock: {
+          description: "Unlock sync on this device with the passphrase (mode 'pass', default) or a recovery code (mode 'reco').",
+          params: { value: 'string — the passphrase or recovery code, required', mode: "'pass' | 'reco' — optional, default 'pass'" },
+          handler: function (p) {
+            const v = String(p.value || '');
+            if (!v) throw new Error('value is required.');
+            const s = hcSyncOrThrow();
+            return (p.mode === 'reco' ? s.unlockWithRecoveryCode(v) : s.unlock(v)).then(function () { return { ok: true }; });
+          },
+        },
+        changePassphrase: {
+          description: 'Change the encryption passphrase (data is not re-encrypted, so this is quick).',
+          params: { oldPassphrase: 'string — current passphrase, required', newPassphrase: 'string — min 8 chars (same guard the form enforces), required' },
+          handler: function (p) {
+            if (!p.oldPassphrase) throw new Error('oldPassphrase is required.');
+            if (String(p.newPassphrase || '').length < 8) throw new Error('Use at least 8 characters.');
+            return hcSyncOrThrow().changePassphrase(String(p.oldPassphrase), String(p.newPassphrase)).then(function () { return { ok: true }; });
+          },
+        },
+        logout: {
+          description: 'Sign out of sync on this device. Local data stays.',
+          params: {},
+          handler: function () {
+            return hcSyncOrThrow().logout().then(function () { return { ok: true }; });
+          },
+        },
+        deleteRemoteData: {
+          description: 'Irreversibly deletes the SERVER copy of all synced data (local data stays). Destructive — the UI’s double-tap rail is replaced by this explicit confirm.',
+          params: { confirm: 'boolean — must be exactly true; the person must have approved this' },
+          handler: function (p) {
+            if (p.confirm !== true) throw new Error('deleteRemoteData irreversibly deletes the server copy; call with {confirm: true} once the person has approved it.');
+            return hcSyncOrThrow().deleteRemoteData().then(function () { return { ok: true }; });
+          },
+        },
+      },
+      notes: 'Suite hub. The companion-written suggestion is opt-in BYOK and fires automatically on arrival when enabled — HC never triggers that fetch directly, and there is deliberately no suggestOn action (its UI enable path inseparably fires the BYOK network fetch; enabling belongs to the person at the consent panel, or via importing the flag store). Also excluded: the suggestion feedback/“ask about this” flows (only meaningful downstream of a live BYOK suggestion on screen) and the install-prompt / Web-Push reminder toggles (browser-permission-gated, no exportable store). The dashboard reads stores owned by other apps (the Reflect journal IndexedDB and each practice’s localStorage blob) — those belong to their apps and are not registered here. Council is reachable at companion.html?mode=council but deliberately has no card.',
+    });
   })();
   </script>
 

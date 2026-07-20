@@ -59,6 +59,7 @@
         })),
         actions: actionDescriptors(),
         urlParams: manifest.urlParams || null,
+        suite: manifest.suite || undefined,
         notes: manifest.notes || null,
       };
     },

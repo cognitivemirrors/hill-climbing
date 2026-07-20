@@ -130,7 +130,8 @@ Each app is a single page at the site root. State keys listed are what HC regist
   hill-climbing-garden (device-local). Actions: openLevel, move, undo, restart. Completion
   comes only from actually solving — same as a human.
 - anime.html — a webcam cel-shading experiment. No persistent state; frames are made and
-  thrown away. Actions drive the camera/snapshot only.
+  thrown away. Actions: startCamera, snapshot, toggleRecording, setPreset, setParam —
+  in-memory filter state only; nothing persists.
 - companion.html — BYOK AI companion + Council ("board of directors"), two modes of one app
   (?mode=council; council.html redirects there). Stores: hill-climbing-companion (includes
   the cross-conversation memory), hill-climbing-council, hill-climbing-requests (all synced,
