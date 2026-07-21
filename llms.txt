@@ -150,7 +150,16 @@ Each app is a single page at the site root. State keys listed are what HC regist
   deleteCharacter. The network acts — a character proposing its name, and conversation — are
   UI-only, never HC (the same human/agent boundary as every BYOK surface). A character writes
   only its own store, never the person's practice stores (§1.4 intact). All app data here is
-  treated as fictional seed data.
+  treated as public seed data.
+- govern.html — "Governance, the Game": the governance layer over Kin's families. Rules are
+  authored at levels (charter > family > character); character actions land in an append-only
+  ledger (a real coded invariant — the record is never rewritten); an asynchronous magistrate
+  (BYOK model call) audits the ledger AFTER the fact and writes public verdicts
+  (allow/refuse-with-reason/hold) — never a synchronous gate, and offline/keyless it leaves
+  entries `unreviewed`. The charter floor is code-backed (a lower rule redefining a protected
+  term is rejected in code). Store: hill-climbing-govern (synced). HC actions (state only):
+  authorRule, deleteRule, logAction. The magistrate is UI-only network, never an HC action —
+  the same human/agent boundary as every model call. See GOVERNANCE.md / STATEMENT.md.
 
 ## Where this is heading
 
