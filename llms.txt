@@ -156,6 +156,17 @@ Each app is a single page at the site root. State keys listed are what HC regist
   UI-only, never HC (the same human/agent boundary as every BYOK surface). A character writes
   only its own store, never the person's practice stores (§1.4 intact). All app data here is
   treated as public seed data.
+- contacts.html — the contact list + messaging, and the suite's FIRST cross-user surface. Three
+  kinds of contact: Family (your Kin characters) and Introduced agents — messaged as BYOK AI,
+  on-device — and Friends (real other users) messaged through the backend (contacts-schema.sql:
+  Supabase profiles/friendships/messages + RLS + security-definer RPCs that enforce
+  mutual-accept-before-message and blocking IN THE DATABASE). GROUND RULE for agents: messages
+  with real people are PUBLIC SEED DATA — server-readable, not private, not E2EE — and the thread
+  says so; act only at the person's request, be kind, and honor that a block stops contact both
+  ways. HC exposes LOCAL state only (addIntroduced, removeIntroduced, appendAgentMessage,
+  clearAgentChat); friend requests, human messages, and the AI calls are UI-only network, never HC
+  actions — so the no-network-in-HC parity invariant holds. Store: hill-climbing-contacts (synced;
+  local — friends + messages live server-side). Needs sign-in at the hub for the friends side.
 - govern.html — "Governance, the Game": the governance layer over Kin's families. Rules are
   authored at levels (charter > family > character); character actions land in an append-only
   ledger (a real coded invariant — the record is never rewritten); an asynchronous magistrate

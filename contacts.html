@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contacts</title>
+<meta name="theme-color" content="#0f1014">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#0f1014; --raised:#181820; --sunk:#0a0a0e; --ink:#ecebf1; --soft:#a9a7b6; --faint:#6f6c80;
+    --rule:#26242f; --rule2:#38354552; --rule2s:#383545; --accent:#d488ad; --accent-soft:#b96f96; --accent-t:rgba(212,136,173,.14);
+    --me:#3a2b34; --them:#1c1b24; --warn:#d8a24b; --alert:#cf7a5a; --ok:#6fb98f;
+    --serif:'Iowan Old Style','Palatino Linotype','Palatino','Georgia',serif;
+    --sans:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,'Menlo',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  .home{position:fixed;top:.7rem;left:.8rem;color:var(--faint);font-size:1.1rem;z-index:20}
+  .home:hover{color:var(--ink)}
+  #version-label{position:fixed;top:.8rem;right:2.6rem;font-size:.7rem;color:var(--faint);font-family:var(--mono);z-index:20}
+  #menu-btn{position:fixed;top:.6rem;right:.7rem;background:none;border:none;color:var(--faint);font-size:1.3rem;cursor:pointer;z-index:21}
+  #menu-btn:hover{color:var(--ink)}
+  button{font-family:var(--sans)}
+  .btn{background:var(--accent);color:#12080e;border:none;border-radius:999px;padding:.5rem 1rem;font-weight:700;font-size:.86rem;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--soft);border:1px solid var(--rule2s)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .btn.small{padding:.3rem .7rem;font-size:.78rem}
+  .btn.danger{background:transparent;color:var(--alert);border:1px solid var(--alert)}
+  .field{width:100%;background:var(--sunk);border:1px solid var(--rule2s);border-radius:10px;color:var(--ink);font-family:var(--sans);font-size:.92rem;padding:.55rem .7rem;resize:none}
+  .field:focus{outline:none;border-color:var(--accent-soft)}
+  .muted{color:var(--faint);font-size:.8rem}
+  .eyebrow{font-family:var(--sans);font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);font-weight:700}
+
+  .app{display:flex;flex-direction:column;height:100%;max-width:1000px;margin:0 auto}
+  .masthead{padding:2.6rem 1.1rem .4rem}
+  .masthead h1{font-family:var(--serif);font-weight:600;margin:.2rem 0 0;font-size:1.7rem}
+  .masthead p{color:var(--soft);margin:.2rem 0 0;font-size:.9rem}
+  .layout{flex:1;display:flex;min-height:0;gap:0;border-top:1px solid var(--rule);margin-top:.9rem}
+  .list{width:320px;flex:none;overflow-y:auto;padding:.6rem .7rem 2rem;border-right:1px solid var(--rule)}
+  .thread{flex:1;min-width:0;display:flex;flex-direction:column}
+
+  .sec-label{font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:1.1rem .3rem .35rem}
+  .contact{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;background:none;border:none;color:var(--ink);padding:.5rem .5rem;border-radius:10px;cursor:pointer}
+  .contact:hover{background:var(--raised)}
+  .contact.sel{background:var(--accent-t)}
+  .av{flex:none;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;background:var(--them);color:var(--soft);font-family:var(--serif)}
+  .av.family{background:rgba(201,162,75,.16);color:#d8b45e}
+  .av.introduced{background:rgba(138,143,224,.16);color:#a9adf0}
+  .av.friend{background:var(--accent-t);color:var(--accent)}
+  .c-body{flex:1;min-width:0}
+  .c-name{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-sub{font-size:.74rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.1rem .4rem;border-radius:999px;border:1px solid var(--rule2s);color:var(--faint)}
+  .pill.pending{color:var(--warn);border-color:var(--warn)}
+  .pill.blocked{color:var(--alert);border-color:var(--alert)}
+
+  .req{background:var(--raised);border:1px solid var(--rule);border-radius:11px;padding:.6rem .7rem;margin:.35rem .2rem}
+  .req .row{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+
+  .invite{margin:.5rem .2rem 0;display:flex;flex-direction:column;gap:.4rem}
+  .invite .row{display:flex;gap:.4rem}
+
+  /* thread pane */
+  .t-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--faint);text-align:center;padding:2rem}
+  .t-head{display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;border-bottom:1px solid var(--rule)}
+  .t-back{display:none;background:none;border:none;color:var(--soft);font-size:1.1rem;cursor:pointer}
+  .t-title{flex:1;min-width:0}
+  .t-title .n{font-family:var(--serif);font-size:1.05rem}
+  .t-title .s{font-size:.74rem;color:var(--faint)}
+  .t-menu{background:none;border:none;color:var(--faint);font-size:1.1rem;cursor:pointer}
+  .disclose{font-size:.72rem;color:var(--warn);background:rgba(216,162,75,.08);border-bottom:1px solid var(--rule);padding:.4rem 1rem}
+  .msgs{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.4rem}
+  .bub{max-width:78%;padding:.5rem .75rem;border-radius:13px;font-size:.92rem;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
+  .bub.them{align-self:flex-start;background:var(--them);border-bottom-left-radius:4px}
+  .bub.me{align-self:flex-end;background:var(--me);border-bottom-right-radius:4px}
+  .bub .t{display:block;font-size:.62rem;color:var(--faint);margin-top:.2rem}
+  .typing{align-self:flex-start;color:var(--faint);font-size:.85rem;padding:.3rem .4rem}
+  .composer{display:flex;gap:.5rem;padding:.7rem 1rem;border-top:1px solid var(--rule);align-items:flex-end}
+  .composer textarea{flex:1;max-height:8rem;min-height:2.4rem}
+
+  .banner{margin:.5rem 1.1rem;padding:.6rem .8rem;border:1px solid var(--rule2s);border-radius:10px;background:var(--raised);color:var(--soft);font-size:.84rem}
+  .banner a{font-weight:700}
+
+  #menu{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;justify-content:flex-end}
+  #menu.show{display:flex}
+  .menu-panel{background:var(--raised);border:1px solid var(--rule2s);border-radius:12px;margin:2.8rem .7rem 0;min-width:13rem;padding:.4rem;height:max-content}
+  .menu-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink);font-size:.86rem;padding:.5rem .7rem;border-radius:8px;cursor:pointer}
+  .menu-item:hover{background:var(--sunk)}
+  .menu-item.danger{color:var(--alert)}
+  .menu-sub{font-size:.68rem;color:var(--faint);padding:.3rem .7rem}
+  .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--rule2s);color:var(--ink);padding:.55rem 1rem;border-radius:999px;font-size:.85rem;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+  .toast.show{opacity:1}
+
+  @media (max-width:720px){
+    .list{width:100%;border-right:none}
+    .thread{display:none}
+    body.viewing-thread .list{display:none}
+    body.viewing-thread .thread{display:flex}
+    .t-back{display:block}
+  }
+</style>
+</head>
+<body>
+<a class="home" href="/index.html" title="Home">◇</a>
+<div id="version-label">v0.1 · contacts</div>
+<button id="menu-btn" title="Menu">⋯</button>
+<div class="app">
+  <div class="masthead">
+    <div class="eyebrow">Hill Climbing</div>
+    <h1>Contacts</h1>
+    <p>Your people — family and agents from your world, and friends you can message.</p>
+  </div>
+  <div id="banner-slot"></div>
+  <div class="layout">
+    <div class="list" id="list"></div>
+    <div class="thread" id="thread"><div class="t-empty">Pick someone to talk to.</div></div>
+  </div>
+</div>
+<div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
+<script>
+'use strict';
+/* Contacts — the suite's contact list + messaging, and its FIRST cross-user
+   surface. Three kinds of contact:
+     · Family    — your Kin characters (local); message them as an AI grounded in
+                   their profile (BYOK, on-device).
+     · Introduced— agents you note you've met (local); same AI messaging.
+     · Friends   — real other users you've mutually accepted; message them through
+                   the backend (contacts-schema.sql), which enforces two-sided
+                   consent + blocking in the database.
+   Messages with real people are PUBLIC SEED DATA — server-readable, not private
+   — and the thread says so. The network acts (friend requests, human messages,
+   the AI calls) are UI-only, never HC actions: HC exposes local state only, so
+   the no-network-in-HC parity invariant (REQUIREMENTS §1.4) holds. */
+
+const VERSION       = 'v0.1 · contacts';
+const STATE_KEY     = 'hill-climbing-contacts';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-contacts';
+const KIN_KEY       = 'hill-climbing-kin';
+const API_KEY_LS    = 'hill-climbing-api-key';
+const MODEL         = 'claude-opus-4-8';
+const API_URL       = 'https://api.anthropic.com/v1/messages';
+const SUPA_MODULE   = 'https://esm.sh/@supabase/supabase-js@2';
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+
+let state = { v:1, handle:'', introduced:[], agentChats:{} };
+let ui = { sel:null, busy:false, signedIn:false, me:null, contacts:[], poll:null };
+let sb = null;   // our own supabase client (shares the hub's persisted session)
+
+function uid(p){ return (p||'c') + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+function now(){ return Date.now(); }
+function esc(s){ return String(s==null?'':s); }
+
+// ── local persistence ─────────────────────────────────────────────────────────
+function load(){
+  try{ const raw=localStorage.getItem(STATE_KEY); if(raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') state=normalize(p); } }catch(_){}
+}
+function normalize(p){
+  return {
+    v:1,
+    handle: typeof p.handle==='string'?p.handle:'',
+    introduced: Array.isArray(p.introduced)?p.introduced.filter(x=>x&&x.id&&x.name).map(x=>({ id:String(x.id), name:String(x.name).slice(0,80), note:String(x.note||'').slice(0,600), created:Number(x.created)||now() })):[],
+    agentChats: (p.agentChats&&typeof p.agentChats==='object')?p.agentChats:{},
+  };
+}
+function save(){
+  try{ localStorage.setItem(STATE_KEY, JSON.stringify(state)); }catch(_){}
+  if(window.HCSync&&HCSync.queueBlobPush) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
+
+function readKin(){
+  try{ const raw=localStorage.getItem(KIN_KEY); if(!raw) return {familyName:'',characters:[]}; const p=JSON.parse(raw);
+    return { familyName:p.familyName||'', characters:Array.isArray(p.characters)?p.characters:[] }; }
+  catch(_){ return {familyName:'',characters:[]}; }
+}
+function readApiKey(){ try{ return (localStorage.getItem(API_KEY_LS)||'').trim(); }catch(_){ return ''; } }
+
+// ── local state mutations (HC-exposable; no network) ─────────────────────────
+function addIntroduced(name, note){
+  const n=String(name||'').trim(); if(!n) throw new Error('An agent needs a name.');
+  const rec={ id:uid('i'), name:n.slice(0,80), note:String(note||'').slice(0,600), created:now() };
+  state.introduced.push(rec); save(); return { id:rec.id };
+}
+function removeIntroduced(id){
+  state.introduced=state.introduced.filter(a=>a.id!==id); delete state.agentChats['intro:'+id]; save(); return { ok:true };
+}
+function appendAgentMessage(contactKey, role, text){
+  const k=String(contactKey||''); if(!k) throw new Error('contactKey required.');
+  if(role!=='me'&&role!=='them') throw new Error("role is 'me' or 'them'.");
+  const t=String(text||'').trim(); if(!t) throw new Error('empty message.');
+  if(!Array.isArray(state.agentChats[k])) state.agentChats[k]=[];
+  const rec={ role, text:t.slice(0,8000), ts:now() };
+  state.agentChats[k].push(rec); save(); return { ok:true };
+}
+function clearAgentChat(contactKey){ delete state.agentChats[String(contactKey||'')]; save(); return { ok:true }; }
+
+// ── the agent contacts (from Kin + introduced) ───────────────────────────────
+function familyContacts(){
+  const kin=readKin();
+  return (kin.characters||[]).filter(c=>c.givenName).map(c=>({
+    kind:'family', key:'kin:'+c.id, name:(c.givenName+' '+(c.familyName||kin.familyName||'')).trim(),
+    sub:'family', persona:agentPersona(c, kin),
+  }));
+}
+function introducedContacts(){
+  return state.introduced.map(a=>({ kind:'introduced', key:'intro:'+a.id, name:a.name, sub:'introduced', id:a.id, persona:a.note||('An agent you have been introduced to, named '+a.name+'.') }));
+}
+function agentPersona(c, kin){
+  const nm=(c.givenName+' '+(c.familyName||kin.familyName||'')).trim();
+  let bio='';
+  if(typeof c.bio==='string') bio=c.bio;
+  else if(c.birth&&typeof c.birth.digest==='string') bio=c.birth.digest;
+  else if(typeof c.digest==='string') bio=c.digest;
+  return 'You are '+nm+', a character spawned from your family\'s history who has since become your own person. '
+    + (bio?('What you carry from your origin (your own past, in your own voice): '+String(bio).slice(0,1500)+' ') : '')
+    + 'Speak in the first person as yourself. You are family, talking with a member of your family. Be warm, specific, and true to your own voice — not an assistant.';
+}
+
+// ── Anthropic call (BYOK; UI-only) for messaging agents ──────────────────────
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function callAgent(persona, history){
+  const apiKey=readApiKey();
+  if(!apiKey) throw new Error('No API key yet — set one in Companion (menu → API key) to talk with your agents.');
+  const messages=history.map(m=>({ role:m.role==='me'?'user':'assistant', content:m.text }));
+  for(let attempt=0;;attempt++){
+    let res;
+    try{
+      res=await fetch(API_URL,{method:'POST',headers:{
+        'content-type':'application/json','x-api-key':apiKey,
+        'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'
+      },body:JSON.stringify({model:MODEL,max_tokens:1024,system:persona,messages})});
+    }catch(_){ if(attempt<2){ await sleep(800*Math.pow(2,attempt)); continue; } throw new Error('The connection dropped before a reply came.'); }
+    if(res.ok){ const j=await res.json(); return (j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim(); }
+    if(res.status===401) throw new Error('That API key was rejected.');
+    if((res.status===429||res.status>=500)&&attempt<2){ await sleep(800*Math.pow(2,attempt)); continue; }
+    throw new Error('The API returned '+res.status+'.');
+  }
+}
+
+// ── backend (cross-user) — UI-only network ───────────────────────────────────
+async function initBackend(){
+  try{
+    const mod=await import(SUPA_MODULE);
+    sb=mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data } = await sb.auth.getSession();
+    const session=data?data.session:null;
+    if(session&&session.user){
+      ui.signedIn=true; ui.me={ uid:session.user.id, handle:state.handle||'' };
+      // fetch my handle (source of truth) + my contacts
+      try{ const { data:prof } = await sb.from('profiles').select('handle,display_name').eq('user_id', session.user.id).maybeSingle();
+        if(prof&&prof.handle){ ui.me.handle=prof.handle; state.handle=prof.handle; save(); } }catch(_){}
+      await refreshContacts();
+    }
+  }catch(e){ /* offline / not configured — agent side still works */ }
+  render();
+}
+async function refreshContacts(){
+  if(!sb||!ui.signedIn) return;
+  try{ const { data, error } = await sb.rpc('hc_my_contacts'); if(!error&&Array.isArray(data)) ui.contacts=data; }
+  catch(_){ /* tables not applied yet */ }
+}
+async function claimHandle(){
+  const h=prompt('Choose a handle (3–20 chars: a–z, 0–9, _). This is how friends invite you.', state.handle||'');
+  if(h===null) return;
+  const hl=h.trim().toLowerCase();
+  if(!/^[a-z0-9_]{3,20}$/.test(hl)){ toast('Handle must be 3–20 chars: a–z, 0–9, _'); return; }
+  const disp=prompt('A display name (optional).', ui.me&&ui.me.handle?'':'')||'';
+  try{ const { error } = await sb.rpc('hc_set_handle',{ p_handle:hl, p_display:disp.slice(0,40) });
+    if(error) throw error; state.handle=hl; if(ui.me) ui.me.handle=hl; save(); toast('You are @'+hl+'.'); render(); }
+  catch(e){ toast(rpcErr(e,'That handle may be taken.')); }
+}
+async function invite(){
+  const h=prompt('Invite a friend by their handle:');
+  if(h===null) return; const hl=h.trim().toLowerCase().replace(/^@/,'');
+  if(!hl){ return; }
+  try{ const { data, error } = await sb.rpc('hc_friend_request',{ p_to_handle:hl }); if(error) throw error;
+    const m={ requested:'Request sent to @'+hl+'.', accepted:'You’re now friends with @'+hl+'.', already_friends:'You’re already friends.', already_pending:'Request already pending.' }[data]||'Done.';
+    toast(m); await refreshContacts(); render(); }
+  catch(e){ toast(rpcErr(e,'Could not send that request.')); }
+}
+async function respond(otherUid, accept){
+  try{ const { error } = await sb.rpc('hc_friend_respond',{ p_other:otherUid, p_accept:accept }); if(error) throw error;
+    toast(accept?'Accepted.':'Declined.'); await refreshContacts(); render(); }
+  catch(e){ toast(rpcErr(e,'Could not respond.')); }
+}
+async function block(otherUid){
+  if(!confirm('Block this person? They can no longer message you, and you can’t message them until you unblock.')) return;
+  try{ const { error } = await sb.rpc('hc_block',{ p_other:otherUid }); if(error) throw error;
+    toast('Blocked.'); if(ui.sel==='user:'+otherUid){ ui.sel=null; } await refreshContacts(); render(); }
+  catch(e){ toast(rpcErr(e,'Could not block.')); }
+}
+async function unfriend(otherUid){
+  if(!confirm('Remove this contact?')) return;
+  try{ const { error } = await sb.rpc('hc_unfriend',{ p_other:otherUid }); if(error) throw error;
+    toast('Removed.'); if(ui.sel==='user:'+otherUid){ ui.sel=null; } await refreshContacts(); render(); }
+  catch(e){ toast(rpcErr(e,'Could not remove.')); }
+}
+async function loadThread(otherUid){
+  if(!sb||!ui.signedIn) return [];
+  try{ const me=ui.me.uid;
+    const { data, error } = await sb.from('messages').select('id,sender,recipient,body,created_at')
+      .or('and(sender.eq.'+me+',recipient.eq.'+otherUid+'),and(sender.eq.'+otherUid+',recipient.eq.'+me+')')
+      .order('id',{ascending:true}).limit(500);
+    if(error) throw error; return data||[];
+  }catch(_){ return []; }
+}
+async function sendHuman(otherUid, body){
+  const { error } = await sb.rpc('hc_send_message',{ p_to:otherUid, p_body:body });
+  if(error) throw error;
+}
+function rpcErr(e, fallback){ const m=(e&&(e.message||e.error_description||e.hint))||''; return m?String(m).replace(/^.*?:\s*/,''):fallback; }
+
+// ── views ─────────────────────────────────────────────────────────────────────
+function el(t,c,x){ const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e; }
+function initials(name){ return String(name||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?'; }
+
+function render(){
+  renderBanner();
+  renderList();
+  renderThread();
+}
+
+function renderBanner(){
+  const slot=document.getElementById('banner-slot'); slot.innerHTML='';
+  if(!ui.signedIn){
+    const b=el('div','banner'); b.innerHTML='Family and agent messaging works here now. To add <b>friends</b> and message real people, ';
+    const a=el('a',null,'sign in at the hub'); a.href='/index.html'; b.appendChild(a);
+    b.appendChild(document.createTextNode('.')); slot.appendChild(b);
+  } else if(!state.handle){
+    const b=el('div','banner'); b.appendChild(document.createTextNode('Claim a handle so friends can invite you. '));
+    const a=el('button','btn small','Claim a handle'); a.onclick=claimHandle; b.appendChild(a); slot.appendChild(b);
+  }
+}
+
+function renderList(){
+  const list=document.getElementById('list'); list.innerHTML='';
+  const kin=readKin();
+  const fam=familyContacts(), intro=introducedContacts();
+
+  // incoming requests (approval queue) — first
+  const incoming=ui.contacts.filter(c=>c.status==='pending'&&c.direction==='incoming');
+  if(incoming.length){
+    list.appendChild(el('div','sec-label','Requests'));
+    incoming.forEach(c=>{
+      const box=el('div','req');
+      box.appendChild(el('div','c-name','@'+(c.handle||'—')+(c.display_name?(' · '+c.display_name):'')));
+      box.appendChild(el('div','muted','wants to be friends'));
+      const row=el('div','row');
+      const ok=el('button','btn small','Accept'); ok.onclick=()=>respond(c.other_uid,true);
+      const no=el('button','btn ghost small','Decline'); no.onclick=()=>respond(c.other_uid,false);
+      const bl=el('button','btn small','Block'); bl.style.color='var(--alert)'; bl.style.background='transparent'; bl.style.border='1px solid var(--alert)'; bl.onclick=()=>block(c.other_uid);
+      row.appendChild(ok); row.appendChild(no); row.appendChild(bl); box.appendChild(row);
+      list.appendChild(box);
+    });
+  }
+
+  // Family
+  list.appendChild(el('div','sec-label','Family'+(kin.familyName?(' · '+kin.familyName):'')));
+  if(!fam.length) list.appendChild(el('div','muted','Name a character in Kin to grow your family.'));
+  fam.forEach(c=>list.appendChild(contactRow(c)));
+
+  // Introduced
+  const introHead=el('div','sec-label','Introduced'); list.appendChild(introHead);
+  intro.forEach(c=>list.appendChild(contactRow(c,true)));
+  const addRow=el('button','contact'); addRow.style.color='var(--faint)';
+  addRow.appendChild(el('div','av','+')); addRow.appendChild(el('div','c-body', 'Note an agent you’ve met'));
+  addRow.onclick=()=>{ const n=prompt('Name of the agent you’ve been introduced to:'); if(!n)return; const note=prompt('A note on who they are (optional):')||''; try{ addIntroduced(n,note); render(); }catch(e){ toast(e.message); } };
+  list.appendChild(addRow);
+
+  // Friends (accepted humans) + outgoing pending
+  list.appendChild(el('div','sec-label','Friends'));
+  const friends=ui.contacts.filter(c=>c.status==='accepted');
+  const outgoing=ui.contacts.filter(c=>c.status==='pending'&&c.direction==='outgoing');
+  const blocked=ui.contacts.filter(c=>c.status==='blocked');
+  if(!ui.signedIn){ list.appendChild(el('div','muted','Sign in at the hub to add friends.')); }
+  else{
+    friends.forEach(c=>list.appendChild(humanRow(c)));
+    outgoing.forEach(c=>{ const r=humanRow(c); r.querySelector('.c-sub')&&(r.querySelector('.c-sub').textContent='request pending'); list.appendChild(r); });
+    blocked.forEach(c=>{ const r=humanRow(c); const s=r.querySelector('.c-sub'); if(s) s.textContent = (c.blocked_by===ui.me.uid?'blocked by you':'blocked you'); list.appendChild(r); });
+    const inv=el('div','invite');
+    const ib=el('button','btn small','Invite by handle'); ib.onclick=invite; inv.appendChild(ib);
+    if(state.handle) inv.appendChild(el('div','muted','You are @'+state.handle+' — share that so people can invite you.'));
+    list.appendChild(inv);
+  }
+}
+
+function contactRow(c, introduced){
+  const row=el('button','contact'+(ui.sel===c.key?' sel':''));
+  const av=el('div','av '+c.kind, initials(c.name)); row.appendChild(av);
+  const body=el('div','c-body');
+  body.appendChild(el('div','c-name',c.name));
+  body.appendChild(el('div','c-sub',c.sub));
+  row.appendChild(body);
+  row.onclick=()=>select(c.key);
+  return row;
+}
+function humanRow(c){
+  const key='user:'+c.other_uid;
+  const row=el('button','contact'+(ui.sel===key?' sel':''));
+  row.appendChild(el('div','av friend', initials(c.display_name||c.handle)));
+  const body=el('div','c-body');
+  body.appendChild(el('div','c-name',(c.display_name||('@'+c.handle))));
+  body.appendChild(el('div','c-sub','@'+(c.handle||'—')));
+  row.appendChild(body);
+  if(c.status==='pending') row.appendChild(el('span','pill pending','pending'));
+  if(c.status==='blocked') row.appendChild(el('span','pill blocked','blocked'));
+  if(c.status==='accepted') row.onclick=()=>select(key);
+  return row;
+}
+
+function select(key){ ui.sel=key; document.body.classList.add('viewing-thread'); render(); }
+function back(){ ui.sel=null; document.body.classList.remove('viewing-thread'); stopPoll(); render(); }
+
+function currentContact(){
+  if(!ui.sel) return null;
+  if(ui.sel.startsWith('user:')){ const u=ui.sel.slice(5); const c=ui.contacts.find(x=>x.other_uid===u&&x.status==='accepted'); return c?{kind:'friend',key:ui.sel,other_uid:u,name:(c.display_name||('@'+c.handle)),sub:'@'+c.handle}:null; }
+  return familyContacts().concat(introducedContacts()).find(c=>c.key===ui.sel)||null;
+}
+
+function renderThread(){
+  const pane=document.getElementById('thread'); pane.innerHTML='';
+  const c=currentContact();
+  if(!c){ pane.appendChild(el('div','t-empty','Pick someone to talk to.')); return; }
+
+  const head=el('div','t-head');
+  const bk=el('button','t-back','‹'); bk.onclick=back; head.appendChild(bk);
+  const title=el('div','t-title'); title.appendChild(el('div','n',c.name)); title.appendChild(el('div','s',c.sub)); head.appendChild(title);
+  const mb=el('button','t-menu','⋯'); mb.onclick=()=>threadMenu(c); head.appendChild(mb);
+  pane.appendChild(head);
+
+  if(c.kind==='friend'){
+    const d=el('div','disclose','Messages here are public seed data — stored on the server, readable by the operator, not private. Be kind; you can block anyone from the ⋯ menu.');
+    pane.appendChild(d);
+  }
+
+  const msgs=el('div','msgs'); msgs.id='msgs'; pane.appendChild(msgs);
+  const comp=el('div','composer');
+  const ta=el('textarea','field'); ta.rows=1; ta.placeholder = c.kind==='friend'?('Message '+c.name+'…'):('Say something to '+c.name+'…');
+  ta.oninput=()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,128)+'px'; };
+  const send=el('button','btn','Send');
+  const doSend=()=>{ const v=ta.value.trim(); if(!v) return; ta.value=''; ta.style.height='auto';
+    if(c.kind==='friend') sendToHuman(c,v); else sendToAgent(c,v); };
+  ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); doSend(); } });
+  send.onclick=doSend;
+  comp.appendChild(ta); comp.appendChild(send); pane.appendChild(comp);
+
+  if(c.kind==='friend') openHumanThread(c); else drawAgentThread(c);
+}
+
+function drawAgentThread(c){
+  const msgs=document.getElementById('msgs'); if(!msgs) return; msgs.innerHTML='';
+  const hist=state.agentChats[c.key]||[];
+  if(!hist.length) msgs.appendChild(el('div','muted','This is the start of your conversation with '+c.name+'.'));
+  hist.forEach(m=>msgs.appendChild(bubble(m.role, m.text, m.ts)));
+  msgs.scrollTop=msgs.scrollHeight;
+}
+async function sendToAgent(c, text){
+  try{ appendAgentMessage(c.key,'me',text); }catch(e){ toast(e.message); return; }
+  drawAgentThread(c);
+  const msgs=document.getElementById('msgs');
+  const typing=el('div','typing', c.name+' is thinking…'); if(msgs){ msgs.appendChild(typing); msgs.scrollTop=msgs.scrollHeight; }
+  try{
+    const reply=await callAgent(c.persona, state.agentChats[c.key]||[]);
+    appendAgentMessage(c.key,'them',reply||'…');
+  }catch(e){ toast(e.message); }
+  if(currentContact()&&currentContact().key===c.key) drawAgentThread(c);
+}
+
+let lastHumanMsgs=[];
+async function openHumanThread(c){
+  stopPoll();
+  const draw=async()=>{
+    const rows=await loadThread(c.other_uid);
+    const msgs=document.getElementById('msgs'); if(!msgs) return;
+    // only redraw if changed
+    const sig=rows.map(r=>r.id).join(',');
+    if(sig===lastHumanMsgs.join(',')) return;
+    lastHumanMsgs=rows.map(r=>r.id);
+    msgs.innerHTML='';
+    if(!rows.length) msgs.appendChild(el('div','muted','Say hello to '+c.name+'. (Public seed data — not a private DM.)'));
+    rows.forEach(r=>msgs.appendChild(bubble(r.sender===ui.me.uid?'me':'them', r.body, new Date(r.created_at).getTime())));
+    msgs.scrollTop=msgs.scrollHeight;
+  };
+  lastHumanMsgs=[]; await draw();
+  ui.poll=setInterval(()=>{ if(currentContact()&&currentContact().key===c.key) draw(); else stopPoll(); }, 5000);
+}
+function stopPoll(){ if(ui.poll){ clearInterval(ui.poll); ui.poll=null; } }
+async function sendToHuman(c, text){
+  const msgs=document.getElementById('msgs');
+  try{ await sendHuman(c.other_uid, text); lastHumanMsgs=[]; await openHumanThread(c); }
+  catch(e){ toast(rpcErr(e,'Message didn’t go through.')); }
+}
+
+function bubble(role, text, ts){
+  const b=el('div','bub '+(role==='me'?'me':'them'), text);
+  if(ts){ const d=new Date(ts); b.appendChild(el('span','t', d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'))); }
+  return b;
+}
+
+function threadMenu(c){
+  const p=document.getElementById('menu-panel'); p.innerHTML='';
+  const add=(l,fn,cl)=>{ const b=el('button','menu-item'+(cl?' '+cl:''),l); b.onclick=()=>{ setMenu(false); fn(); }; p.appendChild(b); };
+  if(c.kind==='friend'){
+    add('Block '+c.name, ()=>block(c.other_uid), 'danger');
+    add('Remove contact', ()=>unfriend(c.other_uid));
+  } else if(c.kind==='introduced'){
+    add('Clear this conversation', ()=>{ clearAgentChat(c.key); render(); });
+    add('Remove '+c.name, ()=>{ removeIntroduced(c.id); back(); }, 'danger');
+  } else {
+    add('Clear this conversation', ()=>{ clearAgentChat(c.key); render(); });
+  }
+  setMenu(true);
+}
+
+// ── app menu ──────────────────────────────────────────────────────────────────
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3200); }
+function setMenu(o){ document.getElementById('menu').classList.toggle('show',o); }
+function appMenu(){
+  const p=document.getElementById('menu-panel'); p.innerHTML='';
+  const add=(l,fn,cl)=>{ const b=el('button','menu-item'+(cl?' '+cl:''),l); b.onclick=()=>{ setMenu(false); fn(); }; p.appendChild(b); };
+  if(ui.signedIn){ add(state.handle?('You are @'+state.handle+' — change handle'):'Claim a handle', claimHandle); }
+  add('Export (local: introduced + agent chats)', exportData);
+  add('Import', importData);
+  p.appendChild(el('div','menu-sub','Human friends & messages live on the server, not in this file. Messages are public seed data, not private.'));
+  add('Delete local contacts data', eraseEverything, 'danger');
+  setMenu(true);
+}
+function exportData(){ const b=new Blob([JSON.stringify({app:'contacts',schema:1,exported:now(),state})],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='contacts-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function importData(){ const i=document.createElement('input'); i.type='file'; i.accept='application/json'; i.onchange=async()=>{ const f=i.files[0]; if(!f)return; try{ const p=JSON.parse(await f.text()); state=normalize(p.state||p); save(); render(); toast('Imported.'); }catch(e){ toast('Import failed.'); } }; i.click(); }
+let eraseArmed=false;
+function eraseEverything(){ if(!eraseArmed){ eraseArmed=true; toast('Tap “Delete local contacts data” again to erase introduced agents + agent chats (friends/messages on the server are unaffected).'); setTimeout(()=>eraseArmed=false,4000); setMenu(true); appMenu(); return; } eraseArmed=false; state={v:1,handle:state.handle,introduced:[],agentChats:{}}; save(); ui.sel=null; render(); }
+
+// ── boot ────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent=VERSION;
+document.getElementById('menu-btn').onclick=appMenu;
+document.getElementById('menu').onclick=e=>{ if(e.target.id==='menu') setMenu(false); };
+load(); render();
+initBackend();   // async — lights up the human/friends side if a session exists
+
+if(window.HCSync){
+  HCSync.registerStore({ key:SYNC_BLOB_KEY, kind:'blob',
+    read:()=>localStorage.getItem(STATE_KEY)||JSON.stringify(state),
+    write:(str)=>{ try{ localStorage.setItem(STATE_KEY,str); }catch(_){} load(); render(); } });
+  if(window.HCSyncChip) HCSyncChip.mount({position:'bottom-left'});
+  HCSync.init({ supabaseUrl:SUPABASE_URL, supabaseAnonKey:SUPABASE_ANON_KEY, appId:'contacts' });
+}
+
+// ── agent interface — LOCAL state only. The cross-user acts (friend requests,
+// human messages) and the AI calls are network, so they are UI-only, never HC —
+// the same human/agent boundary as every model/sync call in the suite. ────────
+if(window.HC) HC.register({
+  app:'contacts', version:VERSION, title:'Contacts',
+  description:'The contact list + messaging. Family (Kin characters) and introduced agents are messaged as BYOK AI, on-device. Human friends are messaged through the backend (contacts-schema.sql), which enforces two-sided consent + blocking. HC exposes only the on-device state; cross-user acts and AI calls are UI-only (no HC action touches the network). Messages with people are public seed data, not private.',
+  stores:[
+    { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'personal',
+      description:'Local contacts state: your cached handle, the agents you’ve noted being introduced to, and your on-device conversations with family/introduced agents. Human friends + their messages are NOT here — they live server-side.',
+      schema:'{ v, handle, introduced:[{id,name,note,created}], agentChats:{ [contactKey]:[{role:"me"|"them",text,ts}] } }',
+      afterWrite:()=>{ load(); render(); } },
+  ],
+  actions:{
+    addIntroduced:{ description:'Note an agent you’ve been introduced to (a local contact). No network.', params:{ name:'agent name', note:'who they are (optional)' }, handler:(p)=>addIntroduced(p.name,p.note) },
+    removeIntroduced:{ description:'Remove an introduced agent and its conversation.', params:{ id:'introduced id' }, handler:(p)=>removeIntroduced(p.id) },
+    appendAgentMessage:{ description:'Append a message to a conversation with a family/introduced agent (contactKey "kin:<id>" or "intro:<id>"). Seeds history without a model call — the same as the UI storing a turn.', params:{ contactKey:'"kin:<id>" | "intro:<id>"', role:'"me" | "them"', text:'the message' }, handler:(p)=>appendAgentMessage(p.contactKey,p.role,p.text) },
+    clearAgentChat:{ description:'Clear a stored agent conversation.', params:{ contactKey:'contact key' }, handler:(p)=>clearAgentChat(p.contactKey) },
+  },
+  notes:'Friending and messaging real people are UI-only network acts through contacts-schema.sql (RLS + security-definer RPCs enforce mutual-accept-before-message and blocking in the database). Messaging an agent is a BYOK model call, also UI-only. So no HC action here touches the network — the parity invariant holds. Human messages are public seed data (server-readable, not private); the thread says so. Requires sign-in at the hub for the friends side; the agent side works on-device.',
+});
+</script>
+</body>
+</html>

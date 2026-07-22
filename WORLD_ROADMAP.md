@@ -191,6 +191,7 @@ single founder sign-off.
   each force a fresh values re-ratification) — checked every phase.
 - **Consent** — from Phase 2 on, no portrayal without an enforced two-sided grant.
 - **Crypto + relational-safety gates** — both block Phase 2; neither is a formality.
+  - **[2026-07 — Phase 2 entered by founder ratification, re-scoped under the public-data frame.]** The founder ratified shipping the first cross-user surface (`contacts.html`: human↔human messaging + a friend graph) ahead of the drafted phasing. How the two gates were met for THIS surface: the **relational-safety gate** is satisfied by two-sided consent + blocking + exit **enforced in the database** (`contacts-schema.sql`); the **crypto gate's confidentiality half is honestly dropped** — messages are public seed data (server-readable, not E2EE, disclosed), so per-room E2EE + out-of-band verification is **not** claimed and **not** faked, and the remaining guard is RLS correctness (hand-reviewed, not machine-verified). This surface is human messaging + your-own-agents, **not** cross-user *portrayed* characters — the deeper portrayal-harm review (S8) still gates any shared/portrayed-character feature. Remaining: live two-account verification; an abuse-report path. See CONSTRAINTS §5 ratification note + REQUIREMENTS §8 v0.6; KNOWN_RISKS L50.
 - **Documentation stays current** — each phase updates CLAUDE.md §§1–2, REQUIREMENTS, and
   KNOWN_RISKS in the same change, per the suite's standing norm.
 
