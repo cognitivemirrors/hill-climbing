@@ -86,6 +86,10 @@
   .msg .bd{color:var(--soft);font-size:.92rem;white-space:pre-wrap}
   .msg.agent{border-color:#39304a}
   .msg.research{border-left:3px solid var(--accent);background:var(--sunk)}
+  .msg.exhibit{border-left:3px solid var(--floor);background:linear-gradient(180deg,rgba(201,162,75,.06),transparent)}
+  .msg .prov{font-size:.72rem;color:var(--floor);opacity:.8;margin-top:.5rem;border-top:1px solid var(--rule);padding-top:.4rem;font-style:italic}
+  .importbtn{margin-top:.5rem;background:none;border:1px solid var(--rule2);color:var(--faint);border-radius:999px;font-size:.68rem;padding:.12rem .55rem;cursor:pointer;font-family:var(--sans)}
+  .importbtn:hover{color:var(--floor);border-color:var(--floor)}
   .msg .src{font-size:.75rem;color:var(--faint);margin-top:.4rem}
   .msg .src a{word-break:break-all}
   .typing{display:flex;align-items:center;gap:.5rem;color:var(--soft);font-size:.86rem;padding:.5rem .2rem;font-style:italic}
@@ -136,7 +140,7 @@
 </head>
 <body>
 <a class="home" href="/index.html" title="Home">◇</a>
-<div id="version-label">v0.2 · rooms</div>
+<div id="version-label">v0.3 · rooms</div>
 <button id="menu-btn" title="Menu">⋯</button>
 <main class="wrap" id="root"></main>
 <div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
@@ -177,7 +181,7 @@
    single-device (no concurrent edits), simplest, matches govern/kin. */
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const VERSION       = 'v0.2 · rooms';
+const VERSION       = 'v0.3 · rooms';
 const STATE_KEY     = 'hill-climbing-rooms';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-rooms';
 const API_KEY_LS    = 'hill-climbing-api-key';
@@ -316,6 +320,7 @@ function applyEvent(st, e){
     case 'enter': { const a=st.actors[p.actorId]; if(a)a.room=p.roomId; break; }
     case 'msg.send': { (st.messages[p.roomId]=st.messages[p.roomId]||[]).push({id:p.id,actorId:e.actor,text:p.text,ts:e.ts,kind:'msg'}); break; }
     case 'research.result': { (st.messages[p.roomId]=st.messages[p.roomId]||[]).push({id:p.id,actorId:e.actor,text:p.finding,ts:e.ts,kind:'research',question:p.question,sources:p.sources||[]}); break; }
+    case 'artifact.import': { (st.messages[p.toRoom]=st.messages[p.toRoom]||[]).push({id:p.id,actorId:e.actor,ts:e.ts,kind:'exhibit',text:p.text,exhibitKind:p.srcKind,question:p.question,sources:p.sources||[],from:{roomId:p.fromRoom,msgId:p.msgId,author:p.author,ts:p.srcTs}}); break; }
     case 'clone.spawn': st.clones[p.id]={id:p.id,familyName:p.familyName,givenName:null,bornAtSeq:p.bornAtSeq,bornAt:e.ts,digest:p.digest,seededStores:p.seededStores||[],naming:{proposed:null,rationale:'',status:'proposing',feedback:[]},thread:[]}; break;
     case 'clone.propose': { const c=st.clones[p.id]; if(c){ c.naming.proposed=p.name; c.naming.rationale=p.rationale||''; c.naming.status='pending'; } break; }
     case 'clone.approve': { const c=st.clones[p.id]; if(c&&c.naming.proposed){ c.givenName=c.naming.proposed; c.naming.status='approved'; } break; }
@@ -372,6 +377,23 @@ function removeActor(id){ if(id==='owner') throw new Error('The owner actor stay
 function enterRoom(actorId,roomId){ const st=reduce(); requireEnter(st, actorId, roomId); emit('enter',{actorId,roomId}); }
 function sendMessage(roomId,text){ text=(text||'').trim(); if(!text) throw new Error('Empty message.'); const st=reduce(); if(!can(st, acting, roomId, 'leave')) throw new Error('"'+(st.actors[acting]?st.actors[acting].label:acting)+'" may not leave anything in that room.'); return emit('msg.send',{id:uid('m'),roomId,text},{room:roomId}).payload.id; }
 function recordResearch(roomId,actorId,question,finding,sources){ return emit('research.result',{id:uid('r'),roomId,question,finding,sources:sources||[]},{actor:actorId,room:roomId}).payload.id; }
+function isMuseum(st,roomId){ const r=st.rooms[roomId]; return !!(r && st.roomTypes[r.typeId] && st.roomTypes[r.typeId].label==='museum'); }
+// Import (acquire) an existing artifact from one room into another — the museum's
+// acquisition path, and cross-room content movement generally. Snapshots the content
+// so the exhibit is stable if the source later changes; preserves provenance (origin
+// room, original author, original time). Authored by the acting actor (the curator);
+// gated on 'leave' into the target, like any room write.
+function importArtifact(fromRoom, msgId, toRoom){
+  const st=reduce();
+  if(!st.rooms[toRoom]) throw new Error('No such target room.');
+  if(fromRoom===toRoom) throw new Error('Already in that room.');
+  if(!can(st, acting, toRoom, 'leave')) throw new Error('"'+actorName(st,acting)+'" may not exhibit into "'+(st.rooms[toRoom].label)+'".');
+  const src=(st.messages[fromRoom]||[]).find(m=>m.id===msgId);
+  if(!src) throw new Error('That artifact is gone.');
+  return emit('artifact.import',{ id:uid('x'), fromRoom, msgId, toRoom, text:src.text,
+    srcKind:src.kind||'msg', question:src.question||'', sources:src.sources||[],
+    author:(src.from&&src.from.author)||src.actorId, srcTs:(src.from&&src.from.ts)||src.ts }, { room:toRoom }).payload.id;
+}
 
 function spawnClone(atSeq){
   const upto = (atSeq==null? world.events.length : Math.max(0,Math.min(atSeq, world.events.length)));
@@ -428,7 +450,7 @@ function worldContext(st, roomId, recent){
   if(comp) L.push('EARLIER (compressed): '+comp.payload.summary);
   const feed=world.events.filter(e=>['msg.send','research.result','goal.add','value.add','task.add','enter'].includes(e.type)).slice(-(recent||18));
   if(feed.length) L.push('RECENT WORLD LOG:\n'+feed.map(e=>'['+fmtFull(e.ts)+'] '+logLine(st,e)).join('\n'));
-  if(roomId){ const msgs=(st.messages[roomId]||[]).slice(-14); if(msgs.length) L.push('THIS ROOM ("'+(st.rooms[roomId]?st.rooms[roomId].label:roomId)+'"):\n'+msgs.map(m=>'['+fmtFull(m.ts)+'] '+actorName(st,m.actorId)+': '+m.text).join('\n')); }
+  if(roomId){ const msgs=(st.messages[roomId]||[]).slice(-14); if(msgs.length) L.push('THIS ROOM ("'+(st.rooms[roomId]?st.rooms[roomId].label:roomId)+'"):\n'+msgs.map(m=>'['+fmtFull(m.ts)+'] '+((m.kind==='exhibit'&&m.from)?(actorName(st,m.actorId)+' exhibited (from '+(st.rooms[m.from.roomId]?st.rooms[m.from.roomId].label:'a room')+', originally '+actorName(st,m.from.author)+'): '+m.text):(actorName(st,m.actorId)+': '+m.text))).join('\n')); }
   return L.join('\n\n');
 }
 function logLine(st,e){ const who=actorName(st,e.actor); const p=e.payload||{};
@@ -576,14 +598,14 @@ function seedWorld(){
   // of starting rooms. All are events, so the log tells the whole story.
   const T=(label,verbs)=>addRoomType(label,verbs,{owner:['enter','act','leave']});
   const tValues=T('values'), tGoals=T('goals'), tCal=T('calendar'), tTasks=T('tasks'),
-        tCommons=T('commons'), tMsg=T('message'), tPrivate=T('private');
+        tCommons=T('commons'), tMsg=T('message'), tPrivate=T('private'), tMuseum=T('museum');
   // roles seeded with STABLE ids the code references (owner is all-access in code)
   [['owner','Owner'],['guest','Guest'],['friend','Friend'],['partner','Partner'],['character','Character'],['researcher','Researcher']].forEach(([id,label])=> emit('role.add',{id,label,defaultRooms:{}}));
   // roles → default room access (bullet 22): friends & characters get the commons
   setRoleAccess('friend', tCommons, ['enter','leave']);
   setRoleAccess('character', tCommons, ['enter','leave']);
   emit('actor.add',{id:'owner',kind:'human',label:(reduce().ownerName||'You'),role:'owner',owner:'owner'});
-  const rCommons=addRoom(tCommons,'The Commons'); addRoom(tGoals,'Goals'); addRoom(tMsg,'Messages');
+  const rCommons=addRoom(tCommons,'The Commons'); addRoom(tGoals,'Goals'); addRoom(tMsg,'Messages'); addRoom(tMuseum,'The Museum');
   emit('enter',{actorId:'owner',roomId:rCommons});
 }
 
@@ -749,14 +771,27 @@ function openPolicyEditor(id, kind){
 }
 
 // ── Room conversation ────────────────────────────────────────────────────────────
+// Pick a target room to exhibit/import an artifact into (museum rooms first).
+function openImportPicker(fromRoom, msgId){
+  const st=reduce();
+  const panel=document.getElementById('menu-panel'); panel.innerHTML='';
+  panel.appendChild(el('div','menu-sub','Exhibit / import into which room?'));
+  const targets=Object.keys(st.rooms).filter(rid=> rid!==fromRoom && can(st, acting, rid, 'leave'))
+    .sort((a,b)=> (isMuseum(st,b)?1:0)-(isMuseum(st,a)?1:0));
+  if(!targets.length){ panel.appendChild(el('div','menu-sub','No room you can exhibit into. Add a museum room, or grant your acting role "leave".')); }
+  targets.forEach(rid=>{ const b=el('button','menu-item', (isMuseum(st,rid)?'🏛  ':'')+st.rooms[rid].label); b.onclick=()=>{ try{ importArtifact(fromRoom,msgId,rid); document.getElementById('menu').classList.remove('show'); toast('Exhibited in '+st.rooms[rid].label+'.'); render(); }catch(e){ toast(e.message); } }; panel.appendChild(b); });
+  document.getElementById('menu').classList.add('show');
+}
+
 function renderRoom(root, st, id){
-  const r=st.rooms[id];
+  const r=st.rooms[id]; const mus=isMuseum(st,id);
   const back=el('button','btn small ghost','‹ Map'); back.onclick=()=>{ openRoom=null; render(); }; root.appendChild(back);
   const h=el('div','eyebrow-row'); h.style.marginTop='.6rem'; h.appendChild(el('h1',null,r.label)); root.appendChild(h);
   const present=presentIn(st,id);
   const pres=el('div','present'); present.forEach(a=>{ const ch=el('span','chip '+a.kind); ch.appendChild(el('span','dot')); ch.appendChild(document.createTextNode(a.label)); pres.appendChild(ch); });
   root.appendChild(pres);
   if(needsModerator(present)) root.appendChild(el('p','muted','This room has '+present.filter(a=>a.kind==='agent').length+' agents / '+present.filter(a=>a.kind==='human').length+' humans — a moderator will pick who responds. (Two humans is the world\'s ceiling — owner + partner.)'));
+  if(mus) root.appendChild(el('p','lede','A museum — a curated exhibition of what was made in the rooms. From any room, an artifact\'s “⇢ exhibit” button imports it here; each exhibit keeps its provenance (where it came from, who made it, when).'));
 
   // who's present controls (move actors in/out)
   const move=el('div','row'); move.style.margin='.4rem 0';
@@ -765,19 +800,22 @@ function renderRoom(root, st, id){
 
   // transcript
   const convo=el('div','convo'); const msgs=st.messages[id]||[];
-  if(!msgs.length) convo.appendChild(el('div','empty','Nothing left here yet. Say something, or run an agent turn.'));
+  if(!msgs.length) convo.appendChild(el('div','empty', mus?'No exhibits yet — open another room and use an artifact’s “⇢ exhibit” button to acquire it here.':'Nothing left here yet. Say something, or run an agent turn.'));
   let lastDay=null;
   msgs.forEach(m=>{
     const day = m.ts? new Date(m.ts).toDateString() : null;
     if(day && day!==lastDay){ convo.appendChild(el('div','daydiv', fmtDay(m.ts))); lastDay=day; }
+    const isExhibit = m.kind==='exhibit';
     const kind=actorKind(st,m.actorId);
-    const box=el('div','msg '+(m.kind==='research'?'research':(kind==='agent'?'agent':'')));
+    const box=el('div','msg '+(isExhibit?'exhibit':(m.kind==='research'?'research':(kind==='agent'?'agent':''))));
     const who=el('div','who'); who.appendChild(el('span','chip '+kind, kind)); who.appendChild(el('span','nm', actorName(st,m.actorId)));
     if(m.ts){ const t=el('span','time', fmtTime(m.ts)); t.title=fmtFull(m.ts); who.appendChild(t); }
     box.appendChild(who);
-    if(m.kind==='research') box.appendChild(el('div','muted','researched: '+m.question));
+    if((isExhibit? m.exhibitKind==='research' : m.kind==='research') && m.question) box.appendChild(el('div','muted','researched: '+m.question));
     box.appendChild(el('div','bd', m.text));
     if(m.sources&&m.sources.length){ const s=el('div','src','Sources: '); m.sources.forEach((src,i)=>{ const a=el('a',null,(i+1)+'. '+(src.title||src.url)); a.href=src.url; a.target='_blank'; a.rel='noopener'; s.appendChild(a); s.appendChild(document.createTextNode('  ')); }); box.appendChild(s); }
+    if(isExhibit && m.from){ const fromLabel=st.rooms[m.from.roomId]?st.rooms[m.from.roomId].label:'a room (since removed)'; const p=el('div','prov'); p.textContent='exhibited from '+fromLabel+' · originally '+actorName(st,m.from.author)+(m.from.ts?(', '+fmtTime(m.from.ts)):'')+' · acquired by '+actorName(st,m.actorId); box.appendChild(p); }
+    if(!isExhibit){ const ib=el('button','importbtn','⇢ exhibit'); ib.title='import this artifact into another room (e.g. a museum)'; ib.onclick=()=>openImportPicker(id, m.id); box.appendChild(ib); }
     convo.appendChild(box);
   });
   root.appendChild(convo);
@@ -794,24 +832,27 @@ function renderRoom(root, st, id){
     sendMessage(id, ta.value); ta.value=''; render(); } }catch(e){ toast(e.message); } };
   comp.appendChild(ta); comp.appendChild(send); root.appendChild(comp);
 
-  // turn scheduler controls
-  const humanPresent=present.some(a=>a.kind==='human');
-  const sched=el('div','row'); sched.style.marginTop='.6rem';
-  const runB=el('button','btn small', humanPresent?'Run an agent turn (immediate)':'Let the room drift (one slow tick)');
-  runB.onclick=()=>runTurn(id);
-  sched.appendChild(runB);
-  const remaining=unattendedRemaining(st);
-  sched.appendChild(el('span','muted', humanPresent? 'a human is here — agents respond at once' : ('no human here — slow, '+remaining+' unattended tokens above the floor')));
-  root.appendChild(sched);
+  // turn scheduler + research: a museum is for exhibition, not conversation, so they're hidden there
+  if(!mus){
+    const humanPresent=present.some(a=>a.kind==='human');
+    const sched=el('div','row'); sched.style.marginTop='.6rem';
+    const runB=el('button','btn small', humanPresent?'Run an agent turn (immediate)':'Let the room drift (one slow tick)');
+    runB.onclick=()=>runTurn(id);
+    sched.appendChild(runB);
+    const remaining=unattendedRemaining(st);
+    sched.appendChild(el('span','muted', humanPresent? 'a human is here — agents respond at once' : ('no human here — slow, '+remaining+' unattended tokens above the floor')));
+    root.appendChild(sched);
 
-  // research trigger
-  const res=el('div','composer'); res.style.marginTop='.6rem';
-  const ri=el('input','field'); ri.placeholder='ask the research agent a question…';
-  const rb=el('button','btn small ghost','Research this'); rb.style.alignSelf='flex-start';
-  rb.onclick=()=>{ const q=ri.value; ri.value=''; doResearch(id, q); };
-  res.appendChild(ri); res.appendChild(rb); root.appendChild(res);
+    const res=el('div','composer'); res.style.marginTop='.6rem';
+    const ri=el('input','field'); ri.placeholder='ask the research agent a question…';
+    const rb=el('button','btn small ghost','Research this'); rb.style.alignSelf='flex-start';
+    rb.onclick=()=>{ const q=ri.value; ri.value=''; doResearch(id, q); };
+    res.appendChild(ri); res.appendChild(rb); root.appendChild(res);
+  }
 
-  root.appendChild(el('div','floor-note','Agents leave signed artifacts in this room only — never in a practice store. The moderator routes turns but never speaks in anyone\'s voice.'));
+  root.appendChild(el('div','floor-note', mus
+    ? 'A museum exhibits copies made when they were acquired — provenance is kept, and editing or deleting the original never alters the exhibit. Nothing leaves the device.'
+    : 'Agents leave signed artifacts in this room only — never in a practice store. The moderator routes turns but never speaks in anyone\'s voice.'));
 }
 function typingSlot(){ const s=el('div'); s.id='typing-slot'; return s; }
 function renderTyping(){ let slot=document.getElementById('typing-slot'); if(!slot) return; slot.innerHTML=''; if(typingState && (typingState.roomId===openRoom || (openClone&&typingState.roomId==='__clone_'+openClone))){ const t=el('div','typing'); t.appendChild(el('span','bd')); t.appendChild(el('span','bd')); t.appendChild(el('span','bd')); t.appendChild(el('span',null,typingState.label)); slot.appendChild(t); } }
@@ -1039,11 +1080,11 @@ if(window.HCSync){
 // every BYOK surface in the suite. An LLM can drive the ENTIRE world through these. ─
 if(window.HC) HC.register({
   app:'rooms', version:VERSION, title:'Rooms',
-  description:'A single-device prototype of the "rooms" world layer (ROOMS.md). An event-sourced world: every state change is an append-only event, folded into the current world; both humans and LLMs append through the same actions (REQUIREMENTS §1.4). Onboarding (name/values/goals-hierarchy/calendar/tasks); rooms + room types + instances + role-scoped permissions; clones + time travel (Kin\'s model); a turn scheduler (immediate with a human present, slow + token-metered without) with a cheap-model moderator; a BYOK research agent. Rooms writes only its own world store — never a practice store. Cross-account sharing, remote partner clone-sharing, and unattended autonomy are deferred + gated. Public seed data.',
+  description:'A single-device prototype of the "rooms" world layer (ROOMS.md). An event-sourced world: every state change is an append-only event, folded into the current world; both humans and LLMs append through the same actions (REQUIREMENTS §1.4). Onboarding (name/values/goals-hierarchy/calendar/tasks); rooms + room types + instances + role-scoped permissions; clones + time travel (Kin\'s model); a turn scheduler (immediate with a human present, slow + token-metered without) with a cheap-model moderator; a BYOK research agent; and a "museum" room type that exhibits artifacts imported (acquired) from other rooms, each kept with its provenance. Rooms writes only its own world store — never a practice store. Cross-account sharing, remote partner clone-sharing, and unattended autonomy are deferred + gated. Public seed data.',
   stores:[
     { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'sensitive',
       description:'The event-sourced world: an append-only log of every state change (values, goals hierarchy, calendar, tasks, rooms, room types, roles, actors, clones, messages, budget), plus an onboarding flag. State is a reduction over the log; older spans fold into compaction events. Agents author only world/room events here — never a practice store.',
-      schema:'{ v:1, onboarded:bool, events:[ { id, seq, ts, actor, room, type, payload } ] }  // types: world.init, owner.rename, value.*, goal.*, cal.*, task.*, roomtype.*, room.*, role.*, actor.*, enter, msg.send, research.result, clone.*, budget.*, compaction',
+      schema:'{ v:1, onboarded:bool, events:[ { id, seq, ts, actor, room, type, payload } ] }  // types: world.init, owner.rename, value.*, goal.*, cal.*, task.*, roomtype.*, room.*, role.*, actor.*, enter, msg.send, research.result, artifact.import (a curated exhibit copied from another room, kept with provenance), clone.*, budget.*, compaction. A "museum" room type exhibits imported artifacts (message kind "exhibit").',
       afterWrite:()=>{ load(); render(); } },
   ],
   actions:{
@@ -1073,6 +1114,7 @@ if(window.HC) HC.register({
     enterRoom:{ description:'Move an actor into a room. Refused if the actor is not admitted (the authorization ring — refusals are first-class).', params:{ actorId:'actor id', roomId:'room id' }, handler:(p)=>enterRoom(p.actorId,p.roomId) },
     sendMessage:{ description:'Leave a message in a room, authored by the current acting actor. Refused if that actor may not leave here.', params:{ roomId:'room id', text:'string' }, handler:(p)=>sendMessage(p.roomId,p.text) },
     recordResearch:{ description:'Record a research artifact (finding + sources) left by an agent in a room. (The web search itself is UI-only.)', params:{ roomId:'room id', actorId:'author actor id', question:'string', finding:'string', sources:'array of {url,title}' }, handler:(p)=>recordResearch(p.roomId,p.actorId,p.question,p.finding,p.sources) },
+    importArtifact:{ description:'Import (acquire) an existing artifact from one room into another — the museum\'s acquisition path, and cross-room content movement generally. Snapshots the content (stable if the source later changes) and preserves provenance (origin room, original author, original time). Authored by the acting actor (the curator); refused if that actor may not leave into the target room.', params:{ fromRoom:'source room id', msgId:'artifact id in the source room', toRoom:'destination room id (e.g. a museum room)' }, handler:(p)=>importArtifact(p.fromRoom, p.msgId, p.toRoom) },
     spawnClone:{ description:'Spawn a clone frozen from the world log (at the given event index, or HEAD). It inherits a frozen digest and diverges. Proposes its own given name.', params:{ atSeq:'event index to freeze at, or null for now' }, handler:(p)=>spawnClone(p.atSeq) },
     setCloneName:{ description:'Record a proposed given name for a clone (the naming handshake; the network proposal is UI-only).', params:{ id:'clone id', name:'string', rationale:'string' }, handler:(p)=>proposeCloneNameState(p.id,p.name,p.rationale) },
     approveCloneName:{ description:'Approve a clone\'s proposed given name.', params:{ id:'clone id' }, handler:(p)=>approveCloneName(p.id) },

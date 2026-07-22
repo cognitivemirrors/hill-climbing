@@ -182,8 +182,10 @@ Each app is a single page at the site root. State keys listed are what HC regist
   setOwnerName, addValue/editValue/removeValue, addGoal/editGoal/removeGoal, addCalEvent/
   removeCalEvent, addTask/tagTask/toggleTask/removeTask, addRoomType/setRoomTypePolicy, addRoom/
   setRoomPolicy/removeRoom, addRole/setRoleAccess, addActor/setActorRole/removeActor, enterRoom,
-  sendMessage, recordResearch, spawnClone, setCloneName/approveCloneName/returnCloneName/cloneSay/
-  removeClone, setBudget/spendTokens/resetBudget, compact. Every model call (agent turns, clone
+  sendMessage, recordResearch, importArtifact, spawnClone, setCloneName/approveCloneName/
+  returnCloneName/cloneSay/removeClone, setBudget/spendTokens/resetBudget, compact. A "museum" room
+  type exhibits artifacts imported (via importArtifact) from other rooms, each kept with its
+  provenance (origin room, original author, time). Every model call (agent turns, clone
   chat, the moderator router, the research agent's web search) is UI-only, never an HC action.
   Rooms writes ONLY its own store — never a practice store (§1.4 intact); the per-event `actor` is
   authorship in a new world-layer store, outside §1.4's scope. Single-device: friend/partner are

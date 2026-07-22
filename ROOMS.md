@@ -169,6 +169,14 @@ Room     = { id, typeId, label, policy?, artifacts }            // an instance; 
   on the type. Enforcement is the **authorization ring** (agent actions + room access only; it does
   not gate a human editing their own data — Layer 3's honest scoping).
 
+**Room types can be purpose-built, not just wrappers.** A **museum** room type (built in v0.3) is
+the first example: it does not wrap a practice page or host a conversation — it *exhibits* content
+made elsewhere in the world. Any room artifact can be **imported** into another room, copied with
+its provenance intact; the museum displays those exhibits as a curated gallery. This is the
+general "import into rooms" move (cross-room artifact acquisition, gated on `leave` into the
+target), with the museum as its natural home. It points at the later exhibition layer
+(`STATEMENT.md`'s "families side by side") — but single-device and within one world for now.
+
 Room rules-as-natural-language (the "room owner authors local rules" level) already exist in
 `GOVERNANCE.md`'s level hierarchy (charter > world > **room** > family > character). Rooms and
 Govern share the same room object; Govern authors *rules* over it, Rooms authors *permissions* over
@@ -495,6 +503,13 @@ A single-file, single-device, BYOK prototype that makes the model tangible and p
 - **Rooms**: a map of rooms; each screen is a room type; you can **add a second room of a type**
   (e.g. a second goals room); per-room and per-room-type **permissions**; **roles** with default
   room access.
+- **A museum room type + import (v0.3)**: a **museum** exhibits content *made in the rooms*. Any
+  artifact (a message, a research finding) carries an "⇢ exhibit" control that **imports** it into
+  another room — the museum being the natural destination — copying the content (stable if the
+  source later changes) and keeping its **provenance** (origin room, original author, original
+  time). Import is the general within-world curation move (room→room, in any direction, gated on
+  `leave` into the target); the museum is the room type built to receive and display it as a
+  curated gallery, with agent turns/research hidden (exhibition, not conversation).
 - **Actors**: the owner, plus local **friend** and **partner** actors and **agent** actors
   (clones); an **act-as** switch so you can take a turn as any actor you own — this is how bullets
   6–7 are modeled on one device without any network sharing.
