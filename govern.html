@@ -244,7 +244,7 @@ async function callModel(system, user, maxTokens){
 function floorViolation(text){
   const t=String(text||'').toLowerCase();
   for(const term of Object.keys(PROTECTED_TERMS)){
-    const re=new RegExp('\\b'+term+'\\b[^.]{0,24}\\b(means|is defined|defined as|only|shall mean|refers only)\\b');
+    const re=new RegExp('\\b'+term+'\\b[^.]{0,24}\\b(means|is defined|defined as|shall mean|means only|refers only)\\b');
     if(re.test(t)) return 'This rule appears to redefine the protected term “'+term+'”, which is fixed at the charter floor. Redefining a protected term is void by code.';
     const re2=new RegExp('\\b(define|redefine)\\b[^.]{0,16}\\b'+term+'\\b');
     if(re2.test(t)) return 'This rule appears to redefine the protected term “'+term+'”, which is fixed at the charter floor.';

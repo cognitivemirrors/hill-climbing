@@ -743,7 +743,7 @@
     </div>
   </section>
 
-  <footer>hill climbing · private by default</footer>
+  <footer>hill climbing</footer>
 
   <!-- ── Account & sync page (full-screen; opened by the chip or #account) ──── -->
   <div id="account-view" role="dialog" aria-modal="true" aria-label="Account and sync">
@@ -753,7 +753,7 @@
       <!-- Log in / Sign up -->
       <div class="acct-panel" id="p-auth">
         <div class="acct-h">Sync your practice</div>
-        <div class="acct-lede">Sign in to sync your data across devices — end-to-end encrypted, so only you can read it.</div>
+        <div class="acct-lede">Sign in to sync your data across devices — encrypted in transit, though the server still sees sizes and timestamps.</div>
         <div class="acct-tabs">
           <button class="acct-tab active" id="tab-login" type="button">Log in</button>
           <button class="acct-tab" id="tab-signup" type="button">Sign up</button>
@@ -829,7 +829,7 @@
       <!-- Signed in + unlocked -->
       <div class="acct-panel" id="p-account">
         <div class="acct-h">Your account</div>
-        <div class="acct-lede">Sync is on. Your data is end-to-end encrypted — the server stores only unreadable ciphertext.</div>
+        <div class="acct-lede">Sync is on. Your data is encrypted in transit; the server sees ciphertext plus metadata (sizes, timestamps).</div>
         <div class="acct-row"><span class="r-label">Signed in</span><span class="r-value" id="account-email">—</span></div>
         <div class="acct-row"><span class="r-label">Sync</span><span class="r-value" id="account-sync">On</span></div>
         <div class="acct-actions">

@@ -533,7 +533,7 @@
     </div>
 
     <p class="disclaimer">
-      The companion is a thinking tool, not an authority — and not therapy, medical, legal, or crisis care.
+      The companion is a thinking tool, not an authority.
       Its job is to help you see your own life clearly. The decisions stay yours.
     </p>
   </div>
@@ -554,7 +554,7 @@
     <div id="board" class="hidden"></div>
 
     <p class="disclaimer">
-      The council is a thinking tool, not an authority — and not therapy, medical, legal, or crisis care.
+      The council is a thinking tool, not an authority.
       Its job is to sharpen your judgment, never to replace it. The decision is always yours.
     </p>
   </div>
@@ -807,8 +807,8 @@ const WEB_TOOLS = [
 // custom tool WE fulfil: the model calls it, the API pauses with
 // stop_reason "tool_use", and callClaudeRaw writes the request to the on-device
 // store and hands a confirmation back so the model can finish its reply.
-// Nothing new leaves the device — the request is stored locally (and E2EE-synced
-// like the conversation). The confirm-first behaviour is instructed in the
+// No new egress — the request is stored locally (and synced like the
+// conversation, if signed in). The confirm-first behaviour is instructed in the
 // system prompt; the visible, deletable list is the backstop.
 const REQUEST_TOOL = {
   name: 'add_request',
@@ -1587,7 +1587,7 @@ function companionAboutHTML() {
       '<p>It can also <strong>look things up on the web</strong> — a live search, or reading a specific page — when a question needs something current or beyond what it knows. Searches run on your key; it’s instructed to use plain, general queries and to keep your private details out of them, and to treat what it finds as worth weighing rather than automatically true.</p>' +
       '<p>Because this suite is still being built, the companion can also help shape it: when you voice an idea or a frustration about the apps themselves, it can — with your okay — write it up as a <strong>request</strong> to the person building this: a heading and a prompt on what to build or the questions to answer. That’s an on-device list you own; review it, copy it as Markdown to hand over, or clear it, all from the menu → <em>Requests</em>. It’s only ever for the apps, never your personal to-dos.</p>' +
       '<p>It’s built on one belief: <strong>a good companion makes your own judgment sharper, not your dependence deeper.</strong> So it’s instructed never to decide for you, never to flatter, and to tell you the true thing with care — including when your journal and your goals disagree.</p>' +
-      '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
+      '<p>This is a tool for thinking, not an authority. If something you’re carrying is heavier than a conversation, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
     '</div>' +
     '<div class="actions"><button class="ghost" id="about-back" type="button">Back</button></div>';
 }
@@ -1886,7 +1886,7 @@ function renderCouncilHistory() {
   const all = loadHist();
   const list = el('hist-list');
   if (!all.length) {
-    list.innerHTML = '<div class="empty">No deliberations yet.<br>Convene the board on a real decision and it’ll be kept here — only on this device.</div>';
+    list.innerHTML = '<div class="empty">No deliberations yet.<br>Convene the board on a real decision and it’ll be kept here — in this browser, and synced when you sign in.</div>';
     return;
   }
   list.innerHTML = all.map((s, i) => {
@@ -1945,7 +1945,7 @@ function councilAboutHTML() {
         SEATS.map(s => '<li><strong style="color:var(--accent);">' + esc(s.name) + '</strong> — ' + esc(s.charge_short) + '.</li>').join('') +
         '<li><strong style="color:var(--accent);">The Chair</strong> — names the real tension and hands the choice back to you.</li>' +
       '</ul>' +
-      '<p>This is a tool for thinking, not an authority — and not therapy, medical, legal, or crisis care. If something you’re carrying is heavier than a decision, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
+      '<p>This is a tool for thinking, not an authority. If something you’re carrying is heavier than a decision, you deserve a real person: a friend, a professional, or a crisis line.</p>' +
     '</div>' +
     '<div class="actions"><button class="ghost" id="about-back" type="button">Back</button></div>';
 }
@@ -2258,7 +2258,7 @@ function renderMenu() {
       menuItem('key-btn', 'API key', 'Change or remove your key') +
       menuItem('about-btn', 'About the council', "How it works, what it isn't") +
       menuItem('clear-btn', 'Clear all sessions', 'Delete every saved deliberation') +
-      '<div class="menu-note">Your sessions live only on this device. Your situation text is sent to Anthropic’s API — on your own key — only when you convene the board.</div>';
+      '<div class="menu-note">Your sessions stay in this browser and sync when you sign in at the hub. Your situation text is sent to Anthropic’s API — on your own key — only when you convene the board.</div>';
     el('key-btn').addEventListener('click', () => { setMenu(false); setView('setup'); });
     el('about-btn').addEventListener('click', () => { setMenu(false); setView('about'); });
     el('clear-btn').addEventListener('click', () => {

@@ -459,7 +459,7 @@
       <span class="menu-item-title">Manage sync</span>
       <span class="menu-item-sub" id="sync-manage-sub">Sign in at the hub</span>
     </a>
-    <div class="menu-note" id="sync-note">Your goals live only on this device.</div>
+    <div class="menu-note" id="sync-note">Your goals are stored in this browser.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -1593,7 +1593,7 @@ function updateSyncUI(st) {
     }
   }
   if (syncNoteEl) syncNoteEl.textContent = unlocked
-    ? 'End-to-end encrypted — the server stores only unreadable ciphertext.'
+    ? 'Synced across your devices — encrypted in transit; the server sees ciphertext plus metadata (sizes, timestamps).'
     : 'Your goals live on this device. Sign in at the hub to sync them, encrypted, across devices.';
 }
 
