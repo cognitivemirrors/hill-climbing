@@ -356,7 +356,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · train</div>
+<div class="corner" id="version-label">v0.3 · train</div>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -381,7 +381,7 @@
       <span class="menu-item-title">Reset history</span>
       <span class="menu-item-sub">Erase all workouts on this device</span>
     </button>
-    <div class="menu-note">Your training log lives only on this device.</div>
+    <div class="menu-note">Your training log stays in this browser — and syncs when you sign in at the hub.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -470,6 +470,7 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
@@ -477,7 +478,7 @@
 //  Single-file app; state lives in one localStorage blob.
 // ═══════════════════════════════════════════════════════════════════
 
-const VERSION   = 'v0.2 · train';
+const VERSION   = 'v0.3 · train';
 const STATE_KEY = 'hill-climbing-train';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-train';   // this app's registered E2E-sync doc (see hc-sync.js)
 const FIELDS    = ['reps', 'weight', 'time'];
@@ -717,31 +718,41 @@ function startWorkout() {
   renderWorkout();
   swapPanel(workoutPanel);
 }
-function discardWorkout() {
+function doDiscardWorkout() {
   if (!state.active) return;
-  const logged = state.active.entries.some(e => e.sets.some(s => FIELDS.some(f => s.actual[f] != null)));
-  if (!confirm(logged ? 'Discard this workout? Logged sets will be lost.' : 'Discard this workout?')) return;
   state.active = null;
   save();
   renderHome();
   swapPanel(homePanel);
 }
-function finishWorkout() {
+function discardWorkout() {
   if (!state.active) return;
+  const logged = state.active.entries.some(e => e.sets.some(s => FIELDS.some(f => s.actual[f] != null)));
+  if (!confirm(logged ? 'Discard this workout? Logged sets will be lost.' : 'Discard this workout?')) return;
+  doDiscardWorkout();
+}
+function doFinishWorkout() {
+  if (!state.active) return null;
   const cleaned = state.active.entries
     .map(e => ({ exerciseId: e.exerciseId, sets: e.sets.filter(s => FIELDS.some(f => s.actual[f] != null)) }))
     .filter(e => e.sets.length);
-  if (!cleaned.length) {
-    if (confirm('No sets logged yet — discard this workout?')) {
-      state.active = null; save(); renderHome(); swapPanel(homePanel);
-    }
-    return;
-  }
-  state.workouts.push({ id: state.active.id, startedAt: state.active.startedAt, finishedAt: Date.now(), entries: cleaned });
+  if (!cleaned.length) return null;
+  const id = state.active.id;
+  state.workouts.push({ id, startedAt: state.active.startedAt, finishedAt: Date.now(), entries: cleaned });
   state.active = null;
   save();
   renderHome();
   swapPanel(homePanel);
+  return id;
+}
+function finishWorkout() {
+  if (!state.active) return;
+  const logged = state.active.entries.some(e => e.sets.some(s => FIELDS.some(f => s.actual[f] != null)));
+  if (!logged) {
+    if (confirm('No sets logged yet — discard this workout?')) doDiscardWorkout();
+    return;
+  }
+  doFinishWorkout();
 }
 
 function addSet(entryIdx) {
@@ -758,16 +769,19 @@ function removeSet(entryIdx, setIdx) {
   e.sets.splice(setIdx, 1);
   save(); renderWorkout();
 }
-function removeEntry(entryIdx) {
-  const e = state.active.entries[entryIdx];
-  const ex = exerciseById(e.exerciseId);
-  const logged = e.sets.some(s => FIELDS.some(f => s.actual[f] != null));
-  if (logged && !confirm('Remove ' + (ex ? ex.name : 'this exercise') + '? Its logged sets will be lost.')) return;
+function doRemoveEntry(entryIdx) {
   const t = state.active.timer;
   if (t && t.entryIdx === entryIdx) state.active.timer = null;
   if (t && t.entryIdx > entryIdx) t.entryIdx--;
   state.active.entries.splice(entryIdx, 1);
   save(); renderWorkout();
+}
+function removeEntry(entryIdx) {
+  const e = state.active.entries[entryIdx];
+  const ex = exerciseById(e.exerciseId);
+  const logged = e.sets.some(s => FIELDS.some(f => s.actual[f] != null));
+  if (logged && !confirm('Remove ' + (ex ? ex.name : 'this exercise') + '? Its logged sets will be lost.')) return;
+  doRemoveEntry(entryIdx);
 }
 function toggleDone(entryIdx, setIdx) {
   const e = state.active.entries[entryIdx];
@@ -958,17 +972,21 @@ function adjustLogValue(delta) {
   const cur = parseTimeInput(input.value);
   input.value = fmtTime(Math.max(0, (cur ?? 0) + delta));
 }
-function confirmLogTime() {
-  if (!state.active || !state.active.timer) { timerOverlay.classList.add('hidden'); return; }
-  const v = parseTimeInput(document.getElementById('timer-log-value').value);
-  if (v == null) { adjustLogValue(0); return; }   // unparseable — snap back to a valid value
+function doLogTime(seconds) {
+  if (!state.active || !state.active.timer) return;
   const { entryIdx, setIdx } = state.active.timer;
   const entry = state.active.entries[entryIdx];
-  if (entry && entry.sets[setIdx]) entry.sets[setIdx].actual.time = v;
+  if (entry && entry.sets[setIdx]) entry.sets[setIdx].actual.time = seconds;
   state.active.timer = null;
   save();
   timerOverlay.classList.add('hidden');
   renderWorkout();
+}
+function confirmLogTime() {
+  if (!state.active || !state.active.timer) { timerOverlay.classList.add('hidden'); return; }
+  const v = parseTimeInput(document.getElementById('timer-log-value').value);
+  if (v == null) { adjustLogValue(0); return; }   // unparseable — snap back to a valid value
+  doLogTime(v);
 }
 function cancelLogTime() {
   timerOverlay.classList.add('hidden');   // the timer never stopped — keep counting
@@ -1014,6 +1032,18 @@ function renderPicker() {
     list.appendChild(empty);
   }
 }
+function createExerciseCore(name, fields) {
+  name = String(name == null ? '' : name).trim();
+  if (!name) throw new Error('An exercise needs a name.');
+  const tracked = {};
+  FIELDS.forEach(f => { tracked[f] = !!(fields && fields[f]); });
+  if (!FIELDS.some(f => tracked[f])) throw new Error('Pick at least one thing to track — reps, weight, or timer.');
+  // case-insensitive dedupe: an existing exercise by this name is reused as-is
+  const existing = state.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
+  const ex = existing || { id: uid('ex_'), name, fields: tracked, createdAt: Date.now() };
+  if (!existing) { state.exercises.push(ex); save(); }
+  return ex;
+}
 function createExercise() {
   const nameInput = document.getElementById('new-ex-name');
   const name = nameInput.value.trim();
@@ -1021,10 +1051,7 @@ function createExercise() {
   const fields = {};
   document.querySelectorAll('.field-chip').forEach(c => { fields[c.dataset.field] = c.classList.contains('on'); });
   if (!FIELDS.some(f => fields[f])) { alert('Pick at least one thing to track — reps, weight, or timer.'); return; }
-  // case-insensitive dedupe: an existing exercise by this name is reused as-is
-  const existing = state.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
-  const ex = existing || { id: uid('ex_'), name, fields, createdAt: Date.now() };
-  if (!existing) { state.exercises.push(ex); save(); }
+  const ex = createExerciseCore(name, fields);
   nameInput.value = '';
   const already = state.active.entries.some(e => e.exerciseId === ex.id);
   if (already) { renderWorkout(); swapPanel(workoutPanel); return; }
@@ -1066,14 +1093,17 @@ function renderDetail(id) {
     wrap.appendChild(card);
   });
 }
-function deleteWorkout() {
-  if (!detailId) return;
-  if (!confirm('Delete this workout from your history?')) return;
-  state.workouts = state.workouts.filter(w => w.id !== detailId);
-  detailId = null;
+function deleteWorkoutById(id) {
+  state.workouts = state.workouts.filter(w => w.id !== id);
+  if (detailId === id) detailId = null;
   save();
   renderHome();
   swapPanel(homePanel);
+}
+function deleteWorkout() {
+  if (!detailId) return;
+  if (!confirm('Delete this workout from your history?')) return;
+  deleteWorkoutById(detailId);
 }
 
 // ── Export / import / reset (your data is yours) ─────────────────────────────
@@ -1103,12 +1133,15 @@ async function importData(file) {
     alert('Import failed: ' + err.message);
   }
 }
-function resetData() {
-  if (!confirm('Erase your whole training log on this device? Export first if you want a backup.')) return;
+function doResetData() {
   state = blankState();
   try { localStorage.removeItem(STATE_KEY); } catch (e) {}
   renderHome();
   swapPanel(homePanel);
+}
+function resetData() {
+  if (!confirm('Erase your whole training log on this device? Export first if you want a backup.')) return;
+  doResetData();
 }
 function toggleUnits() {
   state.unit = state.unit === 'kg' ? 'lbs' : 'kg';
@@ -1191,6 +1224,211 @@ if (window.HCSync) {
   });
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'train' });
+}
+
+// ── Agent interface (window.HC) — the same functions the UI calls ────────────
+if (window.HC) {
+  const hcEntryIdx = (exerciseId) => {
+    if (!state.active) throw new Error('No workout is open — invoke startWorkout first.');
+    const i = state.active.entries.findIndex(e => e.exerciseId === exerciseId);
+    if (i < 0) throw new Error('That exercise is not in the open workout.');
+    return i;
+  };
+  const hcCheckSet = (entryIdx, setIdx) => {
+    const sets = state.active.entries[entryIdx].sets;
+    if (!Number.isInteger(setIdx) || setIdx < 0 || setIdx >= sets.length) {
+      throw new Error('setIdx out of range — that exercise has ' + sets.length + (sets.length === 1 ? ' set.' : ' sets.'));
+    }
+  };
+  HC.register({
+    app: 'train',
+    version: VERSION,
+    title: 'Train',
+    description: 'A workout logger — an exercise catalog, set-by-set goal-over-actual logging, and progressive-overload prefill: each new workout seeds its targets from the last time each exercise was logged.',
+    stores: [{
+      key: STATE_KEY,
+      kind: 'localStorage',
+      description: 'The whole training log — exercise catalog, finished workouts, display unit, and any in-progress workout (including its running timer).',
+      sensitivity: 'personal',
+      schema: "{v, unit:'lbs'|'kg', exercises:[{id,name,fields:{reps,weight,time},createdAt}], workouts:[{id,startedAt,finishedAt,entries:[{exerciseId,sets:[{target:{reps,weight,time},actual:{…},done}]}]}], active:{…,timer:{entryIdx,setIdx,startedAt}|null}|null} — weights stored canonically in lbs; times in integer seconds",
+      syncKey: SYNC_BLOB_KEY,
+      afterWrite: () => {
+        load();
+        if (!workoutPanel.classList.contains('hidden')) renderWorkout();
+        else { renderHome(); swapPanel(homePanel); }
+      },
+    }],
+    actions: {
+      startWorkout: {
+        description: "Start a workout — or resume the open one, exactly as the UI's start/resume button. Starting marks today active for Train in the shared usage log.",
+        params: {},
+        handler: () => {
+          const resumed = !!state.active;
+          startWorkout();
+          return { id: state.active.id, resumed };
+        },
+      },
+      discardWorkout: {
+        description: 'Destructive: abandon the open workout — any logged sets are lost (the UI confirms first; this commits directly).',
+        params: {},
+        handler: () => {
+          if (!state.active) throw new Error('No workout is open.');
+          doDiscardWorkout();
+          return { ok: true };
+        },
+      },
+      finishWorkout: {
+        description: 'Finish the open workout into history. Sets with no logged actuals are dropped, exactly as the UI; if nothing was logged at all, nothing is saved (use discardWorkout to abandon it).',
+        params: {},
+        handler: () => {
+          if (!state.active) throw new Error('No workout is open.');
+          const id = doFinishWorkout();
+          if (!id) throw new Error('No actuals logged — nothing to save. Use discardWorkout to abandon it.');
+          return { id };
+        },
+      },
+      addExercise: {
+        description: "Create an exercise in the catalog (a case-insensitive name match reuses the existing one as-is) and, when a workout is open, add it to that workout with targets seeded from last time — exactly as the picker's create form.",
+        params: {
+          name: 'string — exercise name; required',
+          fields: 'object — {reps?, weight?, time?} booleans; at least one must be true',
+        },
+        handler: (p) => {
+          const ex = createExerciseCore(p.name, p.fields);
+          if (state.active && !state.active.entries.some(e => e.exerciseId === ex.id)) addExerciseToWorkout(ex);
+          return { id: ex.id, name: ex.name };
+        },
+      },
+      addExerciseToWorkout: {
+        description: 'Add a catalog exercise to the open workout. Targets seed from the last time it was logged — max of previous target and actual per tracked field (the progressive-overload prefill); actuals start empty.',
+        params: { exerciseId: 'string — id from the exercise catalog; required' },
+        handler: (p) => {
+          if (!state.active) throw new Error('No workout is open — invoke startWorkout first.');
+          const ex = exerciseById(p.exerciseId);
+          if (!ex) throw new Error('No exercise with that id in the catalog.');
+          if (state.active.entries.some(e => e.exerciseId === ex.id)) throw new Error('That exercise is already in this workout.');
+          addExerciseToWorkout(ex);
+          return { ok: true };
+        },
+      },
+      addSet: {
+        description: "Add a set to an exercise in the open workout, copying the previous set's targets with blank actuals — same as the + add set button.",
+        params: { exerciseId: 'string — an exercise in the open workout; required' },
+        handler: (p) => {
+          const i = hcEntryIdx(p.exerciseId);
+          addSet(i);
+          return { sets: state.active.entries[i].sets.length };
+        },
+      },
+      removeSet: {
+        description: 'Remove one set from an exercise in the open workout (its logged actuals go with it).',
+        params: {
+          exerciseId: 'string — an exercise in the open workout; required',
+          setIdx: 'number — 0-based set index; required',
+        },
+        handler: (p) => {
+          const i = hcEntryIdx(p.exerciseId);
+          hcCheckSet(i, p.setIdx);
+          removeSet(i, p.setIdx);
+          return { ok: true };
+        },
+      },
+      removeEntry: {
+        description: 'Remove an exercise and its sets from the open workout — logged sets are lost (the UI confirms first when any are; this commits directly). The catalog entry stays.',
+        params: { exerciseId: 'string — an exercise in the open workout; required' },
+        handler: (p) => {
+          doRemoveEntry(hcEntryIdx(p.exerciseId));
+          return { ok: true };
+        },
+      },
+      toggleDone: {
+        description: "Toggle a set's done mark. Checking auto-fills blank actuals from targets ('as planned'), exactly as the UI; unchecking keeps the actuals. Only mark done what the person reports having done — never invent a set.",
+        params: {
+          exerciseId: 'string — an exercise in the open workout; required',
+          setIdx: 'number — 0-based set index; required',
+        },
+        handler: (p) => {
+          const i = hcEntryIdx(p.exerciseId);
+          hcCheckSet(i, p.setIdx);
+          toggleDone(i, p.setIdx);
+          return { done: state.active.entries[i].sets[p.setIdx].done };
+        },
+      },
+      setValue: {
+        description: "Set one goal or actual figure on a set, passing the raw string through the same unit-aware parse pipeline as typing in the UI: weight is read in the person's current display unit and stored in lbs, time accepts 'm:ss' or bare seconds (whole seconds), reps round to whole numbers, and an unparseable value clears the field. Record only what the person reports — never invent actuals.",
+        params: {
+          exerciseId: 'string — an exercise in the open workout; required',
+          setIdx: 'number — 0-based set index; required',
+          kind: "'target'|'actual' — goal row or actual row; required",
+          field: "'reps'|'weight'|'time' — must be a field this exercise tracks; required",
+          value: 'string — raw, as the person would type it; required',
+        },
+        handler: (p) => {
+          const i = hcEntryIdx(p.exerciseId);
+          hcCheckSet(i, p.setIdx);
+          if (p.kind !== 'target' && p.kind !== 'actual') throw new Error("kind must be 'target' or 'actual'.");
+          if (!FIELDS.includes(p.field)) throw new Error("field must be 'reps', 'weight', or 'time'.");
+          const ex = exerciseById(p.exerciseId);
+          if (!ex || !ex.fields[p.field]) throw new Error('This exercise does not track ' + p.field + '.');
+          setValue(i, p.setIdx, p.kind, p.field, String(p.value == null ? '' : p.value));
+          renderWorkout();
+          return { stored: state.active.entries[i].sets[p.setIdx][p.kind][p.field] };
+        },
+      },
+      startTimer: {
+        description: 'Start the stopwatch for a time-tracked set (a persisted start timestamp — it survives reloads). One timer at a time: if one is already running, nothing changes, exactly as the UI.',
+        params: {
+          exerciseId: 'string — a time-tracked exercise in the open workout; required',
+          setIdx: 'number — 0-based set index; required',
+        },
+        handler: (p) => {
+          const i = hcEntryIdx(p.exerciseId);
+          hcCheckSet(i, p.setIdx);
+          const ex = exerciseById(p.exerciseId);
+          if (!ex || !ex.fields.time) throw new Error('This exercise does not track time.');
+          startTimer(i, p.setIdx);
+          return { timer: state.active.timer };
+        },
+      },
+      logTime: {
+        description: "Stop the running timer and record the time onto the set it points at, through the same parse pipeline as the confirm overlay ('m:ss' or bare seconds, rounded to whole seconds).",
+        params: { seconds: "number|string — the time to record, e.g. 90 or '1:30'; required" },
+        handler: (p) => {
+          if (!state.active || !state.active.timer) throw new Error('No timer is running.');
+          const v = parseTimeInput(String(p.seconds == null ? '' : p.seconds));
+          if (v == null) throw new Error("Unparseable time — pass seconds or 'm:ss'.");
+          doLogTime(v);
+          return { seconds: v };
+        },
+      },
+      deleteWorkout: {
+        description: 'Destructive: delete one finished workout from history by id (the UI confirms first; this commits directly).',
+        params: { id: 'string — a finished workout id; required' },
+        handler: (p) => {
+          if (!state.workouts.some(w => w.id === p.id)) throw new Error('No finished workout with that id.');
+          deleteWorkoutById(p.id);
+          return { ok: true };
+        },
+      },
+      toggleUnits: {
+        description: 'Flip the display unit between lbs and kg. Display-only — stored weights stay canonical in lbs.',
+        params: {},
+        handler: () => {
+          toggleUnits();
+          return { unit: state.unit };
+        },
+      },
+      deleteEverything: {
+        description: "Destructive: erase the whole training log on this device — the exercise catalog, every finished workout, and any open workout (the UI's erase confirms first; this commits directly). A synced server copy is not touched.",
+        params: {},
+        handler: () => {
+          doResetData();
+          return { ok: true };
+        },
+      },
+    },
+    notes: "Progressive overload lives in the prefill: a new workout's targets seed from max(previous target, previous actual) per field, so inflating actuals inflates the next workout's goals — record only what the person reports, never invent a set or a number. Weights are stored in lbs and entered/displayed in the current unit; times are whole seconds. One timer at a time. The log is a record, not a score — no points, streaks, or targets to optimise.",
+  });
 }
 </script>
 

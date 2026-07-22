@@ -313,7 +313,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.9 · reflect</div>
+<div class="corner" id="version-label">v0.11 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -334,7 +334,6 @@
       <span class="menu-item-title">Import</span>
       <span class="menu-item-sub">Restore from a backup file</span>
     </button>
-    <div class="menu-note">Your entries live only on this device.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -344,7 +343,7 @@
   <section id="write-view">
     <div class="meta-line" id="write-meta"></div>
     <div class="prompt-line" id="prompt-line"></div>
-    <textarea id="entry-text" placeholder="Write freely. Nothing here leaves your device."></textarea>
+    <textarea id="entry-text" placeholder="Write freely."></textarea>
 
     <div class="photo-strip" id="photo-strip">
       <button id="add-photo-btn" type="button">+ add a photo</button>
@@ -393,12 +392,13 @@
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.9 · reflect';
+const VERSION    = 'v0.11 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)
@@ -614,6 +614,11 @@ function refreshPhotoAiToggle() {
   photoAiToggle.textContent = 'describe photos: ' + (photoAiOn() ? 'on' : 'off');
   photoAiToggle.classList.toggle('on', photoAiOn());
 }
+function setPhotoAi(on) {
+  localStorage.setItem(PHOTO_AI_LS, on ? '1' : '0');            // explicit '0', so revocation syncs too
+  if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);   // consent remembered across synced devices
+  refreshPhotoAiToggle();
+}
 function showPhotoAiConsent() {
   const hasKey = !!localStorage.getItem(API_KEY_LS);
   if (hasKey) {
@@ -817,6 +822,7 @@ async function save() {
     resetDraft();
     await loadEntries();
     switchView('history');
+    return updated.id;
   } else {
     const entry = {
       id: uid(), created: now, updated: now,
@@ -830,6 +836,7 @@ async function save() {
     await loadEntries();
     renderWrite();
     flashSaved('saved');
+    return entry.id;
   }
 }
 
@@ -1026,19 +1033,15 @@ photoFile.addEventListener('change', e => {
 // Describe-photos opt-in: off → consent note (explicit enable); on → off instantly.
 photoAiToggle.addEventListener('click', () => {
   if (photoAiOn()) {
-    localStorage.setItem(PHOTO_AI_LS, '0');    // explicit off, so revocation syncs too
-    if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);
-    refreshPhotoAiToggle();
+    setPhotoAi(false);
     flashSaved('photo describing off');
   } else {
     showPhotoAiConsent();
   }
 });
 document.getElementById('photo-ai-enable').addEventListener('click', () => {
-  localStorage.setItem(PHOTO_AI_LS, '1');
-  if (window.HCSync) HCSync.queueBlobPush(PHOTO_AI_SYNC_KEY);   // consent remembered across synced devices
+  setPhotoAi(true);
   photoAiConsent.classList.add('hidden');
-  refreshPhotoAiToggle();
   flashSaved('photo describing on');
 });
 document.getElementById('photo-ai-dismiss').addEventListener('click', () => {
@@ -1116,6 +1119,126 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'reflect' });
 }
+
+// ── Agent interface (window.HC — one symmetric surface, see hc-agent.js) ─────
+// Marshal action params into the live draft the way the UI does: only fields
+// that were passed change; ratings validate to the same 1..7 the dots offer;
+// images pass through the same sanitizeImages hygiene as import/sync.
+function applyDraftParams(p) {
+  const scaleVal = (v) => {
+    if (v === null || v === undefined) return null;
+    const n = Math.round(+v);
+    if (!(n >= 1 && n <= SCALE_MAX)) throw new Error('ratings run 1..' + SCALE_MAX);
+    return n;
+  };
+  const mood = p.mood !== undefined ? scaleVal(p.mood) : undefined;
+  const sat  = p.satisfaction !== undefined ? scaleVal(p.satisfaction) : undefined;
+  if (p.text !== undefined) { textEl.value = p.text == null ? '' : String(p.text); state.draft.text = textEl.value; }
+  if (mood !== undefined) state.draft.mood = mood;
+  if (sat  !== undefined) state.draft.satisfaction = sat;
+  if (p.images !== undefined) { state.draft.images = sanitizeImages(p.images); renderDraftPhotos(); }
+  renderScales();
+  refreshSaveState();
+}
+if (window.HC) HC.register({
+  app: 'reflect',
+  version: VERSION,
+  title: 'Reflect',
+  description: 'A private journal: free writing with optional mood and satisfaction ratings (1–7) and up to four photos per entry, kept on-device and E2EE-synced.',
+  stores: [
+    {
+      key: 'journal/entries', kind: 'idb',
+      description: 'Journal entries — free text, ratings, photos stored in-record as JPEG data URLs with optional AI description/transcription. Deletes are tombstones (deleted:true) so they propagate through sync. The most sensitive store in the suite.',
+      sensitivity: 'sensitive',
+      schema: '{id, created, updated, text, mood:1-7|null, satisfaction:1-7|null, images:[{dataUrl,w,h,desc?,ocr?}], embedding:null, embModel:null, deleted?:true}',
+      read: (opts) => idbAll().then((all) => {
+        if (opts && opts.full) return all;
+        return all.filter((e) => e && !e.deleted)
+          .sort((a, b) => b.created - a.created)
+          .map((e) => ({ ...e, images: (Array.isArray(e.images) ? e.images : []).map((im) => {
+            const t = { w: im.w || null, h: im.h || null, photo: 'omitted — read with {full: true} for bytes' };
+            if (im.desc) t.desc = im.desc;
+            if (im.ocr)  t.ocr  = im.ocr;
+            return t;
+          }) }));
+      }),
+      exportRead: () => idbAll(),
+      write: async (records) => {
+        for (const rec of records || []) {
+          await idbPut(rec);
+          if (window.HCSync) HCSync.pushLogRecord(SYNC_JOURNAL_NS, rec);
+        }
+      },
+    },
+    {
+      key: PHOTO_AI_LS, kind: 'localStorage',
+      description: 'Photo describe/transcribe consent — "1" means each newly attached photo is sent once to Anthropic on the person’s own API key; the choice syncs account-wide.',
+      sensitivity: 'practice',
+      schema: 'raw string: "1" on | "0" off',
+      syncKey: PHOTO_AI_SYNC_KEY,
+      afterWrite: refreshPhotoAiToggle,
+    },
+  ],
+  actions: {
+    addEntry: {
+      description: 'Save a new journal entry through the same save path a human uses. The journal records only what the person asked to write — never invented content. Needs at least one of text / mood / satisfaction / images.',
+      params: {
+        text: 'string — entry text (optional)',
+        mood: 'integer 1-7 — mood rating (optional)',
+        satisfaction: 'integer 1-7 — satisfaction rating (optional)',
+        images: 'array — up to 4 pre-built {dataUrl, w, h, desc?, ocr?} objects; dataUrl must be a base64 image data URL (invalid ones are dropped, as on import) (optional)',
+      },
+      handler: async (p) => {
+        if (state.photoBusy) throw new Error('photos are still being prepared — try again in a moment');
+        resetDraft();
+        renderWrite();
+        applyDraftParams(p || {});
+        const id = await save();
+        if (!id) throw new Error('nothing to save — an entry needs a note, a rating, or a photo');
+        return { id };
+      },
+    },
+    editEntry: {
+      description: 'Edit an existing entry through the same edit-and-save path a human uses; only the fields given change (pass null to clear a rating), the rest keep their current values.',
+      params: {
+        id: 'string — entry id (required)',
+        text: 'string — replacement text (optional)',
+        mood: 'integer 1-7, or null to clear (optional)',
+        satisfaction: 'integer 1-7, or null to clear (optional)',
+        images: 'array — replacement image set, same shape as addEntry (optional)',
+      },
+      handler: async (p) => {
+        if (state.photoBusy) throw new Error('photos are still being prepared — try again in a moment');
+        if (!p || !state.entries.some((x) => x.id === p.id)) throw new Error('no entry with that id');
+        startEdit(p.id);
+        applyDraftParams(p);
+        const id = await save();
+        if (!id) throw new Error('nothing to save — an entry needs a note, a rating, or a photo');
+        return { id };
+      },
+    },
+    deleteEntry: {
+      description: 'Delete an entry (destructive): writes the same sync-propagating tombstone the two-tap UI delete commits — photo bytes dropped, entry hidden everywhere once synced.',
+      params: { id: 'string — entry id (required)' },
+      handler: (p) => {
+        if (!p || !state.entries.some((x) => x.id === p.id)) throw new Error('no entry with that id');
+        state.pendingDelete = { id: p.id, timer: 0 };
+        handleDelete(p.id);
+        return { ok: true };
+      },
+    },
+    setPhotoAi: {
+      description: 'Turn the photo describe/transcribe consent on or off. Plainly: when on, each newly attached photo is sent once to Anthropic on the person’s own API key, and turning it on is an account-wide consent that syncs to every device. Set it only at the person’s explicit, informed request.',
+      params: { on: 'boolean — required' },
+      handler: (p) => {
+        if (!p || typeof p.on !== 'boolean') throw new Error('setPhotoAi needs {on: true|false}');
+        setPhotoAi(p.on);
+        return { on: photoAiOn() };
+      },
+    },
+  },
+  notes: 'The journal is the most sensitive store in the suite: read or write it only at the person’s explicit request, and reads omit photo bytes unless {full: true}. No action touches the network — the opt-in photo-describe call (photo → Anthropic, BYOK) runs only from the app’s own attach flow and is deliberately not exposed here. Entries record the person’s own words and ratings; never invent journal content.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

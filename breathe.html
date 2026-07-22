@@ -221,7 +221,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.9 · breathe</div>
+<div class="corner" id="version-label">v0.11 · breathe</div>
 <div class="corner" id="session-timer">0:00</div>
 <div class="corner" id="cycle-count"></div>
 
@@ -280,12 +280,13 @@
 </div>
 
 <div id="proto-info"></div>
-<div id="safety-note">if dizzy, stop and breathe normally</div>
+<div id="safety-note"></div>
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
@@ -673,14 +674,16 @@ function switchMode(newMode) {
 
 document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchMode(b.dataset.mode)));
 startBtn.addEventListener('click', () => s.running ? stopBreathwork() : startBreathwork());
+function setProtocol(key) {
+  if (!PROTOCOLS[key]) throw new Error('Unknown protocol "' + key + '"');
+  if (s.running) return { ok: false, reason: 'running' };
+  s.protoKey = key;
+  document.querySelectorAll('.proto-btn').forEach(b => b.classList.toggle('sel', b.dataset.key === key));
+  protoInfo.textContent = proto().info;
+  return { ok: true };
+}
 document.querySelectorAll('.proto-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (s.running) return;
-    s.protoKey = btn.dataset.key;
-    document.querySelectorAll('.proto-btn').forEach(b => b.classList.remove('sel'));
-    btn.classList.add('sel');
-    protoInfo.textContent = proto().info;
-  });
+  btn.addEventListener('click', () => setProtocol(btn.dataset.key));
 });
 
 // ── Session length (v0.5) — breathwork only ──
@@ -694,14 +697,17 @@ function syncDurationPills() {
   });
 }
 syncDurationPills();
+function setDurationMinutes(mins) {
+  if (![3, 5, 10, 15, 20].includes(mins)) throw new Error('Duration must be one of 3, 5, 10, 15, 20 minutes');
+  if (s.running) return { ok: false, reason: 'running' };
+  durationMinutes = mins;
+  try { localStorage.setItem(DURATION_KEY, String(durationMinutes)); } catch {}
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+  syncDurationPills();
+  return { ok: true };
+}
 document.querySelectorAll('.dur-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (s.running) return;
-    durationMinutes = parseInt(btn.dataset.minutes, 10);
-    try { localStorage.setItem(DURATION_KEY, String(durationMinutes)); } catch {}
-    if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
-    syncDurationPills();
-  });
+  btn.addEventListener('click', () => setDurationMinutes(parseInt(btn.dataset.minutes, 10)));
 });
 
 primeNextBtn.addEventListener('click', advancePrimeCard);
@@ -738,6 +744,96 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-right' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'breathe' });
 }
+
+// ── Agent interface (window.HC — see hc-agent.js) ────────────────────────────
+if (window.HC) HC.register({
+  app: 'breathe',
+  version: 'v0.11 · breathe',
+  title: 'Breathe',
+  description: 'Breathwork practice (coherence, physiological sigh, box, 4-7-8) plus a stress-then-recover training loop: deliberately raise arousal through exercise, then practice returning to calm.',
+  stores: [
+    {
+      key: DURATION_KEY,
+      kind: 'localStorage',
+      description: 'Chosen breathwork session length in minutes.',
+      sensitivity: 'practice',
+      schema: "raw string integer minutes: '3'|'5'|'10'|'15'|'20'",
+      syncKey: SYNC_BLOB_KEY,
+      afterWrite: () => {
+        try { const v = parseInt(localStorage.getItem(DURATION_KEY), 10); if (v > 0) durationMinutes = v; } catch {}
+        syncDurationPills();
+      },
+    },
+  ],
+  actions: {
+    setProtocol: {
+      description: 'Choose the breathwork protocol. Refused while a session is running.',
+      params: { key: "string — 'coherence'|'physiologicalSigh'|'box'|'fourSevenEight', required" },
+      handler: (p) => setProtocol(p.key),
+    },
+    setDuration: {
+      description: 'Set the breathwork session length. Refused while a session is running.',
+      params: { minutes: 'number — one of 3|5|10|15|20, required' },
+      handler: (p) => setDurationMinutes(p.minutes),
+    },
+    startBreathwork: {
+      description: 'Start a breathwork session with the current protocol and duration; marks today as practised exactly as a human start does.',
+      params: {},
+      handler: () => {
+        if (s.mode !== 'breathwork') return { ok: false, reason: 'not in breathwork mode' };
+        if (s.running) return { ok: false, reason: 'already running' };
+        startBreathwork();
+        return { ok: true };
+      },
+    },
+    stopBreathwork: {
+      description: 'End the running breathwork session, recording its real elapsed duration.',
+      params: {},
+      handler: () => {
+        if (s.mode !== 'breathwork' || !s.running) return { ok: false, reason: 'no breathwork session running' };
+        stopBreathwork();
+        return { ok: true };
+      },
+    },
+    startExercise: {
+      description: "Begin the training loop's exercise stage (skips any remaining priming cards). Only available in training mode before the exercise has begun.",
+      params: {},
+      handler: () => {
+        if (s.mode !== 'training' || s.trainingStage !== 'prime') return { ok: false, reason: 'not at the training prime stage' };
+        startExercise();
+        return { ok: true };
+      },
+    },
+    startRecovery: {
+      description: 'Begin the recovery stage of the training loop (sighs then coherence); marks today as practised exactly as a human start does. Only available during the exercise stage.',
+      params: {},
+      handler: () => {
+        if (s.mode !== 'training' || s.trainingStage !== 'exercise') return { ok: false, reason: 'not in the exercise stage' };
+        startRecovery();
+        return { ok: true };
+      },
+    },
+    stopTraining: {
+      description: 'End the training session, recording its real elapsed duration (exercise + recovery). Only available during the recovery stage.',
+      params: {},
+      handler: () => {
+        if (s.mode !== 'training' || s.trainingStage !== 'recover') return { ok: false, reason: 'not in the recovery stage' };
+        stopTraining();
+        return { ok: true };
+      },
+    },
+    switchMode: {
+      description: 'Switch between breathwork and the training loop. Ends any session in progress, counting the time practised so far.',
+      params: { mode: "string — 'breathwork'|'training', required" },
+      handler: (p) => {
+        if (p.mode !== 'breathwork' && p.mode !== 'training') throw new Error('Mode must be "breathwork" or "training"');
+        switchMode(p.mode);
+        return { ok: true };
+      },
+    },
+  },
+  notes: 'Sessions record real elapsed time only — an agent cannot fabricate a duration through actions (seeding history is what HC.import is for). Audio and screen-wake-lock side effects may no-op headlessly. Practice time is never something to optimise on the person\'s behalf.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

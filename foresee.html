@@ -359,7 +359,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.1 · foresee</div>
+<div class="corner" id="version-label">v0.2 · foresee</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="practice">Predict</button>
   <button class="mode-btn"        data-view="open" id="open-tab">Open</button>
@@ -381,7 +381,7 @@
       <span class="menu-item-title">Import</span>
       <span class="menu-item-sub">Restore from a backup file</span>
     </button>
-    <div class="menu-note">Your predictions live only on this device.</div>
+    <div class="menu-note">Your predictions stay in this browser — and sync when you sign in at the hub.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -495,12 +495,13 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.1 · foresee';
+const VERSION  = 'v0.2 · foresee';
 const STATE_KEY = 'hill-climbing-foresee';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-foresee';   // this app's registered E2E-sync doc (see hc-sync.js)
 const LVL_MIN = 1;
@@ -757,19 +758,31 @@ function showCompose() {
   renderConfHint();
   swapPanel(composePanel);
 }
-function commitCall() {
-  const text = predInput.value.trim();
-  const conf = Number(confSlider.value);
-  if (!text || conf === 50) return;
-  const days = Number(dueSelect.value) || 0;
+function addPrediction({ text, conf, days }) {
+  text = String(text == null ? '' : text).trim().slice(0, 240);
+  if (!text) throw new Error('Write the call as a plain statement that will be clearly true or false.');
+  conf = Number(conf);
+  if (!Number.isInteger(conf) || conf < 5 || conf > 95 || conf % 5 !== 0) throw new Error('Confidence must be 5–95, in steps of 5.');
+  if (conf === 50) throw new Error('50% is a coin flip — no judgment to train on. Lean one way, even slightly.');
+  days = Number(days);
+  if (!DUE_CHOICES.some(c => c.d === days)) throw new Error('Resolves-by must be one of 0, 1, 3, 7, 14, or 30 days.');
   const d = new Date(); d.setDate(d.getDate() + days);
+  const id = 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   state.predictions.unshift({
-    id: 'p' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
+    id: id,
     text: text, conf: conf, madeTs: Date.now(), due: hcDayKey(d),
     level: state.level, status: 'open',
   });
   markUsage();                                  // committing a call is the practice moment
   save();
+  return id;
+}
+function commitCall() {
+  const text = predInput.value.trim();
+  const conf = Number(confSlider.value);
+  if (!text || conf === 50) return;
+  const days = Number(dueSelect.value) || 0;
+  addPrediction({ text: text, conf: conf, days: days });
   const chosen = DUE_CHOICES.find(c => c.d === days);
   document.getElementById('committed-sub').innerHTML =
     `You said <b>${conf}%</b>. It resolves ${chosen ? chosen.label : 'soon'} — come back then and let reality grade it. Until then, nothing to do but live toward the answer.`;
@@ -1028,6 +1041,58 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'foresee' });
 }
+
+// ── Agent interface (window.HC; see hc-agent.js) ─────────────────────────────
+if (window.HC) HC.register({
+  app: 'foresee',
+  version: VERSION,
+  title: 'Foresee',
+  description: 'Calibration training via the staircase: write one-line predictions about your own life with stated confidence, resolve them against reality, and let Brier-scored outcomes move a 2-up/1-down ladder of horizon and interiority.',
+  stores: [{
+    key: STATE_KEY,
+    kind: 'localStorage',
+    description: 'The calibration ladder and every call — level, streak, and each prediction’s text, confidence, due date, and resolution. Predictions are about the person’s own life and other people.',
+    sensitivity: 'personal',
+    schema: '{v, level 1-10, streak, predictions:[{id, text ≤240, conf 1-99, madeTs, due:"YYYY-MM-DD", level 1-10, status:"open"|"resolved"|"void", outcome?:bool, resolvedTs?, brier?}]}',
+    syncKey: SYNC_BLOB_KEY,
+    afterWrite: () => {
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'practice');
+    },
+  }],
+  actions: {
+    addPrediction: {
+      description: 'Write down a call the person has made — never invent one for them. Level is always the current rung, as the UI does. Confidence is 5–95 in steps of 5 and never exactly 50: a coin flip has no judgment to train on.',
+      params: {
+        text: 'string — the prediction, a plain statement that will be clearly true or false (required, ≤240 chars)',
+        conf: 'integer — stated confidence percent, 5–95 in steps of 5, never exactly 50 (required)',
+        days: 'integer — days until it resolves, one of 0|1|3|7|14|30 (required)',
+      },
+      handler: (p) => {
+        const id = addPrediction(p);
+        renderHome();
+        renderOpen();
+        return { id: id };
+      },
+    },
+    resolvePrediction: {
+      description: 'Record what actually happened, as the person reports it — never invent a verdict. "void" (can’t say) is honest and never moves the ladder; already-resolved ids no-op.',
+      params: {
+        id: 'string — the open prediction’s id (required)',
+        verdict: "string — 'yes' (it happened) | 'no' (it didn’t) | 'void' (can’t say) (required)",
+      },
+      handler: (p) => {
+        if (p.verdict !== 'yes' && p.verdict !== 'no' && p.verdict !== 'void') throw new Error("verdict must be 'yes', 'no', or 'void'.");
+        const target = state.predictions.find(x => x.id === p.id && x.status === 'open');
+        if (!target) return { ok: false, reason: 'no open call with that id' };
+        onVerdict(target.id, p.verdict);
+        return { ok: true, status: target.status, level: state.level };
+      },
+    },
+  },
+  notes: 'Calibration is shown as a curve, deliberately never a score — nothing here is something to optimise on the person’s behalf. Both actions record only what the person themselves says; resolution is graded by reality but reported by them.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

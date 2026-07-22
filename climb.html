@@ -426,7 +426,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.5 · climb</div>
+<div class="corner" id="version-label">v0.6 · climb</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="goals">Goals</button>
   <button class="mode-btn"        data-view="steps">Steps</button>
@@ -459,7 +459,7 @@
       <span class="menu-item-title">Manage sync</span>
       <span class="menu-item-sub" id="sync-manage-sub">Sign in at the hub</span>
     </a>
-    <div class="menu-note" id="sync-note">Your goals live only on this device.</div>
+    <div class="menu-note" id="sync-note">Your goals are stored in this browser.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -472,11 +472,12 @@
 
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.5 · climb';
+const VERSION   = 'v0.6 · climb';
 const STATE_KEY = 'hill-climbing-climb';
 const DB_NAME   = 'climb';
 const STORE     = 'events';
@@ -1592,7 +1593,7 @@ function updateSyncUI(st) {
     }
   }
   if (syncNoteEl) syncNoteEl.textContent = unlocked
-    ? 'End-to-end encrypted — the server stores only unreadable ciphertext.'
+    ? 'Synced across your devices — encrypted in transit; the server sees ciphertext plus metadata (sizes, timestamps).'
     : 'Your goals live on this device. Sign in at the hub to sync them, encrypted, across devices.';
 }
 
@@ -1632,6 +1633,130 @@ if (window.HCSync) {
   HCSync.subscribe(updateSyncUI);
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'climb' });
 }
+
+// ── Agent interface (window.HC) — the same functions the UI calls ───────────
+if (window.HC) HC.register({
+  app: 'climb',
+  version: VERSION,
+  title: 'Climb',
+  description: 'A goals + steps tracker: one root goal, nested subgoals, small steps, and a single current focus, with an append-only event log of every change. No due dates, points, or streaks by design.',
+  stores: [
+    {
+      key: STATE_KEY,
+      kind: 'localStorage',
+      description: 'The goal tree — source of truth: goals, steps, current focus.',
+      sensitivity: 'personal',
+      schema: '{v, rootId, goals{id→{id,title,parentId,order,status,created,updated,restedAt}}, tasks{id→{id,goalId,title,done,created,updated,doneAt}}, focusId}',
+      syncKey: SYNC_BLOB_KEY,
+      afterWrite: () => {
+        load();
+        if (!state.goals[ui.path[0]]) ui.path = [state.rootId];
+        ui.editing = null; ui.movingId = null; ui.menuOpenId = null;
+        render();
+      },
+    },
+    {
+      key: 'climb/events',
+      kind: 'idb',
+      description: 'Append-only event log of every change, for later analysis.',
+      sensitivity: 'personal',
+      schema: '[{id, ts, type, …}] — types: goal.add/rename/reorder/move/archive/restore, focus.set/clear, task.add/rename/complete/uncomplete/delete, log.snapshot',
+      syncKey: SYNC_EVENTS_NS,
+      read: () => idbAll().then(evs => evs.sort((a, b) => a.ts - b.ts)),
+      exportRead: () => idbAll().then(evs => evs.sort((a, b) => a.ts - b.ts)),
+      write: (records) => {
+        const events = (Array.isArray(records) ? records : [])
+          .filter(e => e && typeof e.type === 'string' && Number.isFinite(e.ts) && e.id);
+        return idbClear().catch(() => {})
+          .then(() => { if (events.length) return idbPutMany(events).catch(() => {}); })
+          .then(() => { if (window.HCSync && HCSync.isUnlocked()) HCSync.push(SYNC_EVENTS_NS); });
+      },
+    },
+  ],
+  actions: {
+    addGoal: {
+      description: 'Add a goal under a parent goal (default: the root). Empty titles are ignored, as in the UI.',
+      params: { title: 'string — goal title, required', parentId: 'string — parent goal id; omit for the root' },
+      handler: (p) => { addGoal(p.title, p.parentId || state.rootId); render(); return { ok: true }; },
+    },
+    renameGoal: {
+      description: 'Rename a goal. Empty or unchanged titles are ignored.',
+      params: { id: 'string — goal id, required', to: 'string — new title, required' },
+      handler: (p) => { renameGoal(p.id, p.to); render(); return { ok: true }; },
+    },
+    reorderGoal: {
+      description: 'Move a goal to a new position among its active siblings (0-based), as the drag handle does.',
+      params: { id: 'string — active goal id, required', to: 'number — target index among active siblings, clamped to range, required' },
+      handler: (p) => {
+        const g = state.goals[p.id];
+        const sibs = g ? activeChildren(g.parentId) : [];
+        const from = sibs.findIndex(x => x.id === p.id);
+        if (from < 0) return { ok: false };
+        reorderGoal(p.id, from, Math.max(0, Math.min(sibs.length - 1, p.to)));
+        render();
+        return { ok: true };
+      },
+    },
+    moveGoal: {
+      description: 'Move a goal under another goal. The root never moves; a goal never moves into its own subtree; the target must be an existing active goal.',
+      params: { id: 'string — goal id, required', toParent: 'string — target goal id; null/omitted = the root (top level)' },
+      handler: (p) => {
+        const target = p.toParent == null ? state.rootId : p.toParent;
+        if (!state.goals[target] || !isEffectivelyActive(target)) return { ok: false };
+        moveGoal(p.id, target);
+        if (ui.path.length) ui.path = pathTo(ui.path[ui.path.length - 1]);
+        render();
+        return { ok: true };
+      },
+    },
+    archiveGoal: {
+      description: 'Let a goal rest (archive it, subtree included). If the current focus sits inside the rested subtree, the focus is set down too — two events, exactly as the UI.',
+      params: { id: 'string — active goal id, required (never the root)' },
+      handler: (p) => { archiveGoal(p.id); render(); return { ok: true }; },
+    },
+    restoreGoal: {
+      description: 'Pick a resting goal back up; it rejoins the end of its siblings.',
+      params: { id: 'string — resting goal id, required' },
+      handler: (p) => { restoreGoal(p.id); render(); return { ok: true }; },
+    },
+    setFocus: {
+      description: 'Make a goal the single current focus. The root cannot be the focus; the goal must be effectively active.',
+      params: { id: 'string — goal id, required' },
+      handler: (p) => { setFocus(p.id); render(); return { ok: true }; },
+    },
+    clearFocus: {
+      description: 'Set down the current focus.',
+      params: {},
+      handler: () => { clearFocus(); render(); return { ok: true }; },
+    },
+    addTask: {
+      description: 'Add a step to a goal. Empty titles are ignored.',
+      params: { title: 'string — step title, required', goalId: 'string — goal id, required' },
+      handler: (p) => { addTask(p.title, p.goalId); render(); return { ok: true }; },
+    },
+    renameTask: {
+      description: 'Rename a step. Empty or unchanged titles are ignored.',
+      params: { id: 'string — step id, required', to: 'string — new title, required' },
+      handler: (p) => { renameTask(p.id, p.to); render(); return { ok: true }; },
+    },
+    toggleTask: {
+      description: 'Toggle a step between done and open (complete ↔ reopen), recording the moment it was completed. Only mark done what the person actually did.',
+      params: { id: 'string — step id, required' },
+      handler: (p) => { toggleTask(p.id); render(); return { ok: true }; },
+    },
+    deleteTask: {
+      description: 'Remove a step for good (the UI asks twice; this commits directly).',
+      params: { id: 'string — step id, required' },
+      handler: (p) => { deleteTask(p.id); render(); return { ok: true }; },
+    },
+    deleteEverything: {
+      description: 'Destructive: wipes the goal state blob AND the entire event log on this device, then re-seeds an empty root. A synced server copy is not touched.',
+      params: {},
+      handler: () => { eraseEverything(); return { ok: true }; },
+    },
+  },
+  notes: 'Every mutation flows through the same apply() choke point the UI uses — fresh event id + timestamp, blob save, event-log append, usage mark, sync push — so a change made here is indistinguishable from a tap, and any change marks today active for Climb in the shared usage log. No due dates, points, or streaks by design — never complete a step the person did not do. Steps and History views are read-only projections; navigation state is transient and not part of this interface.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

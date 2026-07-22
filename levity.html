@@ -368,7 +368,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · levity</div>
+<div class="corner" id="version-label">v0.3 · levity</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="practice">Practice</button>
   <button class="mode-btn"        data-view="notebook">Notebook</button>
@@ -390,7 +390,7 @@
       <span class="menu-item-title">Import</span>
       <span class="menu-item-sub">Restore from a backup file</span>
     </button>
-    <div class="menu-note">Your progress and notebook live only on this device.</div>
+    <div class="menu-note">Your progress and notebook stay in this browser — and sync when you sign in at the hub.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -520,12 +520,13 @@
 <script src="/hc-sync.js"></script>
 <script src="/hc-usage.js"></script>
 <script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
 
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.2 · levity';
+const VERSION  = 'v0.3 · levity';
 const STATE_KEY = 'hill-climbing-levity';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-levity';   // this app's registered E2E-sync doc (see hc-sync.js)
 const LVL_MIN = 1;
@@ -1109,14 +1110,20 @@ function backToChallenge() {
   const ch = (state.active && byId(state.active.id)) || served;
   if (ch) showChallenge(ch);
 }
-function report(outcomeKey) {
+function reportOutcome(outcomeKey, lineText) {
+  if (!OUTCOMES[outcomeKey]) throw new Error('Unknown outcome "' + outcomeKey + '"');
+  if (!state.active) throw new Error('No bit committed — nothing to report on.');
   // Capture the typed line into the notebook first, tagged landed if it worked.
-  if (lineInput) {
-    const text = lineInput.value.trim();
-    if (text) { addNotebookLine(text, OUTCOMES[outcomeKey].success); lineInput.value = ''; }
-  }
+  const text = (lineText || '').trim().slice(0, 280);
+  if (text) addNotebookLine(text, OUTCOMES[outcomeKey].success);
   const res = recordOutcome(outcomeKey);
   showResult(outcomeKey, res);
+  return res;
+}
+function report(outcomeKey) {                       // UI wrapper — marshals the textarea
+  const text = lineInput ? lineInput.value : '';
+  if (lineInput) lineInput.value = '';
+  reportOutcome(outcomeKey, text);
 }
 function leaveTrying() {
   state.active = null; save();
@@ -1329,6 +1336,113 @@ if (window.HCSync) {
   if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
   HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'levity' });
 }
+
+// ── Agent interface (window.HC — one symmetric surface; see hc-agent.js) ──────
+if (window.HC) HC.register({
+  app: 'levity',
+  version: VERSION,
+  title: 'Levity',
+  description: 'Learn-to-be-funny practice: a 10-level ladder of small comedy-craft challenges climbed by self-reported outcomes, plus a notebook — the bit file — for lines worth keeping.',
+  stores: [{
+    key: STATE_KEY,
+    kind: 'localStorage',
+    description: 'Ladder progress, attempt history, and the bit notebook (user-authored comedy material can be personally revealing).',
+    sensitivity: 'personal',
+    schema: "{v, level 1-10, streak, cleared{challengeId→'landed'|'smile'}, history[{id,outcome,ts}], active{id,ts}|null, recent[ids], notebook[{text,landed,ts}]}",
+    syncKey: SYNC_BLOB_KEY,
+    afterWrite: () => {
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'practice');
+    },
+  }],
+  actions: {
+    newChallenge: {
+      description: 'Serve a challenge at the current level (or resume a bit already committed to).',
+      params: {},
+      handler: () => {
+        newChallenge();
+        return state.active && byId(state.active.id) ? { resumed: state.active.id } : { served: served.id };
+      },
+    },
+    skipChallenge: {
+      description: 'Show another challenge at the same rung. Requires one already served.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No challenge served — call newChallenge first.');
+        skipChallenge();
+        return { served: served.id };
+      },
+    },
+    tooEasy: {
+      description: 'Self-advance a rung — only when the person says the served challenge is beneath them. Requires one served; no-ops at the top of the ladder.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No challenge served — call newChallenge first.');
+        tooEasy();
+        return { level: state.level, served: served.id };
+      },
+    },
+    triedIt: {
+      description: 'Commit to the served challenge as attempted — sets the active bit and marks today as practiced, exactly as the button does.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No challenge served — call newChallenge first.');
+        triedIt();
+        return { active: state.active.id };
+      },
+    },
+    reportOutcome: {
+      description: "Record the outcome the person reports for the active bit (never invent one). 'landed' and 'smile' count as clears for the 2-up/1-down ladder; 'flat' is the down-step — data, not failure. An optional line saves to the bit notebook, starred if the bit worked.",
+      params: {
+        outcome: "string — 'landed'|'smile'|'flat', required",
+        line: 'string — the line they actually tried, optional, ≤280 chars',
+      },
+      handler: (p) => {
+        const res = reportOutcome(p.outcome, p.line || '');
+        return { level: state.level, leveledUp: res.leveledUp, leveledDown: res.leveledDown, newSkill: res.newSkill };
+      },
+    },
+    leaveTrying: {
+      description: 'Leave the active bit without recording an outcome.',
+      params: {},
+      handler: () => { leaveTrying(); return { ok: true }; },
+    },
+    addBit: {
+      description: 'Add a line the person wrote to the bit notebook (same case-insensitive dedupe as the composer).',
+      params: { text: 'string — the line, required, ≤280 chars' },
+      handler: (p) => {
+        const text = (p.text || '').trim().slice(0, 280);
+        if (!text) throw new Error('text is required.');
+        const added = addNotebookLine(text, false);
+        renderNotebook();
+        return added ? { ok: true } : { ok: false, reason: 'duplicate' };
+      },
+    },
+    toggleBitLanded: {
+      description: 'Star or unstar a notebook line as one that landed.',
+      params: { ts: "number — the line's ts identifier, required" },
+      handler: (p) => {
+        const ts = Number(p.ts);
+        const n = state.notebook.find(x => x.ts === ts);
+        if (!n) throw new Error('No notebook line with ts ' + p.ts);
+        toggleLanded(ts);
+        return { ts, landed: n.landed };
+      },
+    },
+    deleteBit: {
+      description: 'Delete a line from the bit notebook.',
+      params: { ts: "number — the line's ts identifier, required" },
+      handler: (p) => {
+        const ts = Number(p.ts);
+        if (!state.notebook.some(x => x.ts === ts)) return { ok: false, reason: 'not found' };
+        removeNotebookLine(ts);
+        return { ok: true };
+      },
+    },
+  },
+  notes: '2-up/1-down staircase (Levitt 1971, ~71%): two self-reported clears in a row climb a rung, one flat bit steps down. Outcomes are only ever what the person reports, and the level is a learning edge, not a score to optimise on their behalf. No points, badges, or streak pressure by design.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

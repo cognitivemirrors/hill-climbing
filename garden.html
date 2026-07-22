@@ -280,7 +280,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · garden</div>
+<div class="corner" id="version-label">v0.3 · garden</div>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -297,7 +297,7 @@
       <span class="menu-item-title">Import</span>
       <span class="menu-item-sub">Restore from a backup file</span>
     </button>
-    <div class="menu-note">Your progress lives only on this device.</div>
+    <div class="menu-note">Your progress is stored in this browser.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -344,11 +344,12 @@
 
 <div class="sr-only" id="announce" aria-live="polite"></div>
 
+<script src="/hc-agent.js"></script>
 <script>
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION   = 'v0.2 · garden';
+const VERSION   = 'v0.3 · garden';
 const STATE_KEY = 'hill-climbing-garden';
 const HISTORY_CAP = 400;
 
@@ -914,6 +915,49 @@ importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e
 document.getElementById('version-label').textContent = VERSION;
 load();
 showPath();
+
+if (window.HC) HC.register({
+  app: 'garden',
+  version: VERSION,
+  title: 'Garden',
+  description: 'A zen stone-garden Sokoban: nudge stones onto moss beds across twelve hand-made, machine-verified-solvable levels.',
+  stores: [
+    { key: STATE_KEY, kind: 'localStorage', description: 'Which gardens have settled (first-solve timestamps) and the last plot opened.', sensitivity: 'practice', schema: '{v, solved{levelIndex→firstSolveTs}, last}' },
+  ],
+  actions: {
+    openLevel: {
+      description: 'Open a plot on the path, persisting it as the last-opened level exactly as clicking it does.',
+      params: { i: 'integer 0-11 — level index, required' },
+      handler: (p) => {
+        const i = Number(p && p.i);
+        if (!Number.isInteger(i) || i < 0 || i >= LEVELS.length) throw new Error('i must be an integer 0-' + (LEVELS.length - 1));
+        openLevel(i);
+        return { ok: true };
+      },
+    },
+    move: {
+      description: 'Take one step, pushing a stone if it is in the way — the same function the keyboard/d-pad calls. Settling fires automatically through the identical afterMove→settle path when the board completes.',
+      params: { dx: 'integer, one of -1/0/1 — required', dy: 'integer, one of -1/0/1 — required' },
+      handler: (p) => {
+        const dx = Number(p && p.dx), dy = Number(p && p.dy);
+        const cardinal = (dx === 0 && (dy === 1 || dy === -1)) || (dy === 0 && (dx === 1 || dx === -1));
+        if (!cardinal) throw new Error('dx/dy must be one cardinal step: (0,1) (0,-1) (1,0) (-1,0)');
+        return { moved: tryMove(dx, dy) };
+      },
+    },
+    undo: {
+      description: 'Undo the last step, same as the undo button.',
+      params: {},
+      handler: () => ({ undone: undo() }),
+    },
+    restart: {
+      description: 'Restart the current garden immediately (the two-tap "again?" arming is a UI affordance only).',
+      params: {},
+      handler: () => { doRestart(); return { ok: true }; },
+    },
+  },
+  notes: 'On-device only, outside sync + usage like Echo. Completion must come from actually solving — settle() is not exposed as an action; seeding solved timestamps is HC.import’s job.',
+});
 </script>
 
 <!-- ── PWA: register the service worker for offline use ──────── -->

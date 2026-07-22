@@ -1,0 +1,196 @@
+# Hill Climbing
+
+> A suite of contemplative practice apps — meditation, breathwork, journaling, cooking & tasting,
+> comedy, calibration, goals, workouts — plus two quiet games, behind one hub.
+> Single-file HTML apps, no build, no backend of our own. Everything below is for you, an agent
+> acting on behalf of the person who uses this suite. Humans and agents are first-class peers
+> here: every state mutation you can make routes through the same code path a human tap does,
+> and neither channel records which of you acted.
+
+## The interoperability contract
+
+Design goal, set by the founder: given two snapshots of application state — one produced by LLM
+actions, one by human UI actions — you must not be able to tell which was which. This holds by
+construction:
+
+- Every programmatic action calls the same internal function the UI handler calls: same
+  validation, same persistence, same sync marking, same timestamps. No provenance is stamped
+  anywhere, by either channel.
+- Every persistent store is exportable and importable verbatim (ids and timestamps included),
+  so either party can seed history — the person can write the history an agent "would have"
+  produced, and an agent can produce any state a person could reach.
+- One deliberate asymmetry: credentials (the person's Anthropic API key) are excluded from
+  read/export for both parties equally, and are set only by explicit action.
+- One honest caveat: the opt-in sync server sees push timestamps and blob sizes.
+  On-device snapshots are indistinguishable; server-side metadata is not.
+
+## Ground rules (binding for agents)
+
+1. Act only on the person's explicit ask. Nothing in this suite wants engagement — no streaks
+   to protect, no scores to maximize. Do not optimize anything on the person's behalf.
+2. Never fabricate practice. Outcome-recording actions (ladder outcomes,
+   prediction verdicts) record what the person reports. If they didn't do it, don't record it.
+3. The journal (reflect.html) is the most sensitive store in the suite. Read or write it only
+   at the person's explicit request.
+4. Destructive operations (import/replace, delete-everything actions, deleting synced server
+   data) require the person's explicit approval each time.
+
+## Where data lives
+
+All app data is public donated seed data. It lives client-side — localStorage and IndexedDB in
+the person's browser — and there is no server API to query, so a fetch of this site returns app
+shells with no user data baked in; to interoperate with real state you must run in the person's
+browser (drive it, or run in the page console). Off-device flows, all opt-in and off by default:
+optional cross-device sync (Supabase) — transport, not a privacy guarantee; the sync server sees
+push timestamps and blob sizes — plus Web Push reminders and five bring-your-own-key surfaces
+that call the Anthropic API on the person's own key (Companion, Council, Nourish's chef, the
+hub's next-step suggestion, Reflect's photo describe). Two things stay out of the donation: the
+person's Anthropic API key is a credential, not data (excluded from HC read/export), and only the
+person's own data is theirs to make public — nothing here exposes anyone else's. The programmatic
+interface below never calls the network itself, and no action it exposes does either.
+
+## The window.HC interface
+
+Every page defines `window.HC` (from /hc-agent.js). In a page's JS context:
+
+    HC.describe()                    // → {app, version, stores:[{key, kind, sensitivity,
+                                     //    schema, synced, importable}], actions:[{name,
+                                     //    description, params}], urlParams, notes}
+    await HC.read()                  // parsed snapshot of all stores ({full:true} for
+                                     // untrimmed records — e.g. journal photo bytes)
+    await HC.read('key')             // one store
+    await HC.export()                // byte-faithful envelope: localStorage raw strings
+                                     // verbatim; IndexedDB records complete, tombstones included
+    await HC.import(payload, {confirm: true})   // verbatim restore/seed — destructive,
+                                     // requires confirm; reloads the page so the app
+                                     // rehydrates through its normal boot path
+    HC.actions()                     // list this app's actions
+    await HC.invoke('name', {...})   // perform an action via the same code path as the UI
+
+Seeding history: `HC.export()` → edit the payload (timestamps, ids, records — keep each app's
+documented shape) → `HC.import(payload, {confirm: true})`. Imported data syncs like any local
+edit: blob stores are clock-bumped and pushed on the post-import reload's reconcile pass;
+per-record stores are pushed record-by-record as they are written.
+
+## App directory
+
+Each app is a single page at the site root. State keys listed are what HC registers.
+
+- index.html — the hub. Cards for every practice, weekly usage dashboard, deterministic
+  next-step suggestion (opt-in BYOK companion layer above it). Stores: usage log
+  (hc-usage/records IDB + hill-climbing-usage legacy aggregate), suggestion flag/log/seed,
+  hill-climbing-requests (synced). Actions include account/sync management (login, unlock,
+  logout, deleteRemoteData {confirm}) and suggestion controls. The hub also enumerates the
+  suite in its manifest (`HC.describe().suite`).
+- meditate.html — meditation. Timed mode (a quiet countdown sit — a bell-bookended ambient
+  bed and a countdown ring) is the whole app; the old camera "stillness" mode and all
+  safety/onboarding scaffolding have been removed. Store: hill-climbing-timed-minutes.
+  Actions: setTimedMinutes, beginTimedSit, endTimedSit.
+- breathe.html — breathwork + a stress-then-recover training loop. Store:
+  breathe-session-duration (synced). Actions: setProtocol, setDuration, startBreathwork,
+  stopBreathwork, startExercise, startRecovery, stopTraining, switchMode. Durations recorded
+  are real elapsed time.
+- reflect.html — journal (IndexedDB journal/entries; synced per-entry; sensitive). Photos ride
+  inside entries; reads omit photo bytes unless {full:true}; exports are complete. Second
+  store: the photo-describe consent flag. Actions: addEntry, editEntry, deleteEntry
+  (tombstone), setPhotoAi.
+- nourish.html — learn-to-cook + learn-to-taste, unified in one app (Cook + Taste tabs). Cook:
+  a 2-up/1-down staircase with self-reported outcomes (General + Sushi tracks; pantry + shopping
+  list), each challenge deep-linking to its paired tasting episode. Taste: a ten-episode season
+  on the palate + community guest lessons. Stores: hill-climbing-nourish (synced),
+  hill-climbing-nourish-chef (device-local), hill-climbing-savor (synced; the taste season, now
+  written from inside Nourish). Actions — cook: serveChallenge, skipChallenge, tooEasy,
+  finishCooking, recordOutcome, leaveCooking, switchTrack, toggleHave, addExtra, toggleExtra,
+  removeExtra, setServings, logChefOutcome, removeChefKey; taste: openEpisode, setStage,
+  finishEpisode, deleteNote, addLesson. Deep links: nourish.html#taste (the taste tab),
+  nourish.html#taste-c1 … #taste-c10 (an episode); a bare #c1 … #c10 also resolves (the old
+  Savor deep-links). The standalone savor.html page was deleted — the Taste season lives here.
+- levity.html — comedy-craft ladder + bit notebook. Store: hill-climbing-levity (synced).
+  Actions: newChallenge, skipChallenge, tooEasy, triedIt, reportOutcome, leaveTrying, addBit,
+  toggleBitLanded, deleteBit.
+- foresee.html — calibration training: one-line predictions about your own life with stated
+  confidence (5–95%, never exactly 50), resolved against reality, Brier-scored into the
+  ladder. Store: hill-climbing-foresee (synced). Actions: addPrediction, resolvePrediction
+  ({verdict: yes|no|void} — void never moves the ladder). Calibration is shown as a curve,
+  never a score.
+- climb.html — goals + steps with an append-only IndexedDB event log (climb/events) — seeding
+  events IS seeding action history. Stores: hill-climbing-climb (synced) + the event log
+  (synced per-record). Actions: addGoal, renameGoal, reorderGoal, moveGoal, archiveGoal,
+  restoreGoal, setFocus, clearFocus, addTask, renameTask, toggleTask, deleteTask,
+  deleteEverything. No due dates, points, or streaks — by design.
+- train.html — workout logger with progressive-overload defaults. Store: hill-climbing-train
+  (synced; weights canonically in lbs). Actions: startWorkout, finishWorkout, discardWorkout,
+  addExercise, addExerciseToWorkout, addSet, removeSet, removeEntry, toggleDone, setValue,
+  startTimer, logTime, deleteWorkout, toggleUnits, deleteEverything.
+- remind.html — a plain reminders list you log to yourself: text + an optional local due
+  datetime ("YYYY-MM-DDTHH:mm", or null for "someday"), grouped Overdue / Today / Upcoming /
+  Someday / Done. No streaks or nagging. Store: hill-climbing-remind (synced). Actions:
+  addReminder, editReminder, setDue, toggleDone, snooze, deleteReminder, clearDone. No network
+  surface — Remind has no BYOK send and no notifications yet; due items surface in-app and on the
+  hub's next-step. Recording a reminder records what the person asked to be reminded of.
+- echo.html — a listening memory game (five stones, a growing bell phrase). Store:
+  hill-climbing-echo (device-local; games are deliberately outside sync and the usage
+  dashboard). Actions: begin, tapStone. The only record is the farthest phrase held.
+- garden.html — a zen stone-garden Sokoban, twelve levels, unlimited undo, no clock. Store:
+  hill-climbing-garden (device-local). Actions: openLevel, move, undo, restart. Completion
+  comes only from actually solving — same as a human.
+- anime.html — a webcam cel-shading experiment. No persistent state; frames are made and
+  thrown away. Actions: startCamera, snapshot, toggleRecording, setPreset, setParam —
+  in-memory filter state only; nothing persists.
+- companion.html — BYOK AI companion + Council ("board of directors"), two modes of one app
+  (?mode=council; council.html redirects there). Stores: hill-climbing-companion (includes
+  the cross-conversation memory), hill-climbing-council, hill-climbing-requests (all synced,
+  sensitive/personal), hill-climbing-cc-mode. The Anthropic key lives at hill-climbing-api-key
+  — deliberately outside HC read/export; manage it via setApiKey/removeApiKey. Actions:
+  startNewConversation, clearConversations, clearCouncilSessions, addRequest, deleteRequest,
+  clearRequests, setMode, setApiKey, removeApiKey. Sending a message to the model is a human
+  act in this app — no HC action calls the network. The hub hands off suggestions via
+  companion.html?ask=suggestion.
+- kin.html — a lineage of characters spawned from the person's history (World Phase 1, built
+  single-user first; see "Where this is heading" and KIN.md). A character inherits a frozen
+  snapshot of everything at birth, then diverges into its own person; family name = the person's
+  name, given name per instance; a character proposes its own name and the person approves or
+  returns it with feedback. Store: hill-climbing-kin (synced, sensitive — birth digests contain
+  everything). HC actions (state only): setFamilyName, spawnCharacter, approveName, returnName,
+  deleteCharacter. The network acts — a character proposing its name, and conversation — are
+  UI-only, never HC (the same human/agent boundary as every BYOK surface). A character writes
+  only its own store, never the person's practice stores (§1.4 intact). All app data here is
+  treated as public seed data.
+- govern.html — "Governance, the Game": the governance layer over Kin's families. Rules are
+  authored at levels (charter > family > character); character actions land in an append-only
+  ledger (a real coded invariant — the record is never rewritten); an asynchronous magistrate
+  (BYOK model call) audits the ledger AFTER the fact and writes public verdicts
+  (allow/refuse-with-reason/hold) — never a synchronous gate, and offline/keyless it leaves
+  entries `unreviewed`. The charter floor is code-backed (a lower rule redefining a protected
+  term is rejected in code). A budget layer distributes a token surplus among families by
+  one-family-one-vote proposals above a coded subsistence floor no vote can strip; metering is a
+  hard coded invariant (you cannot spend what you do not have); discretionary budget resets on a
+  per-world cadence (a jubilee that returns everyone to the floor and leaves the record
+  untouched). Store: hill-climbing-govern (synced). HC actions (state only): authorRule,
+  deleteRule, logAction, setPool, setSubsistence, setCadence, addFamily, removeFamily,
+  proposeDistribution, voteOnProposal, resolveProposal, spendTokens, resetBudgets. The
+  magistrate is UI-only network, never an HC action — the same human/agent boundary as every
+  model call. See GOVERNANCE.md / STATEMENT.md.
+
+## Where this is heading
+
+Hill Climbing is evolving, in intention, toward a private, two-person, values-constrained
+digital world: pages becoming "rooms," each person able to have an agent-character grounded in
+their own profile that goes on adventures with the other, under a permission model that doubles
+as the consent model for how each person is represented. This is a documented **direction**,
+drafted and pending founder ratification — **not built**. The window.HC contract above is what
+exists today; nothing world-related has shipped. Details: `WORLD_ARCHITECTURE.md` and
+`WORLD_ROADMAP.md` at the repo root.
+
+One ground rule already fixed for when it lands, because it matters to any agent reading this
+file: **agents write the world, never a person's practice.** Character-authored content will
+land only in a new room-artifact store — never in journal, Foresee, or goals. That boundary
+is what keeps the parity guarantee above true by construction, not by convention.
+
+## Governance
+
+The repo (github.com/cognitivemirrors/hill-climbing) carries the binding documents:
+CONSTRAINTS.md (care, safety, balanced power distribution), REQUIREMENTS.md (the auditable
+data-practices standard — the agent interface is documented there), KNOWN_RISKS.md, BACKLOG.md.
+If what you read here disagrees with the code or those documents, trust the code and the
+documents, and tell the person this file has drifted.
