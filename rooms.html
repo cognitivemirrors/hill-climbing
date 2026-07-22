@@ -79,6 +79,10 @@
   .msg{border:1px solid var(--rule);border-radius:11px;padding:.6rem .8rem;background:var(--raised)}
   .msg .who{display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem}
   .msg .nm{font-family:var(--serif);font-size:.95rem}
+  .msg .time{margin-left:auto;font-family:var(--mono);font-size:.66rem;color:var(--faint);opacity:.5;letter-spacing:.02em;white-space:nowrap}
+  .msg:hover .time{opacity:.85}
+  .daydiv{display:flex;align-items:center;gap:.6rem;color:var(--faint);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;margin:.3rem 0 .1rem;opacity:.55}
+  .daydiv::before,.daydiv::after{content:'';flex:1;height:1px;background:var(--rule)}
   .msg .bd{color:var(--soft);font-size:.92rem;white-space:pre-wrap}
   .msg.agent{border-color:#39304a}
   .msg.research{border-left:3px solid var(--accent);background:var(--sunk)}
@@ -124,6 +128,7 @@
   .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--rule2);color:var(--ink);padding:.55rem 1rem;border-radius:999px;font-size:.85rem;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
   .toast.show{opacity:1}
   .logline{font-family:var(--mono);font-size:.74rem;color:var(--soft);border-bottom:1px solid var(--rule);padding:.3rem 0}
+  .logline .tm{color:var(--faint);opacity:.55}
   .logline .ty{color:var(--accent)}
   .logline .ac{color:var(--agent)}
   code{font-family:var(--mono);font-size:.8rem;color:var(--soft)}
@@ -131,7 +136,7 @@
 </head>
 <body>
 <a class="home" href="/index.html" title="Home">◇</a>
-<div id="version-label">v0.1 · rooms</div>
+<div id="version-label">v0.2 · rooms</div>
 <button id="menu-btn" title="Menu">⋯</button>
 <main class="wrap" id="root"></main>
 <div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
@@ -172,7 +177,7 @@
    single-device (no concurrent edits), simplest, matches govern/kin. */
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const VERSION       = 'v0.1 · rooms';
+const VERSION       = 'v0.2 · rooms';
 const STATE_KEY     = 'hill-climbing-rooms';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-rooms';
 const API_KEY_LS    = 'hill-climbing-api-key';
@@ -189,6 +194,19 @@ const now = ()=>Date.now();
 function uid(p){ const r=(self.crypto&&crypto.randomUUID)?crypto.randomUUID().slice(0,8):Math.random().toString(36).slice(2,10); return (p||'e')+r+now().toString(36).slice(-4); }
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),3200); }
+// Time is shown to people quietly and ABSOLUTELY (never a relative "waiting" counter —
+// that is the intimate-partner pressure surface CONSTRAINTS §5 rejects). Agents get
+// fuller absolute timestamps because they have no clock of their own.
+function fmtTime(ts){ if(!ts) return ''; const d=new Date(ts), n=new Date();
+  const sameDay = d.toDateString()===n.toDateString();
+  const o = sameDay ? {hour:'numeric',minute:'2-digit'}
+    : (d.getFullYear()===n.getFullYear() ? {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}
+    : {year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  try{ return d.toLocaleString(undefined,o).replace(/\s?([AP])M/i,(m,p)=>' '+p.toLowerCase()+'m'); }catch(_){ return ''; } }
+function fmtDay(ts){ if(!ts) return ''; const d=new Date(ts), n=new Date(); if(d.toDateString()===n.toDateString())return 'Today';
+  const y=new Date(n); y.setDate(n.getDate()-1); if(d.toDateString()===y.toDateString())return 'Yesterday';
+  try{ return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}); }catch(_){ return ''; } }
+function fmtFull(ts){ if(!ts) return '(no time)'; try{ return new Date(ts).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(_){ return ''; } }
 
 // ── API key ────────────────────────────────────────────────────────────────────
 let apiKey='';
@@ -302,7 +320,7 @@ function applyEvent(st, e){
     case 'clone.propose': { const c=st.clones[p.id]; if(c){ c.naming.proposed=p.name; c.naming.rationale=p.rationale||''; c.naming.status='pending'; } break; }
     case 'clone.approve': { const c=st.clones[p.id]; if(c&&c.naming.proposed){ c.givenName=c.naming.proposed; c.naming.status='approved'; } break; }
     case 'clone.return': { const c=st.clones[p.id]; if(c){ c.naming.feedback.push({note:p.feedback,at:e.ts}); c.naming.status='proposing'; } break; }
-    case 'clone.say': { const c=st.clones[p.id]; if(c)c.thread.push({role:p.role,text:p.text}); break; }
+    case 'clone.say': { const c=st.clones[p.id]; if(c)c.thread.push({role:p.role,text:p.text,ts:e.ts}); break; }
     case 'clone.remove': delete st.clones[p.id]; break;
     case 'budget.set': Object.assign(st.budget, p); break;
     case 'budget.spend': st.budget.spent[p.actorId]=(st.budget.spent[p.actorId]||0)+(p.amount||0); break;
@@ -403,11 +421,14 @@ function compactionSummary(st, cut){
 }
 function worldContext(st, roomId, recent){
   const L=[];
+  // Agents have no clock of their own, so give them the current time + absolute
+  // timestamps on every line (more visible than the quiet, hover-level time people see).
+  L.push('NOW: '+fmtFull(now())+'. You have no clock of your own — the bracketed timestamps below are your only sense of time. Use them to stay oriented; do not use elapsed time to pressure anyone.');
   const comp=[...world.events].reverse().find(e=>e.type==='compaction');
   if(comp) L.push('EARLIER (compressed): '+comp.payload.summary);
   const feed=world.events.filter(e=>['msg.send','research.result','goal.add','value.add','task.add','enter'].includes(e.type)).slice(-(recent||18));
-  if(feed.length) L.push('RECENT WORLD LOG:\n'+feed.map(e=>logLine(st,e)).join('\n'));
-  if(roomId){ const msgs=(st.messages[roomId]||[]).slice(-14); if(msgs.length) L.push('THIS ROOM ("'+(st.rooms[roomId]?st.rooms[roomId].label:roomId)+'"):\n'+msgs.map(m=>actorName(st,m.actorId)+': '+m.text).join('\n')); }
+  if(feed.length) L.push('RECENT WORLD LOG:\n'+feed.map(e=>'['+fmtFull(e.ts)+'] '+logLine(st,e)).join('\n'));
+  if(roomId){ const msgs=(st.messages[roomId]||[]).slice(-14); if(msgs.length) L.push('THIS ROOM ("'+(st.rooms[roomId]?st.rooms[roomId].label:roomId)+'"):\n'+msgs.map(m=>'['+fmtFull(m.ts)+'] '+actorName(st,m.actorId)+': '+m.text).join('\n')); }
   return L.join('\n\n');
 }
 function logLine(st,e){ const who=actorName(st,e.actor); const p=e.payload||{};
@@ -745,10 +766,14 @@ function renderRoom(root, st, id){
   // transcript
   const convo=el('div','convo'); const msgs=st.messages[id]||[];
   if(!msgs.length) convo.appendChild(el('div','empty','Nothing left here yet. Say something, or run an agent turn.'));
+  let lastDay=null;
   msgs.forEach(m=>{
+    const day = m.ts? new Date(m.ts).toDateString() : null;
+    if(day && day!==lastDay){ convo.appendChild(el('div','daydiv', fmtDay(m.ts))); lastDay=day; }
     const kind=actorKind(st,m.actorId);
     const box=el('div','msg '+(m.kind==='research'?'research':(kind==='agent'?'agent':'')));
     const who=el('div','who'); who.appendChild(el('span','chip '+kind, kind)); who.appendChild(el('span','nm', actorName(st,m.actorId)));
+    if(m.ts){ const t=el('span','time', fmtTime(m.ts)); t.title=fmtFull(m.ts); who.appendChild(t); }
     box.appendChild(who);
     if(m.kind==='research') box.appendChild(el('div','muted','researched: '+m.question));
     box.appendChild(el('div','bd', m.text));
@@ -931,7 +956,7 @@ function renderCloneChat(root, st, id){
   const back=el('button','btn small ghost','‹ Clones'); back.onclick=()=>{ openClone=null; render(); }; root.appendChild(back);
   root.appendChild(el('h1',null,(c.givenName||'Unnamed')+' '+c.familyName));
   root.appendChild(el('p','muted','Born from your world log at event '+c.bornAtSeq+'. It shares that past but is its own person now.'));
-  const convo=el('div','convo'); (c.thread||[]).forEach(m=>{ const box=el('div','msg '+(m.role==='assistant'?'agent':'')); const who=el('div','who'); who.appendChild(el('span','chip '+(m.role==='assistant'?'agent':'human'), m.role==='assistant'?'agent':'you')); who.appendChild(el('span','nm', m.role==='assistant'?((c.givenName||'')+' '+c.familyName):'You')); box.appendChild(who); box.appendChild(el('div','bd',m.text)); convo.appendChild(box); });
+  const convo=el('div','convo'); (c.thread||[]).forEach(m=>{ const box=el('div','msg '+(m.role==='assistant'?'agent':'')); const who=el('div','who'); who.appendChild(el('span','chip '+(m.role==='assistant'?'agent':'human'), m.role==='assistant'?'agent':'you')); who.appendChild(el('span','nm', m.role==='assistant'?((c.givenName||'')+' '+c.familyName):'You')); if(m.ts){ const t=el('span','time', fmtTime(m.ts)); t.title=fmtFull(m.ts); who.appendChild(t); } box.appendChild(who); box.appendChild(el('div','bd',m.text)); convo.appendChild(box); });
   if(!c.thread.length) convo.appendChild(el('div','empty','Say hello.'));
   root.appendChild(convo);
   root.appendChild(document.getElementById('typing-slot')||typingSlot());
@@ -969,6 +994,7 @@ function renderLog(root, st){
   const box=el('div'); box.style.marginTop='.6rem';
   world.events.slice().reverse().slice(0,200).forEach(e=>{
     const line=el('div','logline');
+    const tm=el('span','tm', fmtTime(e.ts)+' '); tm.title=fmtFull(e.ts); line.appendChild(tm);
     if(e.type==='compaction'){ line.appendChild(el('span','ty','[compaction] ')); line.appendChild(document.createTextNode(e.payload.summary)); }
     else { const s=el('span','ty', e.type+' '); line.appendChild(s); const a=el('span','ac', actorName(st,e.actor)+' '); line.appendChild(a); line.appendChild(document.createTextNode(logDetail(e))); }
     box.appendChild(line);

@@ -188,7 +188,10 @@ Each app is a single page at the site root. State keys listed are what HC regist
   Rooms writes ONLY its own store — never a practice store (§1.4 intact); the per-event `actor` is
   authorship in a new world-layer store, outside §1.4's scope. Single-device: friend/partner are
   local actors; networked cross-account sharing, sharing a clone with a remote partner, and
-  unattended autonomy are deferred + gated. See ROOMS.md.
+  unattended autonomy are deferred + gated. Timing: every event is timestamped; when you act you
+  are given a "NOW" anchor + absolute per-line timestamps (you have no clock of your own) — use
+  them to stay oriented, not to pressure anyone about elapsed time. People see the same times
+  quietly (absolute, never a relative "waiting" counter). See ROOMS.md.
 
 ## Where this is heading
 
