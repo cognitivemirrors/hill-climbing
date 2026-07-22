@@ -82,12 +82,10 @@ Each app is a single page at the site root. State keys listed are what HC regist
   hill-climbing-requests (synced). Actions include account/sync management (login, unlock,
   logout, deleteRemoteData {confirm}) and suggestion controls. The hub also enumerates the
   suite in its manifest (`HC.describe().suite`).
-- meditate.html — meditation. Timed mode (a quiet countdown sit) is the live practice; the
-  camera "stillness" mode is hidden (its stores remain seedable). Stores: stillness-game
-  (synced), hill-climbing-timed-minutes, hill-combing-last-trajectory,
-  hill-combing-acknowledged-v1, hill-climbing-introduced-v1, hill-combing-reports (the
-  legacy "hill-combing-" typo prefix is deliberate — never "fix" it). Actions: setTimedMinutes,
-  beginTimedSit, endTimedSit, finishOnboarding, acknowledgeSafety, submitReport.
+- meditate.html — meditation. Timed mode (a quiet countdown sit — a bell-bookended ambient
+  bed and a countdown ring) is the whole app; the old camera "stillness" mode and all
+  safety/onboarding scaffolding have been removed. Store: hill-climbing-timed-minutes.
+  Actions: setTimedMinutes, beginTimedSit, endTimedSit.
 - breathe.html — breathwork + a stress-then-recover training loop. Store:
   breathe-session-duration (synced). Actions: setProtocol, setDuration, startBreathwork,
   stopBreathwork, startExercise, startRecovery, stopTraining, switchMode. Durations recorded
@@ -157,9 +155,15 @@ Each app is a single page at the site root. State keys listed are what HC regist
   (BYOK model call) audits the ledger AFTER the fact and writes public verdicts
   (allow/refuse-with-reason/hold) — never a synchronous gate, and offline/keyless it leaves
   entries `unreviewed`. The charter floor is code-backed (a lower rule redefining a protected
-  term is rejected in code). Store: hill-climbing-govern (synced). HC actions (state only):
-  authorRule, deleteRule, logAction. The magistrate is UI-only network, never an HC action —
-  the same human/agent boundary as every model call. See GOVERNANCE.md / STATEMENT.md.
+  term is rejected in code). A budget layer distributes a token surplus among families by
+  one-family-one-vote proposals above a coded subsistence floor no vote can strip; metering is a
+  hard coded invariant (you cannot spend what you do not have); discretionary budget resets on a
+  per-world cadence (a jubilee that returns everyone to the floor and leaves the record
+  untouched). Store: hill-climbing-govern (synced). HC actions (state only): authorRule,
+  deleteRule, logAction, setPool, setSubsistence, setCadence, addFamily, removeFamily,
+  proposeDistribution, voteOnProposal, resolveProposal, spendTokens, resetBudgets. The
+  magistrate is UI-only network, never an HC action — the same human/agent boundary as every
+  model call. See GOVERNANCE.md / STATEMENT.md.
 
 ## Where this is heading
 

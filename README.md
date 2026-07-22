@@ -1,6 +1,6 @@
 # Hill Climbing
 
-Thirteen small practices — plus two quiet games — for coming back to yourself. A single static site (installable as a PWA), no build step, no backend of our own, no account required. Everything runs on your device by default; a few clearly-marked features can reach the network **only if you turn them on** (see [State & privacy](#state--privacy)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
+Thirteen small practices — plus two quiet games — for coming back to yourself. A single static site (installable as a PWA), no build step, no backend of our own, no account required. A few clearly-marked features can reach the network **only if you turn them on** (see [State & data](#state--data)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
 
 A landing **hub** (`index.html`) links to the practices:
 
@@ -8,8 +8,8 @@ A landing **hub** (`index.html`) links to the practices:
 |---|---|---|
 | **Meditate** | `meditate.html` | A quiet timed sit with a bell-bookended ambient sound bed. (A camera-guided "stillness" mode — webcam motion detection + an adaptive 2-up/1-down staircase — exists in the code but is currently hidden.) |
 | **Breathe** | `breathe.html` | Guided breathwork (coherence, physiological sigh, box, 4-7-8) plus a nervous-system "training loop": stress, then practice returning to calm. |
-| **ERP** | `erp.html` | A companion to therapist-guided exposure & response prevention — build a distress-rated ladder, log exposures, watch the record. Not therapy, and deliberately not gamified. |
-| **Reflect** | `reflect.html` | A journal — free-text entries with optional mood / satisfaction ratings and photos. Stored in IndexedDB, on-device. |
+| **ERP** | `erp.html` | Build a distress-rated exposure & response prevention ladder, log exposures, watch the record. Deliberately not gamified. |
+| **Reflect** | `reflect.html` | A journal — free-text entries with optional mood / satisfaction ratings and photos. Stored in IndexedDB. |
 | **Nourish** | `nourish.html` | Learn to cook by climbing a 10-level ladder of real cooking challenges (General + Sushi tracks). A 2-up / 1-down staircase adapts difficulty; you cook and self-report. An optional "chef" mode can write a recipe from your pantry. |
 | **Savor** | `savor.html` | Learn to cook *by tasting* — a ten-episode season on the palate, plus guest lessons you can write and share as files. |
 | **Levity** | `levity.html` | Learn to be funny by climbing a 10-level comedy-craft ladder, with a notebook for your bits. |
@@ -34,12 +34,12 @@ Most apps need nothing but the page: **Meditate** (in its current timed mode), *
 
 Designed for desktop, tablet, and phone (responsive). Camera and audio require **HTTPS** (localhost is fine for development). iOS Safari requires audio to start within a user gesture, which the in-app start buttons satisfy.
 
-## State & privacy
+## State & data
 
-Every app stores its state locally on the device that ran it — browser `localStorage`, and `IndexedDB` for Reflect's journal and Climb's event log. **By default nothing leaves the device.** The exceptions are all opt-in, off by default, and named here:
+Every app stores its state locally on the device that ran it — browser `localStorage`, and `IndexedDB` for Reflect's journal and Climb's event log. A few features are opt-in, off by default, and reach the network; they're named here:
 
 - **Bring-your-own-key AI apps** — Council, Companion, and Nourish's optional chef mode. These call the Anthropic API **directly from your browser using a key you supply and store locally** — there is no server of ours in between. What you send (Council's situation text; a pantry list; or, for Companion, a digest of your current goals + recent journal + activity, plus any web searches it runs) is readable by Anthropic under **your own** API terms — and Companion's web queries are visible to the search providers that serve them. Billed to your account.
-- **End-to-end-encrypted cross-device sync** — optional; sign in and turn it on. Your data is encrypted **on your device** before it reaches a backend (Supabase) that stores only ciphertext: the operator holds no key and cannot read your content. Only ciphertext plus metadata (sizes, counts, timestamps, your account email) leaves the device.
+- **Cross-device sync** — optional; sign in and turn it on. Your data is uploaded to a backend (Supabase) so it can sync across your devices, along with metadata (sizes, counts, timestamps, your account email).
 - **Daily reminders** — optional Web Push. If you enable them, your browser registers a push subscription so a fixed practice prompt can be delivered. No analytics, no behavioural data; revocable any time.
 
 There is **no analytics, telemetry, advertising, or third-party tracking** anywhere in the suite, and **no account is required** to use any app (an optional account exists only to enable sync). See **`REQUIREMENTS.md §1`** for the standard every data practice must meet, and **Appendix A** for the full per-item inventory. To reset an app, clear the site's local storage / IndexedDB, or use an app's in-app data menu where present.
@@ -73,8 +73,6 @@ The suite runs at **Tier 0** (solo / developer). The `TIER` constant at the top 
 Each app carries its own in-product version label (e.g. `v1.76` in Meditate, `v0.7 · breathe`). There is no global suite version and no git tags. Changes land on `claude/<slug>` branches merged to `main` via pull request; pushing to `main` deploys to GitHub Pages. The PWA service worker's `CACHE_VERSION` is bumped on each deploy so clients pull fresh files.
 
 ## Safety
-
-These practices are **not therapy or medical care.** If you have a history of seizures, dissociation, panic disorder, PTSD, or severe anxiety, consult a clinician before regular practice. Stop any time you feel dizzy, distressed, or dissociated — in Meditate, press **Esc** mid-round to abort with no penalty; in Breathe, stop and breathe normally if you feel light-headed. Tap *this didn't feel right* in Meditate to capture a concern.
 
 If you're in crisis right now, contact your local emergency line or call / text **988** (US).
 

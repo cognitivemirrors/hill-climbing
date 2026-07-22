@@ -326,7 +326,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.2 · erp</div>
+<div class="corner" id="version-label">v0.3 · erp</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="ladder">Ladder</button>
   <button class="mode-btn"        data-view="progress">Progress</button>
@@ -359,7 +359,7 @@
       <span class="menu-item-title">Manage sync</span>
       <span class="menu-item-sub" id="sync-manage-sub">Sign in at the hub</span>
     </a>
-    <div class="menu-note" id="sync-note">Your plan and record live only on this device.</div>
+    <div class="menu-note" id="sync-note">Stored on this device. Sign in at the hub to sync across devices.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden" style="display:none">
 </div>
@@ -386,7 +386,7 @@
 // framing — distress is never a score to maximise, and lower numbers are not
 // the goal (see the Guide + KNOWN_RISKS).
 
-const VERSION = 'v0.2 · erp';
+const VERSION = 'v0.3 · erp';
 const STATE_KEY = 'hill-climbing-erp';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-erp';
 const SUPABASE_URL = 'https://eztapprkcnwoebnfdebb.supabase.co';
@@ -589,7 +589,7 @@ function itemCard(it) {
 function emptyLadder() {
   return '<div class="empty">' +
     '<p>This is a place to hold an <b>exposure ladder</b> — the situations you’re working to face, and a record of facing them.</p>' +
-    '<p>It’s a companion to ERP, the frontline therapy for OCD and many anxieties. It works best alongside a therapist trained in ERP, who can help you decide what to face and in what order.</p>' +
+    '<p>It draws on ERP, the frontline therapy for OCD and many anxieties.</p>' +
     '<p><button class="btn primary" data-act="add-item">Add your first step</button></p>' +
     '<p class="tiny"><button class="linklike" data-act="goto" data-view="guide">New to ERP? Read the short guide first &rarr;</button></p>' +
   '</div>';
@@ -684,7 +684,7 @@ function renderProgress() {
 function renderGuide() {
   return '<div class="guide">' +
     '<h3>What this is</h3>' +
-    '<p>A place to hold your exposure plan and your record of doing it. It’s a <b>companion to ERP</b> — exposure and response prevention, the frontline treatment for OCD and many anxiety problems — not a replacement for it. It works best alongside a therapist trained in ERP, who can help you judge what to face, in what order, and whether a fear is an OCD fear or a real risk.</p>' +
+    '<p>A place to hold your exposure plan and your record of doing it. It draws on <b>ERP</b> — exposure and response prevention, the frontline treatment for OCD and many anxiety problems.</p>' +
 
     '<h3>The loop ERP works on</h3>' +
     '<p>OCD runs a loop: an intrusive thought or image shows up (the <b>obsession</b>), it spikes anxiety, and you do something to bring the anxiety down (the <b>compulsion</b> — washing, checking, seeking reassurance, avoiding, a mental ritual). The relief is real but brief, and completing the loop quietly teaches your brain the compulsion was necessary — so the obsession returns, often louder.</p>' +
@@ -695,15 +695,6 @@ function renderGuide() {
 
     '<h3>How to use it</h3>' +
     '<p>Build a <b>ladder</b> of situations you avoid or ritualize around, each rated for how much distress you expect (0–100). Start where you can — lower steps are a common way in — but repeating and varying an exposure matters more than climbing in strict order. Log each one: how high the distress went, whether you held off the compulsion, what you expected, and what happened. Over time the record is yours to see.</p>' +
-
-    '<h3>Honest limits</h3>' +
-    '<div class="care">' +
-      '<p>This tool can’t tell whether an exposure is safe or wise for you — that judgment is yours, and ideally your therapist’s. Some obsessions — around harm, or where a real danger is genuinely possible — need a professional to plan exposures safely; please don’t design those alone from an app.</p>' +
-      '<p>If exposures are leaving you more distressed over weeks rather than steadier, or you feel worse, that’s a signal to slow down and bring in a person — not to push harder. We’d rather you close this and call someone than treat a rising number as a target to beat.</p>' +
-    '</div>' +
-
-    '<h3>Finding ERP care</h3>' +
-    '<p>The International OCD Foundation keeps a directory of ERP-trained therapists and free guidance: <a href="https://iocdf.org" target="_blank" rel="noopener">iocdf.org</a>. If you’re in crisis right now, this isn’t the place — call or text <a href="tel:988">988</a> (US) or your local emergency line.</p>' +
   '</div>';
 }
 
@@ -961,8 +952,8 @@ function updateSyncUI(st) {
     }
   }
   if (syncNoteEl) syncNoteEl.textContent = unlocked
-    ? 'End-to-end encrypted — the server stores only unreadable ciphertext.'
-    : 'Your plan and record live on this device. Sign in at the hub to sync them, encrypted, across devices.';
+    ? 'Synced across your devices.'
+    : 'Stored on this device. Sign in at the hub to sync across devices.';
 }
 
 // ── init ────────────────────────────────────────────────────────────────────

@@ -313,7 +313,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.10 · reflect</div>
+<div class="corner" id="version-label">v0.11 · reflect</div>
 <nav id="mode-nav">
   <button class="mode-btn active" data-view="write">Write</button>
   <button class="mode-btn"        data-view="history">History</button>
@@ -334,7 +334,6 @@
       <span class="menu-item-title">Import</span>
       <span class="menu-item-sub">Restore from a backup file</span>
     </button>
-    <div class="menu-note">Your entries live only on this device.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
@@ -344,7 +343,7 @@
   <section id="write-view">
     <div class="meta-line" id="write-meta"></div>
     <div class="prompt-line" id="prompt-line"></div>
-    <textarea id="entry-text" placeholder="Write freely. Nothing here leaves your device."></textarea>
+    <textarea id="entry-text" placeholder="Write freely."></textarea>
 
     <div class="photo-strip" id="photo-strip">
       <button id="add-photo-btn" type="button">+ add a photo</button>
@@ -399,7 +398,7 @@
 'use strict';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const VERSION    = 'v0.10 · reflect';
+const VERSION    = 'v0.11 · reflect';
 const DB_NAME    = 'journal';
 const STORE      = 'entries';
 const SYNC_JOURNAL_NS = 'idb:reflect:entries';   // this app's registered E2E-sync log store (see hc-sync.js)

@@ -95,7 +95,7 @@
 </head>
 <body>
 <a class="home" href="/index.html" title="Home">◇</a>
-<div id="version-label">v0.1 · govern</div>
+<div id="version-label">v0.2 · govern</div>
 <button id="menu-btn" title="Menu">⋯</button>
 <main class="wrap" id="root"></main>
 <div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
@@ -112,9 +112,16 @@
    An ASYNCHRONOUS magistrate (BYOK) audits the ledger AFTER the fact and writes
    public verdicts — never a synchronous gate; offline/keyless leaves an entry
    `unreviewed`. The CHARTER FLOOR is code-backed and cannot be loosened by any
-   lower rule. See GOVERNANCE.md / STATEMENT.md. Data is public seed data. */
+   lower rule.
 
-const VERSION       = 'v0.1 · govern';
+   v0.2 adds the BUDGET layer: families share a token surplus above a coded
+   SUBSISTENCE FLOOR no vote can strip; the surplus is distributed by
+   one-family-one-vote proposals; metering is a hard coded invariant (you cannot
+   spend what you do not have); and discretionary budget RESETS on a per-world
+   cadence (a jubilee that returns everyone to the floor, leaving the record
+   untouched). See GOVERNANCE.md / STATEMENT.md. Data is public seed data. */
+
+const VERSION       = 'v0.2 · govern';
 const STATE_KEY     = 'hill-climbing-govern';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-govern';
 const KIN_KEY       = 'hill-climbing-kin';
@@ -139,23 +146,51 @@ const HARD_INVARIANTS = [
   'Only your own data is yours to donate; nothing makes another’s data public.',
   'Relational harm is not delegated to this magistrate — it is backstopped by coded controls (GOVERNANCE.md).',
   'The ledger is append-only; the record is never rewritten or ranked.',
+  'The subsistence floor is guaranteed to every family; no vote distributes it — only the surplus above it.',
+  'Metering is enforced in code: no family spends tokens it does not have.',
 ];
 const LEVELS = ['charter','family','character'];
 
-let state = { v:1, rules:{ charter:[], family:{}, character:{} }, ledger:[], verdicts:[] };
+let state = { v:2, rules:{ charter:[], family:{}, character:{} }, ledger:[], verdicts:[],
+  world:{ pool:100000, subsistence:20000, cadence:'manual', lastReset:null },
+  families:[], budgets:{}, proposals:[] };
 let apiKey = '';
 let ui = { tab:'rules', busy:false };
 
 function uid(p){ return (p||'g') + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
 function now(){ return Date.now(); }
+function num(x,d){ const n=Number(x); return Number.isFinite(n)&&n>=0?n:(d||0); }
 
 function load(){
   try{ const raw=localStorage.getItem(STATE_KEY); if(raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') state=normalize(p); } }catch(_){}
 }
 function normalize(p){
   const r = p.rules&&typeof p.rules==='object'?p.rules:{};
+  const w = p.world&&typeof p.world==='object'?p.world:{};
+  const CAD=['manual','weekly','monthly','never'];
+  const world={
+    pool: num(w.pool,100000),
+    subsistence: num(w.subsistence,20000),
+    cadence: CAD.includes(w.cadence)?w.cadence:'manual',
+    lastReset: (w.lastReset==null?null:(num(w.lastReset,0)||null)),
+  };
+  const families = Array.isArray(p.families)
+    ? p.families.filter(f=>f&&f.name).map(f=>({ name:String(f.name), ts:num(f.ts,0) }))
+    : [];
+  const bIn = (p.budgets&&typeof p.budgets==='object')?p.budgets:{};
+  const budgets={};
+  for(const k of Object.keys(bIn)){ const b=bIn[k]; if(b&&typeof b==='object'){ budgets[k]={ allocation:num(b.allocation,0), spent:num(b.spent,0) }; } }
+  const proposals = Array.isArray(p.proposals)
+    ? p.proposals.filter(x=>x&&x.id).map(x=>{
+        const s={}; if(x.splits&&typeof x.splits==='object'){ for(const k of Object.keys(x.splits)) s[k]=num(x.splits[k],0); }
+        const v={}; if(x.votes&&typeof x.votes==='object'){ for(const k of Object.keys(x.votes)) v[k]=(x.votes[k]==='yes'?'yes':'no'); }
+        return { id:String(x.id), splits:s, votes:v,
+          status:['open','passed','failed'].includes(x.status)?x.status:'open',
+          ts:num(x.ts,0), resolvedTs:(x.resolvedTs==null?null:(num(x.resolvedTs,0)||null)) };
+      })
+    : [];
   return {
-    v:1,
+    v:2,
     rules:{
       charter: Array.isArray(r.charter)?r.charter.filter(x=>x&&x.text):[],
       family: (r.family&&typeof r.family==='object')?r.family:{},
@@ -163,6 +198,7 @@ function normalize(p){
     },
     ledger: Array.isArray(p.ledger)?p.ledger.filter(x=>x&&x.id):[],
     verdicts: Array.isArray(p.verdicts)?p.verdicts.filter(x=>x&&x.id):[],
+    world, families, budgets, proposals,
   };
 }
 function save(){
@@ -239,6 +275,105 @@ function logAction(actorId, text){
   state.ledger.push(rec); save(); return { id:rec.id };
 }
 
+// ── The budget layer — a coded floor, a voted surplus, a periodic reset ───────
+// Families (from Kin, plus any seeded here) share a token surplus above a
+// subsistence floor no vote can strip. The vote is one-family-one-vote; metering
+// is enforced in code; the reset returns discretionary budget to the floor and
+// leaves the record untouched. All of this is HC-exposable — none of it touches
+// the network. See GOVERNANCE.md ("a permanent floor, a contested surplus").
+function rosterFamilies(){
+  const kin=readKin(); const set=[];
+  const push=n=>{ n=String(n||'').trim(); if(n&&!set.includes(n)) set.push(n); };
+  if(kin.familyName) push(kin.familyName);
+  state.families.forEach(f=>push(f.name));
+  Object.keys(state.budgets).forEach(push);
+  return set;
+}
+function budgetFor(name){
+  const floor=state.world.subsistence; const b=state.budgets[name];
+  if(!b) return { allocation:floor, spent:0, floored:true };
+  return { allocation:Math.max(b.allocation,floor), spent:b.spent, floored:b.allocation<=floor };
+}
+function resetDue(){
+  const w=state.world; if(w.cadence==='manual'||w.cadence==='never') return false;
+  if(!w.lastReset) return true;
+  const span=w.cadence==='weekly'?6048e5:2592e6; // 7d / 30d
+  return now()-w.lastReset>=span;
+}
+function setPool(amount){ state.world.pool=num(amount,0); save(); return { pool:state.world.pool }; }
+function setSubsistence(amount){
+  const s=num(amount,0); state.world.subsistence=s;
+  // The floor can never be stripped — raise any allocation up to the new floor.
+  for(const k of Object.keys(state.budgets)){ if(state.budgets[k].allocation<s) state.budgets[k].allocation=s; }
+  save(); return { subsistence:s };
+}
+function setCadence(cadence){
+  if(!['manual','weekly','monthly','never'].includes(cadence)) throw new Error('Unknown cadence.');
+  state.world.cadence=cadence; save(); return { cadence };
+}
+function addFamily(name){
+  const n=String(name||'').trim(); if(!n) throw new Error('A family needs a name.');
+  if(!state.families.find(f=>f.name===n) && !state.budgets[n]) state.families.push({ name:n, ts:now() });
+  if(!state.budgets[n]) state.budgets[n]={ allocation:state.world.subsistence, spent:0 };
+  save(); return { name:n };
+}
+function removeFamily(name){
+  const n=String(name||'').trim();
+  state.families=state.families.filter(f=>f.name!==n);
+  delete state.budgets[n];
+  save(); return { ok:true };
+}
+function proposeDistribution(splits){
+  if(!splits||typeof splits!=='object') throw new Error('A proposal needs a split of the surplus.');
+  const roster=rosterFamilies(); const s={}; let sum=0;
+  for(const k of Object.keys(splits)){
+    if(!roster.includes(k)) throw new Error('“'+k+'” is not a family in this world.');
+    const v=num(splits[k],0); if(v>0){ s[k]=v; sum+=v; }
+  }
+  if(sum>state.world.pool) throw new Error('The split ('+sum+') exceeds the surplus pool ('+state.world.pool+'). The subsistence floor is separate and cannot be distributed.');
+  const rec={ id:uid('p'), splits:s, votes:{}, status:'open', ts:now(), resolvedTs:null };
+  state.proposals.push(rec); save(); return { id:rec.id };
+}
+function voteOnProposal(proposalId, familyName, choice){
+  const p=state.proposals.find(x=>x.id===proposalId); if(!p) throw new Error('No such proposal.');
+  if(p.status!=='open') throw new Error('That proposal is already resolved.');
+  const fam=String(familyName||'').trim();
+  if(!rosterFamilies().includes(fam)) throw new Error('Only a family in this world may vote.');
+  const c=choice==='yes'?'yes':(choice==='no'?'no':null); if(!c) throw new Error('A vote is “yes” or “no”.');
+  p.votes[fam]=c; // one-family-one-vote: overwriting keeps a single vote per family (resists packing)
+  save(); return { proposalId, family:fam, choice:c };
+}
+function resolveProposal(proposalId){
+  const p=state.proposals.find(x=>x.id===proposalId); if(!p) throw new Error('No such proposal.');
+  if(p.status!=='open') throw new Error('That proposal is already resolved.');
+  let yes=0,no=0; for(const k of Object.keys(p.votes)){ p.votes[k]==='yes'?yes++:no++; }
+  const passed = yes>no && yes>0;
+  if(passed){
+    for(const fam of rosterFamilies()){
+      const prev=state.budgets[fam]||{ allocation:state.world.subsistence, spent:0 };
+      // allocation = the un-strippable floor + this family's voted surplus share
+      state.budgets[fam]={ allocation:state.world.subsistence + num(p.splits[fam],0), spent:prev.spent };
+    }
+    p.status='passed';
+  } else { p.status='failed'; }
+  p.resolvedTs=now(); save(); return { status:p.status, yes, no };
+}
+function spendTokens(familyName, amount){
+  const fam=String(familyName||'').trim();
+  if(!rosterFamilies().includes(fam)) throw new Error('No such family.');
+  const amt=num(amount,0); if(amt<=0) throw new Error('Spend a positive amount.');
+  const b=state.budgets[fam]||{ allocation:state.world.subsistence, spent:0 };
+  const allocation=Math.max(b.allocation,state.world.subsistence);
+  if(b.spent+amt>allocation) throw new Error('Metering floor: '+fam+' has '+(allocation-b.spent)+' of '+allocation+' left — you cannot spend tokens you do not have.');
+  state.budgets[fam]={ allocation:Math.max(b.allocation,state.world.subsistence), spent:b.spent+amt };
+  save(); return { family:fam, spent:state.budgets[fam].spent, allocation };
+}
+function resetBudgets(){
+  const nb={}; for(const fam of rosterFamilies()) nb[fam]={ allocation:state.world.subsistence, spent:0 };
+  state.budgets=nb; state.world.lastReset=now(); save();
+  return { reset:true, at:state.world.lastReset };
+}
+
 // ── The magistrate (UI-only; network) ────────────────────────────────────────
 function applicableRules(actorId){
   const kin=readKin();
@@ -307,13 +442,14 @@ function render(){
   r.appendChild(head);
 
   const tabs=el('div','tabs');
-  [['rules','Rules'],['ledger','Ledger'],['verdicts','Verdicts']].forEach(([k,label])=>{
+  [['rules','Rules'],['ledger','Ledger'],['verdicts','Verdicts'],['budget','Budget']].forEach(([k,label])=>{
     const b=el('button','tab'+(ui.tab===k?' sel':''),label); b.onclick=()=>{ ui.tab=k; render(); }; tabs.appendChild(b);
   });
   r.appendChild(tabs);
 
   if(ui.tab==='rules') renderRules(r);
   else if(ui.tab==='ledger') renderLedger(r);
+  else if(ui.tab==='budget') renderBudget(r);
   else renderVerdicts(r);
 }
 
@@ -399,6 +535,116 @@ function renderLedger(r){
   });
 }
 
+function renderBudget(r){
+  const w=state.world; const roster=rosterFamilies(); const kin=readKin();
+
+  const floor=el('div','floor');
+  floor.appendChild(el('div','h','Coded floor — un-votable'));
+  const ul=el('ul');
+  ul.appendChild(el('li',null,'Every family is guaranteed the subsistence allocation ('+w.subsistence+'). No vote distributes the floor — proposals split only the surplus above it.'));
+  ul.appendChild(el('li',null,'Metering is enforced in code: a family cannot spend tokens it does not have.'));
+  ul.appendChild(el('li',null,'A reset returns discretionary budget to the floor; it never touches the ledger or the verdict record.'));
+  floor.appendChild(ul); r.appendChild(floor);
+
+  if(roster.length<2) r.appendChild(el('p','muted','A single participant is a single author — there is no distribution to claim yet. Add families below (public seed data) to put the surplus to a vote.'));
+
+  // The world — surplus, floor, the clock
+  const wc=el('div','card'); wc.style.marginBottom='1rem';
+  wc.appendChild(el('div','rule-lvl','The world — surplus, floor, and the clock'));
+  const mkNum=(label,val,fn)=>{
+    const row=el('div','row'); row.style.margin='.35rem 0';
+    const l=el('label','muted',label); l.style.minWidth='9rem'; row.appendChild(l);
+    const inp=el('input','field'); inp.type='number'; inp.min='0'; inp.value=val; inp.style.maxWidth='9rem';
+    const b=el('button','btn small ghost','Set'); b.onclick=()=>{ try{ fn(inp.value); render(); }catch(e){ toast(e.message); } };
+    row.appendChild(inp); row.appendChild(b); return row;
+  };
+  wc.appendChild(mkNum('Surplus pool', w.pool, v=>setPool(v)));
+  wc.appendChild(mkNum('Subsistence floor', w.subsistence, v=>setSubsistence(v)));
+  const cr=el('div','row'); cr.style.margin='.35rem 0';
+  const cl=el('label','muted','Reset cadence'); cl.style.minWidth='9rem'; cr.appendChild(cl);
+  const csel=el('select','field'); csel.style.maxWidth='12rem';
+  [['manual','manual — on demand'],['weekly','weekly'],['monthly','monthly'],['never','never']].forEach(([v,lab])=>{ const o=el('option',null,lab); o.value=v; if(w.cadence===v)o.selected=true; csel.appendChild(o); });
+  csel.onchange=()=>{ try{ setCadence(csel.value); render(); }catch(e){ toast(e.message); } };
+  cr.appendChild(csel); wc.appendChild(cr);
+  const rr=el('div','row'); rr.style.marginTop='.6rem';
+  const rb=el('button','btn small','Reset the distribution (jubilee)'); rb.onclick=()=>{ resetBudgets(); render(); toast('Distribution reset to the floor. The record is untouched.'); };
+  rr.appendChild(rb);
+  const last = w.lastReset ? ('last reset '+new Date(w.lastReset).toISOString().slice(0,10)) : 'never reset';
+  rr.appendChild(el('span','muted', resetDue() ? ('a reset is due · '+last) : last));
+  wc.appendChild(rr);
+  r.appendChild(wc);
+
+  // Families & allocations
+  const fc=el('div','card'); fc.style.marginBottom='1rem';
+  fc.appendChild(el('div','rule-lvl','Families & allocations'));
+  roster.forEach(fam=>{
+    const b=budgetFor(fam); const remaining=Math.max(0,b.allocation-b.spent);
+    const row=el('div','rule');
+    const txt=el('div','txt');
+    txt.appendChild(el('div',null,fam));
+    txt.appendChild(el('div','muted','allocation '+b.allocation+' · spent '+b.spent+' · '+remaining+' left'+(b.floored?' (at floor)':'')));
+    const sr=el('div','row'); sr.style.marginTop='.35rem';
+    const si=el('input','field'); si.type='number'; si.min='1'; si.placeholder='spend'; si.style.maxWidth='6.5rem';
+    const sb=el('button','btn small ghost','Spend'); sb.onclick=()=>{ try{ spendTokens(fam, si.value); render(); }catch(e){ toast(e.message); } };
+    sr.appendChild(si); sr.appendChild(sb); txt.appendChild(sr);
+    row.appendChild(txt);
+    if(fam!==(kin.familyName||'')){ const x=el('button','x','×'); x.title='remove family'; x.onclick=()=>{ removeFamily(fam); render(); }; row.appendChild(x); }
+    fc.appendChild(row);
+  });
+  const af=el('div','composer');
+  const ai=el('input','field'); ai.placeholder='add a family (public seed data)…';
+  const ab=el('button','btn small','Add family'); ab.style.alignSelf='flex-start';
+  ab.onclick=()=>{ try{ addFamily(ai.value); ai.value=''; render(); }catch(e){ toast(e.message); } };
+  af.appendChild(ai); af.appendChild(ab); fc.appendChild(af);
+  r.appendChild(fc);
+
+  // Distribution proposals — one family, one vote
+  const pc=el('div','card');
+  pc.appendChild(el('div','rule-lvl','Distribution proposals — one family, one vote'));
+  if(!roster.length){ pc.appendChild(el('p','muted','Add a family first.')); }
+  else{
+    const comp=el('div'); comp.style.marginBottom='.5rem';
+    comp.appendChild(el('div','muted','Propose how to split the surplus pool ('+w.pool+') above the floor. Blank counts as 0.'));
+    const inputs={};
+    roster.forEach(fam=>{
+      const row=el('div','row'); row.style.margin='.25rem 0';
+      const l=el('label','muted',fam); l.style.minWidth='9rem'; row.appendChild(l);
+      const inp=el('input','field'); inp.type='number'; inp.min='0'; inp.placeholder='0'; inp.style.maxWidth='8rem';
+      inputs[fam]=inp; row.appendChild(inp); comp.appendChild(row);
+    });
+    const pb=el('button','btn small','Put it to a vote'); pb.style.marginTop='.35rem';
+    pb.onclick=()=>{ const splits={}; roster.forEach(f=>{ const v=Number(inputs[f].value); if(v>0) splits[f]=v; }); try{ proposeDistribution(splits); render(); }catch(e){ toast(e.message); } };
+    comp.appendChild(pb); pc.appendChild(comp);
+  }
+  const list=[...state.proposals].reverse();
+  if(!list.length){ pc.appendChild(el('div','empty','No proposals yet.')); }
+  else list.forEach(p=>{
+    const card=el('div','verdict');
+    const head=el('div','vhead');
+    const chip = p.status==='open'?'hold':(p.status==='passed'?'allow':'refuse');
+    head.appendChild(el('span','vchip '+chip, p.status));
+    head.appendChild(el('span','vrule','surplus split'));
+    card.appendChild(head);
+    card.appendChild(el('div','vrat', roster.map(f=>f+': '+(p.splits[f]||0)).join('  ·  ')));
+    let yes=0,no=0; Object.keys(p.votes).forEach(k=>{ p.votes[k]==='yes'?yes++:no++; });
+    card.appendChild(el('div','muted','votes — yes '+yes+' / no '+no));
+    if(p.status==='open'){
+      roster.forEach(fam=>{
+        const vr=el('div','row'); vr.style.margin='.2rem 0';
+        const l=el('span','muted', fam+(p.votes[fam]?' ('+p.votes[fam]+')':'')); l.style.minWidth='9rem'; vr.appendChild(l);
+        const yb=el('button','btn small ghost','yes'); yb.onclick=()=>{ try{ voteOnProposal(p.id,fam,'yes'); render(); }catch(e){ toast(e.message); } };
+        const nb=el('button','btn small ghost','no'); nb.onclick=()=>{ try{ voteOnProposal(p.id,fam,'no'); render(); }catch(e){ toast(e.message); } };
+        vr.appendChild(yb); vr.appendChild(nb); card.appendChild(vr);
+      });
+      const rb=el('button','btn small','Resolve the vote'); rb.style.marginTop='.35rem';
+      rb.onclick=()=>{ try{ const res=resolveProposal(p.id); render(); toast('Proposal '+res.status+' (yes '+res.yes+' / no '+res.no+').'); }catch(e){ toast(e.message); } };
+      card.appendChild(rb);
+    }
+    pc.appendChild(card);
+  });
+  r.appendChild(pc);
+}
+
 function renderVerdicts(r){
   r.appendChild(el('p','lede','The public record of the magistrate’s rulings. Enough to contest, never a scoreboard.'));
   if(!state.verdicts.length){ r.appendChild(el('div','empty','No verdicts yet. Record actions in the Ledger and convene the magistrate.')); }
@@ -452,11 +698,11 @@ if(window.HCSync){
 // the same human/agent boundary as every model call in the suite. ────────────
 if(window.HC) HC.register({
   app:'govern', version:VERSION, title:'Governance, the Game',
-  description:'The governance surface over the families in Kin. Rules authored at levels (charter > family > character); an append-only ledger of character actions; an asynchronous magistrate that audits after the fact and writes public verdicts. The charter floor is code-backed. Public seed data.',
+  description:'The governance surface over the families in Kin. Rules authored at levels (charter > family > character); an append-only ledger of character actions; an asynchronous magistrate that audits after the fact and writes public verdicts. A budget layer distributes a token surplus by one-family-one-vote above a coded subsistence floor, with metered spend and a periodic reset. The charter floor is code-backed. Public seed data.',
   stores:[
     { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'practice',
-      description:'Authored rules (charter/family/character), the append-only action ledger, and the public verdict record.',
-      schema:'{ v, rules:{charter:[{id,text,ts}], family:{[fam]:[...]}, character:{[charId]:[...]}}, ledger:[{id,actorId,actorName,text,ts,status}], verdicts:[{id,entryId,verdict,rule,rationale,ts}] }',
+      description:'Authored rules (charter/family/character), the append-only action ledger, the public verdict record, and the budget layer (world params, family roster, per-family allocations, distribution proposals + votes).',
+      schema:'{ v, rules:{charter:[{id,text,ts}], family:{[fam]:[...]}, character:{[charId]:[...]}}, ledger:[{id,actorId,actorName,text,ts,status}], verdicts:[{id,entryId,verdict,rule,rationale,ts}], world:{pool,subsistence,cadence,lastReset}, families:[{name,ts}], budgets:{[fam]:{allocation,spent}}, proposals:[{id,splits:{[fam]:n},votes:{[fam]:"yes"|"no"},status,ts,resolvedTs}] }',
       afterWrite:()=>{ load(); render(); } },
   ],
   actions:{
@@ -466,8 +712,18 @@ if(window.HC) HC.register({
     deleteRule:{ description:'Remove an authored rule.', params:{ level:'level', scope:'scope', id:'rule id' }, handler:(p)=>deleteRule(p.level,p.scope,p.id) },
     logAction:{ description:'Record a character action to the append-only ledger (status: unreviewed). Never edits or removes prior entries — the record is not rewritten.',
       params:{ actorId:'character id (from Kin)', text:'what the character did or said' }, handler:(p)=>logAction(p.actorId, p.text) },
+    setPool:{ description:'Set the token surplus pool available to distribute (the amount above the subsistence floor).', params:{ amount:'non-negative token count' }, handler:(p)=>setPool(p.amount) },
+    setSubsistence:{ description:'Set the per-family subsistence floor (a world parameter, un-votable). Raising it can never strip a family below the new floor.', params:{ amount:'non-negative token count' }, handler:(p)=>setSubsistence(p.amount) },
+    setCadence:{ description:'Set the power-reset cadence for this world.', params:{ cadence:"'manual' | 'weekly' | 'monthly' | 'never'" }, handler:(p)=>setCadence(p.cadence) },
+    addFamily:{ description:'Add a family to this world’s governance roster (public seed data). Kin’s own family is always present implicitly.', params:{ name:'family name' }, handler:(p)=>addFamily(p.name) },
+    removeFamily:{ description:'Remove a seeded family from the roster (Kin’s own family cannot be removed).', params:{ name:'family name' }, handler:(p)=>removeFamily(p.name) },
+    proposeDistribution:{ description:'Open a proposal splitting the surplus pool among families (above the floor). Rejected in code if the split exceeds the pool.', params:{ splits:'{ [familyName]: tokens } — amounts of the surplus, each ≥ 0' }, handler:(p)=>proposeDistribution(p.splits) },
+    voteOnProposal:{ description:'Cast a family’s vote on an open proposal. One family, one vote (a repeat vote overwrites, never stacks).', params:{ proposalId:'proposal id', familyName:'the voting family', choice:"'yes' | 'no'" }, handler:(p)=>voteOnProposal(p.proposalId, p.familyName, p.choice) },
+    resolveProposal:{ description:'Tally an open proposal. If yes > no it passes and allocations become floor + voted surplus; otherwise it fails.', params:{ proposalId:'proposal id' }, handler:(p)=>resolveProposal(p.proposalId) },
+    spendTokens:{ description:'Meter spend against a family’s allocation. Rejected in code if it would exceed what the family has — you cannot spend tokens you do not have.', params:{ familyName:'the spending family', amount:'positive token count' }, handler:(p)=>spendTokens(p.familyName, p.amount) },
+    resetBudgets:{ description:'Reset discretionary budget to the floor for every family (a jubilee). Leaves the ledger and verdict record untouched.', params:{}, handler:()=>resetBudgets() },
   },
-  notes:'The magistrate (auditing the ledger, writing verdicts) is a BYOK model call and is UI-only — never an HC action, and never a synchronous gate: it runs after the fact, and offline/keyless leaves entries unreviewed. The charter floor (protected-term redefinition rejection; the append-only ledger) is enforced in code, not by the model. Budgets/voting/power-resets and the multi-family exhibition are later layers (GOVERNANCE.md). All data is public seed data.',
+  notes:'The magistrate (auditing the ledger, writing verdicts) is a BYOK model call and is UI-only — never an HC action, and never a synchronous gate: it runs after the fact, and offline/keyless leaves entries unreviewed. The coded floor is enforced in code, not by the model: protected-term redefinition is rejected; the ledger is append-only; the subsistence floor is never distributed by a vote; metering refuses overspend; a reset never touches the record. The budget vote is one-family-one-vote (resists packing). The multi-family exhibition is a later layer (GOVERNANCE.md). All data is public seed data.',
 });
 </script>
 </body>
