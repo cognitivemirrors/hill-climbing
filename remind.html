@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Remind</title>
+<meta name="theme-color" content="#0f1016">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#0f1016; --raised:#171826; --sunk:#0a0b11; --ink:#e9eaf2; --soft:#a6a9bd; --faint:#6d7189;
+    --rule:#242637; --rule2:#343650; --accent:#8a8fe0; --accent-soft:#6d72c9; --accent-t:rgba(138,143,224,.14);
+    --overdue:#d8a24b; --today:#8a8fe0; --upcoming:#6d7189; --done:#5b8f74; --alert:#cf7a5a;
+    --serif:'Iowan Old Style','Palatino Linotype','Palatino','Georgia',serif;
+    --sans:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,'Menlo',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  a{color:var(--accent);text-decoration:none}
+  .home{position:fixed;top:.7rem;left:.8rem;color:var(--faint);font-size:1.1rem;z-index:20}
+  .home:hover{color:var(--ink)}
+  #version-label{position:fixed;top:.8rem;right:2.6rem;font-size:.7rem;color:var(--faint);font-family:var(--mono);z-index:20}
+  #menu-btn{position:fixed;top:.6rem;right:.7rem;background:none;border:none;color:var(--faint);font-size:1.3rem;cursor:pointer;z-index:21}
+  #menu-btn:hover{color:var(--ink)}
+  .wrap{max-width:660px;width:100%;margin:0 auto;padding:2.8rem 1.1rem 3rem;flex:1;display:flex;flex-direction:column}
+  h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.15;margin:0}
+  .eyebrow{font-family:var(--sans);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .lede{color:var(--soft)}
+  button{font-family:var(--sans)}
+  .btn{background:var(--accent);color:#0a0b11;border:none;border-radius:999px;padding:.55rem 1.1rem;font-weight:700;font-size:.88rem;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--soft);border:1px solid var(--rule2)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .btn.small{padding:.35rem .8rem;font-size:.8rem}
+  .field{width:100%;background:var(--sunk);border:1px solid var(--rule2);border-radius:10px;color:var(--ink);font-family:var(--sans);font-size:.95rem;padding:.6rem .75rem}
+  .field:focus{outline:none;border-color:var(--accent-soft)}
+  input.field[type=datetime-local]{font-family:var(--mono);font-size:.85rem;color-scheme:dark}
+  .muted{color:var(--faint);font-size:.82rem}
+  .card{background:var(--raised);border:1px solid var(--rule);border-radius:13px;padding:1rem 1.05rem}
+
+  /* compose */
+  .compose{margin:1.3rem 0 1.6rem}
+  .compose .top{display:flex;gap:.5rem;align-items:stretch}
+  .compose .top .field{flex:1}
+  .chips{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.6rem}
+  .chip{background:transparent;border:1px solid var(--rule2);color:var(--soft);border-radius:999px;padding:.3rem .7rem;font-size:.78rem;cursor:pointer}
+  .chip:hover{border-color:var(--accent-soft);color:var(--ink)}
+  .chip.sel{background:var(--accent-t);border-color:var(--accent-soft);color:var(--ink)}
+  .when-row{display:flex;gap:.5rem;align-items:center;margin-top:.6rem}
+  .when-row .field{max-width:15rem}
+
+  /* groups */
+  .group{margin-top:1.4rem}
+  .group-head{display:flex;align-items:baseline;gap:.5rem;margin-bottom:.5rem}
+  .group-title{font-family:var(--sans);font-size:.72rem;letter-spacing:.11em;text-transform:uppercase;font-weight:700}
+  .group.overdue .group-title{color:var(--overdue)}
+  .group.today .group-title{color:var(--today)}
+  .group.upcoming .group-title{color:var(--soft)}
+  .group.someday .group-title{color:var(--faint)}
+  .group-count{color:var(--faint);font-size:.75rem}
+
+  .rem{display:flex;gap:.7rem;align-items:flex-start;background:var(--raised);border:1px solid var(--rule);border-radius:11px;padding:.7rem .8rem;margin-bottom:.45rem}
+  .rem.is-overdue{border-left:3px solid var(--overdue)}
+  .rem.is-today{border-left:3px solid var(--today)}
+  .dot{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid var(--rule2);background:transparent;cursor:pointer;margin-top:.1rem;position:relative}
+  .dot:hover{border-color:var(--accent-soft)}
+  .dot.done{border-color:var(--done);background:var(--done)}
+  .dot.done::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#0a0b11;font-size:.7rem;font-weight:800}
+  .rem .body{flex:1;min-width:0}
+  .rem .txt{font-size:.95rem;word-wrap:break-word;overflow-wrap:anywhere}
+  .rem.done .txt{color:var(--faint);text-decoration:line-through}
+  .due{font-size:.76rem;margin-top:.18rem;display:inline-flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .due .when{color:var(--soft)}
+  .due.overdue .when{color:var(--overdue)}
+  .due.today .when{color:var(--today)}
+  .snooze{background:none;border:none;color:var(--faint);font-size:.76rem;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+  .snooze:hover{color:var(--ink)}
+  .rem .acts{flex:none;display:flex;gap:.15rem;align-items:center}
+  .iconbtn{background:none;border:none;color:var(--faint);cursor:pointer;font-size:.95rem;line-height:1;padding:.2rem .3rem;border-radius:6px}
+  .iconbtn:hover{color:var(--ink);background:var(--sunk)}
+  .iconbtn.del:hover{color:var(--alert)}
+
+  /* inline editor */
+  .editor{flex:1;display:flex;flex-direction:column;gap:.5rem}
+  .editor .row2{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+
+  .done-toggle{background:none;border:none;color:var(--faint);font-size:.8rem;cursor:pointer;margin-top:1.4rem;padding:.2rem 0;display:flex;align-items:center;gap:.4rem}
+  .done-toggle:hover{color:var(--soft)}
+  .done-list{margin-top:.6rem}
+
+  .empty{text-align:center;color:var(--faint);padding:2.4rem 1rem}
+  .foot-note{color:var(--faint);font-size:.78rem;border-top:1px solid var(--rule);padding-top:.9rem;margin-top:1.6rem}
+
+  #menu{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;justify-content:flex-end}
+  #menu.show{display:flex}
+  .menu-panel{background:var(--raised);border:1px solid var(--rule2);border-radius:12px;margin:2.8rem .7rem 0;min-width:12rem;padding:.4rem;height:max-content}
+  .menu-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink);font-size:.88rem;padding:.55rem .7rem;border-radius:8px;cursor:pointer}
+  .menu-item:hover{background:var(--sunk)}
+  .menu-item.danger{color:var(--alert)}
+  .menu-sub{font-size:.7rem;color:var(--faint);padding:.3rem .7rem}
+  .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--rule2);color:var(--ink);padding:.55rem 1rem;border-radius:999px;font-size:.85rem;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<a class="home" href="/index.html" title="Home">◇</a>
+<div id="version-label">v0.1 · remind</div>
+<button id="menu-btn" title="Menu">⋯</button>
+<main class="wrap" id="root"></main>
+<div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
+<script>
+'use strict';
+/* Remind — a plain place to log reminders to yourself. Write the thing you don't
+   want to forget, optionally give it a time, and it waits — grouped calmly into
+   Overdue / Today / Upcoming / Someday / Done. No streaks, no counts-as-failure,
+   no nagging: a reminder serves you, not the reverse. On-device; synced across
+   your devices if you sign in at the hub. All app data is public seed data
+   (STATEMENT.md). The HC surface exposes state mutations only — no network. */
+
+const VERSION       = 'v0.1 · remind';
+const STATE_KEY     = 'hill-climbing-remind';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-remind';
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+
+let state = { v:1, reminders:[] };
+let ui = { editing:null, showDone:false, pendingWhen:'' };
+
+function uid(){ return 'r' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+function now(){ return Date.now(); }
+
+// ── persistence ──────────────────────────────────────────────────────────────
+function load(){
+  try{ const raw=localStorage.getItem(STATE_KEY); if(raw){ const p=JSON.parse(raw); if(p&&typeof p==='object') state=normalize(p); } }catch(_){}
+}
+function normalize(p){
+  const arr = Array.isArray(p.reminders)?p.reminders:[];
+  return { v:1, reminders: arr.filter(r=>r&&r.id&&typeof r.text==='string').map(r=>({
+    id:String(r.id),
+    text:String(r.text).slice(0,600),
+    created:Number(r.created)||now(),
+    due:(r.due==null||r.due==='')?null:String(r.due),
+    done:!!r.done,
+    doneAt:r.doneAt==null?null:(Number(r.doneAt)||null),
+  })) };
+}
+function save(){
+  try{ localStorage.setItem(STATE_KEY, JSON.stringify(state)); }catch(_){}
+  if(window.HCSync&&HCSync.queueBlobPush) HCSync.queueBlobPush(SYNC_BLOB_KEY);
+}
+
+// ── time helpers (naive local time; a due string is "YYYY-MM-DDTHH:mm") ───────
+function pad(n){ return String(n).padStart(2,'0'); }
+function toLocalInput(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); }
+function midnight(d){ return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime(); }
+function dayDiff(a,b){ return Math.round((midnight(a)-midnight(b))/86400000); } // midnights → DST-safe
+function atToday(h,m){ const d=new Date(); d.setHours(h,m,0,0); return d; }
+function atTomorrow(h,m){ const d=new Date(); d.setDate(d.getDate()+1); d.setHours(h,m,0,0); return d; }
+function atPlusDays(n,h,m){ const d=new Date(); d.setDate(d.getDate()+n); d.setHours(h,m,0,0); return d; }
+
+// A due datetime → { label, cls } for display, and helpers for bucketing.
+function dueInfo(due){
+  if(!due) return { label:'', cls:'someday' };
+  const d=new Date(due); if(isNaN(d.getTime())) return { label:'', cls:'someday' };
+  const nd=new Date();
+  const past = d.getTime() < nd.getTime();
+  const dd = dayDiff(d, nd);
+  const hm = pad(d.getHours())+':'+pad(d.getMinutes());
+  let day;
+  if(dd===0) day='today';
+  else if(dd===1) day='tomorrow';
+  else if(dd===-1) day='yesterday';
+  else if(dd>1 && dd<7) day=d.toLocaleDateString(undefined,{weekday:'long'});
+  else if(dd<-1 && dd>-7) day=d.toLocaleDateString(undefined,{weekday:'long'});
+  else day=d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  const label = (past?'was due ':'') + day + ' · ' + hm;
+  const cls = past ? 'overdue' : (dd===0 ? 'today' : 'upcoming');
+  return { label, cls };
+}
+
+// ── state mutations (HC-exposable; no network) ───────────────────────────────
+function addReminder(text, due){
+  const t=String(text||'').trim(); if(!t) throw new Error('A reminder needs some words.');
+  const rec={ id:uid(), text:t.slice(0,600), created:now(), due:(due==null||due==='')?null:String(due), done:false, doneAt:null };
+  state.reminders.push(rec); save(); return { id:rec.id };
+}
+function editReminder(id, text){
+  const r=state.reminders.find(x=>x.id===id); if(!r) throw new Error('No such reminder.');
+  const t=String(text||'').trim(); if(!t) throw new Error('A reminder needs some words.');
+  r.text=t.slice(0,600); save(); return { ok:true };
+}
+function setDue(id, due){
+  const r=state.reminders.find(x=>x.id===id); if(!r) throw new Error('No such reminder.');
+  r.due=(due==null||due==='')?null:String(due); save(); return { ok:true };
+}
+function toggleDone(id){
+  const r=state.reminders.find(x=>x.id===id); if(!r) throw new Error('No such reminder.');
+  r.done=!r.done; r.doneAt=r.done?now():null; save(); return { id, done:r.done };
+}
+function snooze(id, until){
+  const r=state.reminders.find(x=>x.id===id); if(!r) throw new Error('No such reminder.');
+  r.due=(until==null||until==='')?null:String(until); r.done=false; r.doneAt=null; save(); return { id, due:r.due };
+}
+function deleteReminder(id){
+  state.reminders=state.reminders.filter(r=>r.id!==id); save(); return { ok:true };
+}
+function clearDone(){
+  state.reminders=state.reminders.filter(r=>!r.done); save(); return { ok:true };
+}
+
+// ── bucketing ─────────────────────────────────────────────────────────────────
+function buckets(){
+  const overdue=[], today=[], upcoming=[], someday=[], done=[];
+  const nd=new Date();
+  state.reminders.forEach(r=>{
+    if(r.done){ done.push(r); return; }
+    if(!r.due){ someday.push(r); return; }
+    const d=new Date(r.due);
+    if(isNaN(d.getTime())){ someday.push(r); return; }
+    if(d.getTime() < nd.getTime()) overdue.push(r);
+    else if(dayDiff(d,nd)===0) today.push(r);
+    else upcoming.push(r);
+  });
+  const byDue=(a,b)=>new Date(a.due)-new Date(b.due);
+  overdue.sort(byDue); today.sort(byDue); upcoming.sort(byDue);
+  someday.sort((a,b)=>b.created-a.created);
+  done.sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+  return { overdue, today, upcoming, someday, done };
+}
+
+// ── views ─────────────────────────────────────────────────────────────────────
+const root=()=>document.getElementById('root');
+function el(t,c,x){ const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e; }
+
+function render(){
+  const r=root(); r.innerHTML='';
+  const head=el('div'); head.style.marginBottom='.2rem';
+  head.appendChild(el('div','eyebrow','Hill Climbing'));
+  const h=el('h1',null,'Remind'); h.style.marginTop='.25rem'; head.appendChild(h);
+  head.appendChild(el('p','lede','Jot the thing you don’t want to forget. Give it a time or leave it for someday — it just waits here, quietly.'));
+  r.appendChild(head);
+
+  r.appendChild(renderCompose());
+
+  const b=buckets();
+  const active=b.overdue.length+b.today.length+b.upcoming.length+b.someday.length;
+  if(active===0 && b.done.length===0){
+    r.appendChild(el('div','empty','Nothing to remember yet. Write the first thing above.'));
+  } else {
+    renderGroup(r,'overdue','Overdue',b.overdue);
+    renderGroup(r,'today','Today',b.today);
+    renderGroup(r,'upcoming','Upcoming',b.upcoming);
+    renderGroup(r,'someday','Someday',b.someday);
+    if(b.done.length) renderDone(r,b.done);
+  }
+
+  const note=el('div','foot-note','Reminders live here and sync across your devices if you sign in at the hub. They surface when you open this page or the hub — Remind doesn’t send phone notifications yet.');
+  r.appendChild(note);
+}
+
+function renderCompose(){
+  const wrap=el('div','compose');
+  const top=el('div','top');
+  const input=el('input','field'); input.type='text'; input.placeholder='Remind me to…'; input.maxLength=600; input.id='compose-text';
+  const add=el('button','btn','Add');
+  const commit=()=>{
+    try{ addReminder(input.value, ui.pendingWhen); input.value=''; ui.pendingWhen=''; render();
+      const ni=document.getElementById('compose-text'); if(ni) ni.focus();
+    }catch(e){ toast(e.message); }
+  };
+  input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } });
+  add.onclick=commit;
+  top.appendChild(input); top.appendChild(add); wrap.appendChild(top);
+
+  // quick-time chips (set the optional "when")
+  const chips=el('div','chips');
+  const opts=[
+    ['This evening', ()=>toLocalInput(atToday(18,0))],
+    ['Tomorrow',     ()=>toLocalInput(atTomorrow(9,0))],
+    ['Next week',    ()=>toLocalInput(atPlusDays(7,9,0))],
+    ['Someday',      ()=>''],
+  ];
+  opts.forEach(([label,fn])=>{
+    const val=fn();
+    const c=el('button','chip'+(ui.pendingWhen===val?' sel':''),label);
+    c.onclick=()=>{ ui.pendingWhen = (ui.pendingWhen===val ? '' : val); render(); const ni=document.getElementById('compose-text'); if(ni) ni.focus(); };
+    chips.appendChild(c);
+  });
+  wrap.appendChild(chips);
+
+  // explicit datetime (optional), kept in sync with the chips
+  const wr=el('div','when-row');
+  const dt=el('input','field'); dt.type='datetime-local'; dt.value=ui.pendingWhen||''; dt.title='Optional — when to be reminded';
+  dt.onchange=()=>{ ui.pendingWhen=dt.value; render(); };
+  const lab=el('span','muted', ui.pendingWhen?('reminds '+(dueInfo(ui.pendingWhen).label||'—')):'no time — filed under Someday');
+  wr.appendChild(dt); wr.appendChild(lab); wrap.appendChild(wr);
+  return wrap;
+}
+
+function renderGroup(parent,key,title,list){
+  if(!list.length) return;
+  const g=el('div','group '+key);
+  const gh=el('div','group-head');
+  gh.appendChild(el('span','group-title',title));
+  gh.appendChild(el('span','group-count',String(list.length)));
+  g.appendChild(gh);
+  list.forEach(r=>g.appendChild(renderRow(r,key)));
+  parent.appendChild(g);
+}
+
+function renderRow(r, groupKey){
+  if(ui.editing===r.id) return renderEditor(r);
+  const info=dueInfo(r.due);
+  const row=el('div','rem'+(r.done?' done':'')+(info.cls==='overdue'?' is-overdue':(info.cls==='today'?' is-today':'')));
+  const dot=el('button','dot'+(r.done?' done':'')); dot.title=r.done?'Mark not done':'Mark done';
+  dot.onclick=()=>{ toggleDone(r.id); render(); };
+  row.appendChild(dot);
+
+  const body=el('div','body');
+  body.appendChild(el('div','txt',r.text));
+  if(r.due){
+    const due=el('span','due '+info.cls);
+    due.appendChild(el('span','when',info.label));
+    if(!r.done && (groupKey==='overdue'||groupKey==='today')){
+      const sn=el('button','snooze','snooze to tomorrow');
+      sn.onclick=()=>{ snooze(r.id, toLocalInput(atTomorrow(9,0))); render(); toast('Snoozed to tomorrow morning.'); };
+      due.appendChild(sn);
+    }
+    body.appendChild(due);
+  }
+  row.appendChild(body);
+
+  const acts=el('div','acts');
+  const ed=el('button','iconbtn','✎'); ed.title='Edit'; ed.onclick=()=>{ ui.editing=r.id; render(); };
+  const del=el('button','iconbtn del','×'); del.title='Delete'; del.onclick=()=>{ deleteReminder(r.id); render(); };
+  acts.appendChild(ed); acts.appendChild(del);
+  row.appendChild(acts);
+  return row;
+}
+
+function renderEditor(r){
+  const row=el('div','rem');
+  const ed=el('div','editor');
+  const ta=el('input','field'); ta.type='text'; ta.value=r.text; ta.maxLength=600;
+  const row2=el('div','row2');
+  const dt=el('input','field'); dt.type='datetime-local'; dt.value=r.due||''; dt.style.maxWidth='14rem';
+  const clr=el('button','chip','Someday'); clr.onclick=()=>{ dt.value=''; };
+  row2.appendChild(dt); row2.appendChild(clr);
+  const row3=el('div','row2');
+  const saveb=el('button','btn small','Save');
+  saveb.onclick=()=>{ try{ editReminder(r.id, ta.value); setDue(r.id, dt.value); ui.editing=null; render(); }catch(e){ toast(e.message); } };
+  const cancel=el('button','btn ghost small','Cancel'); cancel.onclick=()=>{ ui.editing=null; render(); };
+  row3.appendChild(saveb); row3.appendChild(cancel);
+  ed.appendChild(ta); ed.appendChild(row2); ed.appendChild(row3);
+  row.appendChild(ed);
+  return row;
+}
+
+function renderDone(parent, done){
+  const t=el('button','done-toggle', (ui.showDone?'▾':'▸')+' Done ('+done.length+')');
+  t.onclick=()=>{ ui.showDone=!ui.showDone; render(); };
+  parent.appendChild(t);
+  if(!ui.showDone) return;
+  const list=el('div','done-list');
+  done.forEach(r=>list.appendChild(renderRow(r,'done')));
+  const clr=el('button','btn ghost small','Clear done'); clr.style.marginTop='.4rem';
+  clr.onclick=()=>{ if(!clearDoneArmed){ clearDoneArmed=true; toast('Tap “Clear done” again to remove all completed reminders.'); setTimeout(()=>clearDoneArmed=false,4000); return; } clearDoneArmed=false; clearDone(); render(); };
+  list.appendChild(clr);
+  parent.appendChild(list);
+}
+let clearDoneArmed=false;
+
+// ── menu ──────────────────────────────────────────────────────────────────────
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+function setMenu(o){ document.getElementById('menu').classList.toggle('show',o); if(o) renderMenu(); }
+function renderMenu(){
+  const p=document.getElementById('menu-panel'); p.innerHTML='';
+  const add=(l,fn,c)=>{ const b=el('button','menu-item'+(c?' '+c:''),l); b.onclick=()=>{ setMenu(false); fn(); }; p.appendChild(b); };
+  add('Export', exportData);
+  add('Import', importData);
+  p.appendChild(el('div','menu-sub','—'));
+  add('Delete everything', eraseEverything, 'danger');
+}
+function exportData(){ const b=new Blob([JSON.stringify({app:'remind',schema:1,exported:now(),state})],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='remind-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function importData(){ const i=document.createElement('input'); i.type='file'; i.accept='application/json'; i.onchange=async()=>{ const f=i.files[0]; if(!f)return; try{ const p=JSON.parse(await f.text()); state=normalize(p.state||p); save(); render(); toast('Imported.'); }catch(e){ toast('Import failed.'); } }; i.click(); }
+let eraseArmed=false;
+function eraseEverything(){ if(!eraseArmed){ eraseArmed=true; toast('Tap “Delete everything” again to erase every reminder.'); setTimeout(()=>eraseArmed=false,4000); setMenu(true); return; } eraseArmed=false; state={v:1,reminders:[]}; save(); render(); }
+
+// ── boot ────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent=VERSION;
+document.getElementById('menu-btn').onclick=()=>setMenu(true);
+document.getElementById('menu').onclick=e=>{ if(e.target.id==='menu') setMenu(false); };
+load(); render();
+
+if(window.HCSync){
+  HCSync.registerStore({ key:SYNC_BLOB_KEY, kind:'blob',
+    read:()=>localStorage.getItem(STATE_KEY)||JSON.stringify(state),
+    write:(str)=>{ try{ localStorage.setItem(STATE_KEY,str); }catch(_){} load(); render(); } });
+  if(window.HCSyncChip) HCSyncChip.mount({position:'bottom-left'});
+  HCSync.init({ supabaseUrl:SUPABASE_URL, supabaseAnonKey:SUPABASE_ANON_KEY, appId:'remind' });
+}
+
+// ── agent interface — state mutations only, no network (REQUIREMENTS §1.4) ────
+if(window.HC) HC.register({
+  app:'remind', version:VERSION, title:'Remind',
+  description:'A plain reminders list you log to yourself: text + an optional due time, grouped into Overdue / Today / Upcoming / Someday / Done. No streaks or nagging. On-device, synced. Public seed data.',
+  stores:[
+    { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'practice',
+      description:'Your reminders — each with text, an optional due datetime, and a done flag.',
+      schema:'{ v, reminders:[{ id, text, created, due (ISO "YYYY-MM-DDTHH:mm" or null), done, doneAt }] }',
+      afterWrite:()=>{ load(); render(); } },
+  ],
+  actions:{
+    addReminder:{ description:'Add a reminder. `due` is an optional local datetime string "YYYY-MM-DDTHH:mm" (or null for “someday”).',
+      params:{ text:'the reminder', due:'optional "YYYY-MM-DDTHH:mm" local datetime, or null' }, handler:(p)=>addReminder(p.text, p.due) },
+    editReminder:{ description:'Change a reminder’s text.', params:{ id:'reminder id', text:'new text' }, handler:(p)=>editReminder(p.id, p.text) },
+    setDue:{ description:'Set or clear a reminder’s due datetime.', params:{ id:'reminder id', due:'"YYYY-MM-DDTHH:mm" or null to clear' }, handler:(p)=>setDue(p.id, p.due) },
+    toggleDone:{ description:'Toggle a reminder’s done state (records/clears doneAt).', params:{ id:'reminder id' }, handler:(p)=>toggleDone(p.id) },
+    snooze:{ description:'Push a reminder to a later time and mark it not-done.', params:{ id:'reminder id', until:'"YYYY-MM-DDTHH:mm" or null' }, handler:(p)=>snooze(p.id, p.until) },
+    deleteReminder:{ description:'Delete a reminder.', params:{ id:'reminder id' }, handler:(p)=>deleteReminder(p.id) },
+    clearDone:{ description:'Remove all completed reminders.', params:{}, handler:()=>clearDone() },
+  },
+  notes:'Times are naive local datetimes ("YYYY-MM-DDTHH:mm"); a null due means “someday”. Nothing here touches the network — Remind has no BYOK surface and sends no notifications yet. All data is public seed data.',
+});
+</script>
+</body>
+</html>

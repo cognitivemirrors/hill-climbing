@@ -120,6 +120,7 @@
     .card.foresee  { --accent: hsl(58,68%,64%);  --accent-soft: hsla(58,62%,60%,0.45);  --accent-glow: hsla(58,68%,50%,0.14); }
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
+    .card.remind   { --accent: hsl(250,58%,74%); --accent-soft: hsla(250,54%,70%,0.45); --accent-glow: hsla(250,58%,62%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
     .card.kin      { --accent: hsl(38,56%,64%);  --accent-soft: hsla(38,52%,60%,0.45);  --accent-glow: hsla(38,58%,48%,0.16); }
@@ -220,6 +221,7 @@
     .ns-go.levity   { --accent: hsl(348,78%,72%); }
     .ns-go.foresee  { --accent: hsl(58,68%,64%); }
     .ns-go.climb    { --accent: hsl(230,65%,72%); }
+    .ns-go.remind   { --accent: hsl(250,58%,74%); }
     .ns-go.train    { --accent: hsl(20,72%,66%); }
     .ns-alt {
       display: none; font-family: var(--font-ui); font-size: 0.62rem;
@@ -601,6 +603,16 @@
       </span>
       <h2>Train</h2>
       <p>Log your workouts, one set at a time.</p>
+    </a>
+
+    <a class="card remind" href="remind.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 6h20v36l-10-7-10 7z"/>
+        </svg>
+      </span>
+      <h2>Remind</h2>
+      <p>Log the things you don't want to forget.</p>
     </a>
 
     <a class="card echo" href="echo.html">
@@ -1153,6 +1165,20 @@
                                  : nsForeseeDue + ' calls in Foresee have come due — reality has voted; record them.',
         app: 'foresee', href: 'foresee.html', go: 'Record the verdict',
       });
+      const remind = nsReadJSON('hill-climbing-remind');
+      if (remind && Array.isArray(remind.reminders)) {
+        const eod = new Date(); eod.setHours(23, 59, 59, 999); const eodMs = eod.getTime();
+        const dueN = remind.reminders.filter(function (r) {
+          if (!r || r.done || !r.due) return false;
+          const t = new Date(r.due).getTime();
+          return !isNaN(t) && t <= eodMs;   // overdue or due later today
+        }).length;
+        if (dueN) out.push({
+          text: dueN === 1 ? 'A reminder is due — you left it here for now.'
+                           : dueN + ' reminders are due.',
+          app: 'remind', href: 'remind.html', go: 'Open Remind',
+        });
+      }
 
       // 2 — enough is allowed to be enough.
       if (!late && activeToday.length >= 2) out.push({ text: 'You’ve already come back to yourself twice today. Enough is allowed to be enough.' });
@@ -1578,6 +1604,7 @@
         { title: 'Foresee', href: 'foresee.html' },
         { title: 'Climb', href: 'climb.html' },
         { title: 'Train', href: 'train.html' },
+        { title: 'Remind', href: 'remind.html' },
         { title: 'Echo', href: 'echo.html' },
         { title: 'Garden', href: 'garden.html' },
         { title: 'Anime', href: 'anime.html' },

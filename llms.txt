@@ -122,6 +122,12 @@ Each app is a single page at the site root. State keys listed are what HC regist
   (synced; weights canonically in lbs). Actions: startWorkout, finishWorkout, discardWorkout,
   addExercise, addExerciseToWorkout, addSet, removeSet, removeEntry, toggleDone, setValue,
   startTimer, logTime, deleteWorkout, toggleUnits, deleteEverything.
+- remind.html — a plain reminders list you log to yourself: text + an optional local due
+  datetime ("YYYY-MM-DDTHH:mm", or null for "someday"), grouped Overdue / Today / Upcoming /
+  Someday / Done. No streaks or nagging. Store: hill-climbing-remind (synced). Actions:
+  addReminder, editReminder, setDue, toggleDone, snooze, deleteReminder, clearDone. No network
+  surface — Remind has no BYOK send and no notifications yet; due items surface in-app and on the
+  hub's next-step. Recording a reminder records what the person asked to be reminded of.
 - echo.html — a listening memory game (five stones, a growing bell phrase). Store:
   hill-climbing-echo (device-local; games are deliberately outside sync and the usage
   dashboard). Actions: begin, tapStone. The only record is the farthest phrase held.
