@@ -123,7 +123,6 @@ const SEED_STORES = [
   ['hill-climbing-climb',      'Goals & follow-through'],
   ['hill-climbing-foresee',    'Predictions & calibration'],
   ['hill-climbing-levity',     'Comedy & voice'],
-  ['hill-climbing-erp',        'Exposure ladder'],
   ['hill-climbing-nourish',    'Cooking'],
   ['hill-climbing-savor',      'Tasting'],
   ['hill-climbing-train',      'Workouts'],
@@ -231,8 +230,6 @@ function summarizeBlob(key, label){
       s = v.predictions.slice(-14).map(p=>`• ${p.text} — ${p.conf}%${p.status==='resolved'?(p.outcome?' ✓':' ✗'):''}`).join('\n');
     } else if(key==='hill-climbing-levity' && Array.isArray(v.notebook)){
       s = v.notebook.slice(0,16).map(n=>'• '+(n.text||'')).join('\n');
-    } else if(key==='hill-climbing-erp' && v.items){
-      s = Object.values(v.items).filter(i=>i&&i.title).slice(0,12).map(i=>`• ${i.title} (SUDS ${i.anticipated})`).join('\n');
     } else if(key==='hill-climbing-companion' && v.memory && v.memory.summary){
       s = v.memory.summary.slice(0,1500);
     } else if(key==='hill-climbing-nourish'){
