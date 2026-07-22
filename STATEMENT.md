@@ -52,8 +52,11 @@ that existed to protect private data: end-to-end encryption is now just optional
 a secrecy guarantee; there are no consent gates, no shareable-vs-private distinction, no
 sensitivity tiers, no relational-safety review, and no partner whose data isn't theirs to give
 (everyone gives their own). `CONSTRAINTS.md` / `REQUIREMENTS.md` / `KNOWN_RISKS.md` remain in the
-repo as the record of the product-era frame; they are **superseded, not authoritative,** for the
-art project.
+repo as the record of the product-era frame; their **privacy and safety-scaffolding specifics are
+superseded**, but their founding **values — care, safety, balanced power distribution — remain the
+art's foundation** (Govern's coded floor is literally "care for the vulnerable"). Read them for
+those values; where they describe protecting *private* data or tier-gated safety machinery, read
+them as historical.
 
 Two things are *not* "public data" and survive the strip:
 

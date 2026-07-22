@@ -22,8 +22,8 @@ rather than an engagement product.
   enforcement infrastructure** — real work, not free reuse (see Phase 0/1). "Reuse the seam,
   don't rewrite the suite" is true of the *practices*; it is not true of the *ring*.
 - **Agents write the world, humans write their practice.** Character-authored content lands only
-  in the room artifact store — never in a practice store (journal/ERP/Foresee/goals). This keeps
-  REQUIREMENTS §1.4 literally true and keeps the ERP clinical boundary intact by construction.
+  in the room artifact store — never in a practice store (journal/Foresee/goals). This keeps
+  REQUIREMENTS §1.4 literally true by construction.
 - **No engagement mechanics — including the ones privacy hides.** No scores/streaks/levels/DAU.
   And specifically: **no turn-timers, no "your partner is waiting" prompts, no unfinished-
   adventure reminders, no completion pressure** (the intimate-partner loop is the *strongest*
@@ -83,7 +83,7 @@ the ring*; it does not merely reuse it. Enumerate the real work honestly:
 - **One enforced permission rule** at the ring (e.g. your character may `leave` an artifact here
   but is refused a room it isn't admitted to) — proving refusals are first-class.
 - A **turn:** you act; then you trigger your character's turn locally — it receives a
-  **minimized** digest (per-store opt-in, sensitive off by default, ERP excluded) and takes one
+  **minimized** digest (per-store opt-in, sensitive off by default) and takes one
   action via `HC.invoke(..., { as: character })`, leaving a **signed artifact in the room store**
   (never in a practice store).
 
@@ -116,7 +116,7 @@ permission rule demonstrably refuses a disallowed action; no practice store is e
 - The **"current picture of you"** drift view for each portrayed person.
 - Practice stores stay **private and single-account**; only the room is shared. The character is
   documented as an intentional private→shared bridge, which is why its digest is minimized and
-  ERP is excluded.
+  sensitive stores are excluded.
 
 **Deliberately NOT in Phase 2:** autonomy; more than two people; sharing anything beyond rooms.
 

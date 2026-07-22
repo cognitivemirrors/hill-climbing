@@ -6,7 +6,7 @@ before any partner, room, or cross-user surface exists. Design captured from a f
 conversation; see `WORLD_ROADMAP.md` for how it feeds the larger direction.
 
 > **All data in the app is treated as fictional seed data** (founder instruction). A character
-> inherits *everything* at birth; the sensitivity carve-outs that apply to real data (ERP/journal
+> inherits *everything* at birth; the sensitivity carve-outs that apply to real data (journal
 > exclusion for *shared* characters) are a **Phase-2 concern** for when a character becomes
 > partner-shareable, not this single-user MVP.
 
@@ -23,7 +23,7 @@ own past**, then **diverges** — from that moment it lives its own life and no 
   times inherit different slices of you, so they differ by *when* they were born.
 - **Copy-on-spawn, then diverge.** The birth digest is frozen; your later life never re-enters it.
 - **One-way.** A character writes only its own store — never back into your practice stores. This
-  keeps REQUIREMENTS §1.4 intact (nothing agent-authored touches journal/ERP/Foresee/goals). You
+  keeps REQUIREMENTS §1.4 intact (nothing agent-authored touches journal/Foresee/goals). You
   can bring the real into the family (the backlog, below); the family cannot fabricate the real
   into your record.
 
@@ -38,8 +38,9 @@ practice for Phase 2.)
 ## The family backlog *(deferred — the clean second layer)*
 
 There are things a character **cannot do** — the embodied, real-time, perceptual practices only a
-body can perform: meditate (a real sit), breathe, taste (Savor), hear the phrase (Echo), actually
-cook. When a character wants one, it **files a request to a shared family backlog** (via a
+body can perform: meditate (a real sit), breathe, taste (Nourish's Taste tab), hear the phrase
+(Echo), actually cook. When a character wants one, it **files a request to a shared family
+backlog** (via a
 confirm-first client tool, the same pattern as Companion's `add_request` — on-device, no new
 egress). **You** — the one member with a body — take items on *for the family*: the hub becomes
 the family map, an item deep-links you into the real practice, and completing the real act marks

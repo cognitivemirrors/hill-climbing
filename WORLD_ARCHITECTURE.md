@@ -27,7 +27,7 @@ Three things this conversation established, which the architecture honors:
 - **Parity solves embodiment — for world actions.** A programmatic action is indistinguishable
   from a human one (REQUIREMENTS §1.4), so a character can act in the world natively. **Honest
   narrowing (revision):** characters act with full parity on **room/world** actions and never
-  mutate practice stores (journal, ERP, Foresee, goals) — see §5. "A character can do anything a
+  mutate practice stores (journal, Foresee, goals) — see §5. "A character can do anything a
   person can do" means *in the world*, not *to your private records*.
 - **The profile solves characterization — from a minimized digest, not a raw dump.** *Who* a
   character is comes from a **redacted, per-store-opt-in digest** of its owner's stores (§5), not
@@ -146,14 +146,14 @@ an extension of the symmetric sync engine.
 The boundary is deliberate but **soft, not structural** (§5, §7): practice stores stay
 single-account and private; only *rooms* are shared. The honest caveat is that a character seeded
 from your stores is itself a sanctioned bridge from private data into the shared surface — which
-is why seeding is minimized and ERP is excluded entirely (§5).
+is why seeding is minimized and sensitive stores are excluded by default (§5).
 
 ### Layer 5 — Characters *(agents; write only to the world)*
 A **character** is an agent bound to an actor identity, given:
 
 1. a **minimized, redacted profile digest** — **not** a raw `HC.export`. Per-store opt-in;
-   sensitive stores excluded **by default**; **ERP excluded entirely** (consistent with the
-   L39(d) clinical boundary and the L40 hub-suggest posture). The digest is model-facing context,
+   sensitive stores (e.g. the journal) excluded **by default** (consistent with the L40
+   hub-suggest posture). The digest is model-facing context,
    and the instruction "paraphrase, never quote private-store content verbatim into shared
    artifacts" is a **soft, prompt-level guardrail** — the same class as the L30 web-query and L40
    guardrails, honestly labelled, not a hard filter.
@@ -161,9 +161,8 @@ A **character** is an agent bound to an actor identity, given:
 
 It acts through `HC.invoke(action, params, { as: character })`, and — the load-bearing rule —
 **character-authored content lands only in the room's `artifacts` store, never in a practice
-store.** This single rule (adopted from the review as the spine of the design) does four things
-at once: it keeps §1.4's practice-store parity **literally true**; it removes the ERP
-clinical-boundary collision *by construction* (no agent-written exposure logs can exist); it
+store.** This single rule (adopted from the review as the spine of the design) does three things
+at once: it keeps §1.4's practice-store parity **literally true**; it
 gives `{as}` a clean place to land; and it makes signed authorship tractable. Turn-based first:
 **a character acts when a human runs a turn.**
 
@@ -216,7 +215,7 @@ persisted digest). Any party's exit **auto-disables** autonomy (§7).
 The world needs authorship ("whose character left this?"). The review resolved the apparent
 conflict cleanly, and it is now the spine of the design:
 
-- **Agents never write practice stores.** No journal entry, goal, prediction, or ERP log is ever
+- **Agents never write practice stores.** No journal entry, goal, or prediction is ever
   agent-authored. §1.4's practice-store parity is therefore **preserved literally, unchanged** —
   not "reworded," not "narrowed." (The earlier draft's "§1.4 becomes a property of the practice
   stores" wording overstated a change that, under this rule, isn't one; §9 flags it for founder
@@ -225,8 +224,8 @@ conflict cleanly, and it is now the spine of the design:
   additive, not a modification of the parity guarantee.
 
 Keeping this boundary is the single most important discipline as the world grows: the moment an
-agent is allowed to write a practice store, §1.4 breaks and the ERP clinical boundary is
-crossed. The rule is "agents write the world, humans write their practice."
+agent is allowed to write a practice store, §1.4 breaks. The rule is "agents write the world,
+humans write their practice."
 
 ---
 
@@ -381,7 +380,7 @@ it through the §6 amendment process.
 Resolved by the review (recorded here, ratification still yours):
 
 - **Digest boundary (was Q1) → resolved:** seed from a **minimized, per-store-opt-in** digest,
-  sensitive stores off by default, **ERP excluded entirely.** Adopt as a hard rule.
+  sensitive stores off by default. Adopt as a hard rule.
 - **Latitude (was Q2) → resolved:** **conservative by default** for real-partner portrayal,
   generosity opt-in per room.
 - **Membership (was Q4) → resolved:** **two only, binding**; adding anyone is a product-shape
