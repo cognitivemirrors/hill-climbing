@@ -3173,7 +3173,7 @@ if (window.HCSync) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TASTE SEASON  (merged from the former savor.html) — the ten-episode season on
+// TASTE SEASON  (merged from the former Savor app) — the ten-episode season on
 // the palate. Wrapped in its own scope so its state/functions never collide with
 // the cook side (both once defined load/save/state/switchView/el/…). Reads/writes
 // the SAME localStorage key Savor always used (hill-climbing-savor) so existing
@@ -3952,7 +3952,7 @@ document.getElementById('ch-taste-link').addEventListener('click', (e) => {
 
 // ── Hash routing ────────────────────────────────────────────────────────────
 // #cook / #taste choose a section; #taste-<id> (or a bare episode id #c4/#g2/#m…)
-// opens the Taste season on that episode — how savor.html now redirects people in.
+// opens the Taste season on that episode — the in-app path taste deep-links use.
 function applyHash() {
   const h = (location.hash || '').replace(/^#/, '');
   if (!h) return;
@@ -4208,7 +4208,7 @@ if (window.HC) HC.register({
   urlParams: {
     '#cook': 'open the Cook section',
     '#taste': 'open the Taste season',
-    '#taste-<episodeId>': 'open the Taste season on that episode (e.g. #taste-c4); a bare #c4/#g2/#m… also works — this is how the old savor.html deep-links now resolve',
+    '#taste-<episodeId>': 'open the Taste season on that episode (e.g. #taste-c4); a bare #c4/#g2/#m… also works — this is how the old Savor deep-links now resolve',
   },
   notes: 'One app, two sections. COOK: the ladder is a 2-up/1-down staircase (Levitt 1971) — two reported clears step the level up, one struggle steps it down, converging near a 71% success rate; the level is a learning edge, not a score. TASTE: episodes are content, not a score — watched marks keep only the first-tasted timestamp; never optimise for completion. Outcomes and tastings are always the person\'s own reports — never invent one. The chef\'s recipe generation and key/consent settings are human acts: no HC action performs network egress or calls the Anthropic API; the chef reads the shared hill-climbing-api-key, which belongs to Companion and is never registered, read, or exported here. Contributed taste lessons have no delete in the UI (an inherited gap, deliberately mirrored). Cook challenge cards cross-link to the paired taste episode in-app.',
 });
