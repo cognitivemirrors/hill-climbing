@@ -94,15 +94,16 @@ Each app is a single page at the site root. State keys listed are what HC regist
   inside entries; reads omit photo bytes unless {full:true}; exports are complete. Second
   store: the photo-describe consent flag. Actions: addEntry, editEntry, deleteEntry
   (tombstone), setPhotoAi.
-- nourish.html — learn-to-cook + learn-to-taste, unified in one app (Cook + Taste tabs). Cook:
-  a 2-up/1-down staircase with self-reported outcomes (General + Sushi tracks; pantry + shopping
-  list), each challenge deep-linking to its paired tasting episode. Taste: a ten-episode season
-  on the palate + community guest lessons. Stores: hill-climbing-nourish (synced),
-  hill-climbing-nourish-chef (device-local), hill-climbing-savor (synced; the taste season, now
+- nourish.html — learn-to-cook + learn-to-taste, one app with a single five-view nav
+  (Cook · Taste · Chef · Shop · Progress). Cook: a 2-up/1-down staircase with self-reported
+  outcomes (General + Sushi tracks), each challenge deep-linking to its paired tasting episode.
+  Taste: a ten-episode season on the palate + community guest lessons, with the tasting
+  notebook rendered inside the Progress view. Stores: hill-climbing-nourish (synced),
+  hill-climbing-nourish-chef (device-local), hill-climbing-savor (synced; the taste season,
   written from inside Nourish). Actions — cook: serveChallenge, skipChallenge, tooEasy,
   finishCooking, recordOutcome, leaveCooking, switchTrack, toggleHave, addExtra, toggleExtra,
   removeExtra, setServings, logChefOutcome, removeChefKey; taste: openEpisode, setStage,
-  finishEpisode, deleteNote, addLesson. Deep links: nourish.html#taste (the taste tab),
+  finishEpisode, deleteNote, addLesson. Deep links: nourish.html#taste (the Taste view),
   nourish.html#taste-c1 … #taste-c10 (an episode); a bare #c1 … #c10 also resolves (the old
   Savor deep-links). The standalone savor.html page was deleted — the Taste season lives here.
 - levity.html — comedy-craft ladder + bit notebook. Store: hill-climbing-levity (synced).

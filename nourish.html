@@ -66,8 +66,8 @@
     #version-label { top: 22px; left: 62px; }
 
     /* Corner menu — a single icon that opens a small data-management dropdown.
-       Replaces the old two text buttons, which crowded the centre mode-nav once
-       it grew to three tabs. Mirrors #home-link's round button on the right. */
+       Replaces the old two text buttons, which crowded the header. Mirrors
+       #home-link's round button on the right. */
     #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
     #menu-btn {
       width: 34px; height: 34px; padding: 0;
@@ -113,18 +113,6 @@
     }
     #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
     #home-link svg { width: 16px; height: 16px; display: block; }
-
-    #mode-nav {
-      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
-      display: flex; background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
-    }
-    .mode-btn {
-      padding: 5px 16px; border-radius: 14px; border: none; background: transparent;
-      color: var(--dim); font-size: 11px; letter-spacing: 0.08em; cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-    }
-    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
 
     main { max-width: 600px; margin: 0 auto; }
     .panel { animation: fadeUp 0.35s ease; }
@@ -193,7 +181,7 @@
       font-family: var(--font-display); font-weight: 400; font-size: 1.55rem;
       line-height: 1.25; color: var(--text); margin-bottom: 18px;
     }
-    /* cross-link to Savor — "the taste behind this challenge" */
+    /* cross-link to the paired taste episode — "the taste behind this challenge" */
     .taste-link {
       display: inline-block; margin: 2px 0 16px; text-decoration: none;
       font-size: 12px; letter-spacing: 0.02em; color: var(--accent); line-height: 1.5;
@@ -474,21 +462,14 @@
     .rec-cook-note { font-size: 11px; color: var(--faint); letter-spacing: 0.04em; }
     .rec-ack { font-family: var(--font-display); font-style: italic; color: var(--mid); font-size: 1.02rem; text-align: center; margin-top: 22px; line-height: 1.6; }
 
-    @media (max-width: 420px) { .mode-btn { padding: 5px 10px; letter-spacing: 0.04em; } }
-
     /* ══════════════════════════════════════════════════════════════
-       TASTE SECTION (merged from Savor) — the ten-episode taste season.
-       Its own berry/wine accent, scoped to #taste-section so the cook
-       side stays herb-green. Class names that collided with the cook
-       side are prefixed `sv-`; everything else is Savor-only.
+       TASTE VIEW (the ten-episode taste season, formerly Savor) — one
+       view of the same app, in the same herb-green accent. Class names
+       that collided with the cook side are prefixed `sv-`; everything
+       else is taste-only.
        ══════════════════════════════════════════════════════════════ */
-    #taste-section {
-      --accent:      hsl(322,60%,66%);
-      --accent-soft: hsla(322,56%,64%,0.5);
-      --accent-glow: hsla(322,64%,52%,0.16);
-    }
 
-    /* section sub-nav — in-flow segmented control, used by both sections */
+    /* app nav — in-flow segmented control across the five views */
     .subnav {
       display: flex; justify-content: center; gap: 2px; width: fit-content;
       margin: 0 auto 24px; padding: 3px;
@@ -500,12 +481,14 @@
       letter-spacing: 0.06em; cursor: pointer; transition: background 0.2s, color 0.2s;
     }
     .subnav-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+    @media (max-width: 420px) { .subnav-btn { padding: 6px 10px; letter-spacing: 0.03em; } }
 
-    /* WATCH — the show home */
+    /* WATCH — the taste home */
     #watch-view { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 4px; }
-    .sv-kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 22px; }
-    .show-title { font-family: var(--font-display); font-weight: 400; font-size: 2.5rem; line-height: 1; color: var(--text); text-shadow: 0 0 40px var(--accent-glow); margin-bottom: 8px; }
-    .show-tag { font-family: var(--font-display); font-style: italic; font-size: 1.02rem; color: var(--mid); margin-bottom: 30px; }
+    .sv-kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+    .show-tag { font-family: var(--font-display); font-style: italic; font-size: 1.02rem; color: var(--mid); margin-bottom: 26px; }
+    /* the episode library, in-flow below the hero */
+    .season-lib { width: 100%; text-align: left; margin-top: 40px; }
     .filmstrip { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; max-width: 340px; }
     .frame { width: 24px; height: 17px; border-radius: 3px; border: 1px solid var(--line); background: var(--faint); transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease; }
     .frame.done { background: var(--accent-soft); border-color: var(--accent-soft); }
@@ -613,7 +596,6 @@
     .sv-empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 54px; line-height: 1.9; }
 
     @media (max-width: 560px) {
-      .show-title { font-size: 2.1rem; }
       .hero-title { font-size: 1.42rem; }
       .player-title { font-size: 1.5rem; }
     }
@@ -645,11 +627,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div class="corner" id="version-label">v0.17 · nourish</div>
-<nav id="mode-nav">
-  <button class="mode-btn active" data-section="cook">Cook</button>
-  <button class="mode-btn"        data-section="taste">Taste</button>
-</nav>
+<div class="corner" id="version-label">v0.18 · nourish</div>
 <div id="menu">
   <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -660,26 +638,27 @@
     <div class="menu-head">Your data</div>
     <button class="menu-item" id="export-btn" type="button" role="menuitem">
       <span class="menu-item-title">Export</span>
-      <span class="menu-item-sub" id="export-sub">Download a backup file</span>
+      <span class="menu-item-sub" id="export-sub">Cooking + tasting, one backup file</span>
     </button>
     <button class="menu-item" id="import-btn" type="button" role="menuitem">
       <span class="menu-item-title">Import</span>
-      <span class="menu-item-sub" id="import-sub">Restore from a backup file</span>
+      <span class="menu-item-sub" id="import-sub">Restore a backup, or receive a shared lesson</span>
     </button>
-    <div class="menu-note" id="menu-note">Back up or move your data between devices.</div>
+    <div class="menu-note" id="menu-note">One file covers everything here — your cooking and your tasting.</div>
   </div>
   <input type="file" id="import-file" accept="application/json" class="hidden">
 </div>
 
 <main>
-  <!-- ══ COOK SECTION ══════════════════════════════════════════ -->
-  <div id="cook-section">
-    <nav class="subnav" id="cook-subnav" aria-label="Cook views">
-      <button class="subnav-btn active" data-view="cook">Make</button>
-      <button class="subnav-btn"        data-view="chef">Chef</button>
-      <button class="subnav-btn"        data-view="shop">Shop</button>
-      <button class="subnav-btn"        data-view="progress">Progress</button>
-    </nav>
+  <!-- One nav for the whole kitchen — cooking and tasting are views of the
+       same app, not separate apps. -->
+  <nav class="subnav" id="main-nav" aria-label="Nourish views">
+    <button class="subnav-btn active" data-view="cook">Cook</button>
+    <button class="subnav-btn"        data-view="taste">Taste</button>
+    <button class="subnav-btn"        data-view="chef">Chef</button>
+    <button class="subnav-btn"        data-view="shop">Shop</button>
+    <button class="subnav-btn"        data-view="progress">Progress</button>
+  </nav>
 
   <!-- ══ COOK ══════════════════════════════════════════════════ -->
   <section id="cook-view">
@@ -843,11 +822,17 @@
     <div class="section-label">Skills in hand</div>
     <div class="skills-grid" id="skills-grid"></div>
 
-    <div class="section-label">History</div>
+    <div class="section-label">Cook history</div>
     <div id="history-list"></div>
     <div id="history-empty" class="empty hidden">
       No cooks logged yet.<br>Your first challenge will land here.
     </div>
+
+    <!-- the palate — the taste season's progress + tasting notebook -->
+    <div class="section-label" style="margin-top:40px;">The palate</div>
+    <div class="sv-prog-summary" id="nb-stats"></div>
+    <div class="section-label">Tasting notes</div>
+    <div id="nb-notes"></div>
   </section>
 
   <!-- ══ SHOP ══════════════════════════════════════════════════ -->
@@ -884,33 +869,39 @@
       </div>
     </form>
   </section>
-  </div><!-- /#cook-section -->
 
-  <!-- ══ TASTE SECTION (merged from Savor) ═════════════════════ -->
-  <div id="taste-section" class="hidden">
-    <nav class="subnav" id="taste-subnav" aria-label="Taste views">
-      <button class="subnav-btn active" data-tview="watch">Watch</button>
-      <button class="subnav-btn"        data-tview="lessons">Lessons</button>
-      <button class="subnav-btn"        data-tview="notebook">Notebook</button>
-    </nav>
+  <!-- ══ TASTE — the ten-episode season on the palate ══════════ -->
+  <div id="taste-view" class="hidden">
 
-    <!-- ══ WATCH — the show ══════════════════════════════════════ -->
+    <!-- ══ WATCH — the taste home ════════════════════════════════ -->
     <section id="watch-view" class="panel">
-      <div class="sv-kicker" id="watch-kicker">A cooking show</div>
-      <div class="show-title">Savor</div>
+      <div class="sv-kicker" id="watch-kicker">The taste season</div>
       <div class="show-tag">Learn to cook by learning to taste.</div>
       <div class="filmstrip" id="filmstrip" aria-hidden="true"></div>
       <div class="season-count" id="season-count"></div>
       <div id="resume-slot"></div>
       <div class="hero" id="hero"></div>
-      <div id="community-slot"></div>
       <div id="kitchen-slot"></div>
       <div class="watch-hint" id="watch-hint">Each episode is a few minutes of reading, then a small tasting you do at your own counter. No recipe to follow — just your tongue, learning.</div>
+
+      <!-- the episode library, right below the hero — no separate tab to find -->
+      <div class="season-lib">
+        <div class="sv-section-label">The season · learning to taste</div>
+        <div class="section-note">Ten episodes, in order. Each trains one thing your tongue can do — the foundations every cook works from.</div>
+        <div class="ep-list" id="core-list"></div>
+
+        <div class="sv-section-label">From the community</div>
+        <div class="section-note" id="community-note">Guest lessons — small tasting habits passed between cooks. A handful of starters to begin with; the rest grows from what you and others add and share.</div>
+        <div class="ep-list" id="community-list"></div>
+        <div class="lessons-cta">
+          <button class="btn primary" id="contribute-btn">＋ SHARE A TASTE LESSON</button>
+        </div>
+      </div>
     </section>
 
     <!-- ══ PLAYER — the tune-in flow ═════════════════════════════ -->
     <section id="player-view" class="hidden">
-      <button class="btn ghost player-back" id="player-back">‹ back to the show</button>
+      <button class="btn ghost player-back" id="player-back">‹ back to the season</button>
 
       <!-- stage 1 · intro -->
       <div id="stage-intro">
@@ -964,35 +955,21 @@
         <div class="close-sub" id="pc-sub"></div>
         <div class="close-actions">
           <button class="btn primary" id="pc-next">NEXT EPISODE</button>
-          <button class="btn ghost" id="pc-done">back to the show</button>
-          <a class="btn ghost" id="pc-cook" href="#cook">cook something on the Cook side →</a>
+          <button class="btn ghost" id="pc-done">back to the season</button>
+          <a class="btn ghost" id="pc-cook" href="#cook">go cook something →</a>
         </div>
-      </div>
-    </section>
-
-    <!-- ══ LESSONS — the library ═════════════════════════════════ -->
-    <section id="lessons-view" class="hidden panel">
-      <div class="sv-section-label">The season · learning to taste</div>
-      <div class="section-note">Ten episodes, in order. Each trains one thing your tongue can do — the foundations every cook works from.</div>
-      <div class="ep-list" id="core-list"></div>
-
-      <div class="sv-section-label">From the community</div>
-      <div class="section-note" id="community-note">Guest lessons — small tasting habits passed between cooks. A handful of starters to begin with; the rest grows from what you and others add and share.</div>
-      <div class="ep-list" id="community-list"></div>
-      <div class="lessons-cta">
-        <button class="btn primary" id="contribute-btn">＋ SHARE A TASTE LESSON</button>
       </div>
     </section>
 
     <!-- ══ CONTRIBUTE — write your own ═══════════════════════════ -->
     <section id="contribute-view" class="hidden">
-      <button class="btn ghost player-back" id="contrib-back">‹ back to lessons</button>
+      <button class="btn ghost player-back" id="contrib-back">‹ back to the season</button>
       <div class="contrib-intro">
         <div class="contrib-title">Teach a tasting</div>
         <div class="contrib-sub">Something a friend, a parent, a cook you worked with, or your own tongue taught you. Keep it to one small thing someone can taste tonight.</div>
       </div>
       <div class="share-note">
-        To pass a lesson to someone — or into the show — <b>export it from the menu</b> and share the file.
+        To pass a lesson to someone — or into the season — <b>export it from the menu</b> and share the file.
       </div>
       <form id="contrib-form">
         <div class="field">
@@ -1027,14 +1004,7 @@
         </div>
       </form>
     </section>
-
-    <!-- ══ NOTEBOOK — your tasting notes ═════════════════════════ -->
-    <section id="notebook-view" class="hidden panel">
-      <div class="sv-prog-summary" id="nb-stats"></div>
-      <div class="sv-section-label">Your tasting notes</div>
-      <div id="nb-notes"></div>
-    </section>
-  </div><!-- /#taste-section -->
+  </div><!-- /#taste-view -->
 </main>
 
 <!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
@@ -1047,7 +1017,7 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const VERSION  = 'v0.17 · nourish';
+const VERSION  = 'v0.18 · nourish';
 const STATE_KEY = 'hill-climbing-nourish';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-nourish';   // this app's registered E2E-sync doc (see hc-sync.js). The chef settings blob (hill-climbing-nourish-chef) and the shared Anthropic key (hill-climbing-api-key) are deliberately NOT registered — they stay on-device.
 const LVL_MIN = 1;
@@ -2256,6 +2226,7 @@ function recordOutcome(outcomeKey) {
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const cookView    = document.getElementById('cook-view');
+const tasteView   = document.getElementById('taste-view');
 const progressView= document.getElementById('progress-view');
 const shopView    = document.getElementById('shop-view');
 const chefView    = document.getElementById('chef-view');
@@ -2309,7 +2280,7 @@ function showChallenge(ch) {
   served = ch;
   document.getElementById('ch-skill').textContent = SKILL_LABELS[ch.skill] || ch.skill;
   document.getElementById('ch-time').textContent  = ch.time === '—' ? 'any dish' : '~ ' + ch.time;
-  // cross-link to the Savor episode behind this challenge's skill
+  // cross-link to the taste episode behind this challenge's skill
   const pair = episodeForSkill(ch.skill);
   const tasteLink = document.getElementById('ch-taste-link');
   tasteLink.href = '#taste-' + pair.id;         // in-app: opens the Taste season on that episode
@@ -2399,8 +2370,9 @@ function swapPanel(panel) {
   panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
 }
 function switchView(v) {
-  document.querySelectorAll('#cook-subnav .subnav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.querySelectorAll('#main-nav .subnav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   cookView.classList.toggle('hidden', v !== 'cook');
+  tasteView.classList.toggle('hidden', v !== 'taste');
   progressView.classList.toggle('hidden', v !== 'progress');
   shopView.classList.toggle('hidden', v !== 'shop');
   chefView.classList.toggle('hidden', v !== 'chef');
@@ -2408,6 +2380,9 @@ function switchView(v) {
     // returning to Cook always lands on home (or resumes an active cook)
     if (state.active) { const ac = byId(state.active.id); if (ac) { showCooking(ac); return; } }
     renderHome(); swapPanel(homePanel);
+  } else if (v === 'taste') {
+    Savor.activate();   // re-render with fresh cook-side data (the ladder bridge reads it)
+    window.scrollTo(0, 0);
   } else if (v === 'progress') {
     renderProgress();
   } else if (v === 'chef') {
@@ -2469,6 +2444,7 @@ function renderProgress() {
   document.getElementById('p-level').textContent  = state.level;
   document.getElementById('p-cooked').textContent = clearedCount();
   document.getElementById('p-skills').textContent = learnedSkills().size;
+  Savor.renderNotebook();   // the palate — taste-season stats + tasting notes live here too
 
   // skills for the ACTIVE track only (distinct, in ladder order), learned ones lit
   const learned = learnedSkills();
@@ -2642,8 +2618,28 @@ function removeExtra(name) {
 }
 
 // ── Export / import (your data is yours) ────────────────────────────────────────
+// One file for the whole app: cook ladder + taste season together (schema 2).
+// Import still accepts every older shape — a schema-1 Nourish export, an old
+// standalone Savor export, or a single shared taste lesson — so no file anyone
+// holds ever stops working.
+function applyCookImport(incoming) {
+  if (!incoming || typeof incoming !== 'object') throw new Error('not a Nourish export');
+  // per-track progress (or migrate a flat/legacy export into General)
+  if (incoming.tracks && typeof incoming.tracks === 'object') {
+    Object.keys(TRACKS).forEach(t => { if (incoming.tracks[t]) state.tracks[t] = normalizeProgress(incoming.tracks[t]); });
+  } else {
+    state.tracks.general = normalizeProgress(incoming);
+  }
+  if (TRACKS[incoming.track]) state.track = incoming.track;
+  state.tracks[state.track].active = null;     // don't resume a half-cook from an import
+  loadWorkingFromTrack();
+  if (incoming.pantry && typeof incoming.pantry === 'object') state.pantry = incoming.pantry;
+  if (Array.isArray(incoming.extras)) state.extras = incoming.extras.filter(e => e && typeof e.name === 'string');
+  if ([1, 2, 4].includes(incoming.servings)) state.servings = incoming.servings;
+  save();
+}
 function exportData() {
-  const payload = { app: 'nourish', schema: 1, exported: Date.now(), state };
+  const payload = { app: 'nourish', schema: 2, exported: Date.now(), cook: state, taste: Savor.getState() };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2656,21 +2652,39 @@ function exportData() {
 async function importData(file) {
   try {
     const parsed = JSON.parse(await file.text());
-    const incoming = parsed && parsed.state ? parsed.state : parsed;
-    if (!incoming || typeof incoming !== 'object') throw new Error('not a Nourish export');
-    // per-track progress (or migrate a flat/legacy export into General)
-    if (incoming.tracks && typeof incoming.tracks === 'object') {
-      Object.keys(TRACKS).forEach(t => { if (incoming.tracks[t]) state.tracks[t] = normalizeProgress(incoming.tracks[t]); });
-    } else {
-      state.tracks.general = normalizeProgress(incoming);
+    if (!parsed || typeof parsed !== 'object') throw new Error('not a readable export');
+
+    // 1 · a single shared taste lesson ({ lesson } wrapper, or a bare lesson object)
+    const bare = parsed.state || parsed;
+    const single = parsed.lesson ? parsed.lesson
+      : (bare && bare.title && !bare.watched && !bare.notes && !bare.tracks && !bare.cook) ? bare : null;
+    if (single) {
+      const lesson = Savor.receiveLesson(single);
+      switchView('taste');
+      alert('Added “' + lesson.title + '” to your lessons.');
+      return;
     }
-    if (TRACKS[incoming.track]) state.track = incoming.track;
-    state.tracks[state.track].active = null;     // don't resume a half-cook from an import
-    loadWorkingFromTrack();
-    if (incoming.pantry && typeof incoming.pantry === 'object') state.pantry = incoming.pantry;
-    if (Array.isArray(incoming.extras)) state.extras = incoming.extras.filter(e => e && typeof e.name === 'string');
-    if ([1, 2, 4].includes(incoming.servings)) state.servings = incoming.servings;
-    save();
+
+    // 2 · a unified export (schema 2): both halves in one file
+    if (parsed.cook || parsed.taste) {
+      if (parsed.cook)  applyCookImport(parsed.cook);
+      if (parsed.taste) Savor.importState(parsed.taste);
+      switchView('progress');
+      alert('Imported your Nourish data.');
+      return;
+    }
+
+    // 3 · an old standalone Savor export (taste data only)
+    const incoming = parsed.state ? parsed.state : parsed;
+    if (parsed.app === 'savor' || (incoming && (incoming.watched || incoming.notes || incoming.myLessons))) {
+      Savor.importState(incoming);
+      switchView('progress');
+      alert('Imported your taste-season data.');
+      return;
+    }
+
+    // 4 · a schema-1 Nourish export (cook data only)
+    applyCookImport(incoming);
     switchView('progress');
     alert('Imported your Nourish progress.');
   } catch (err) {
@@ -2679,7 +2693,7 @@ async function importData(file) {
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────────
-document.querySelectorAll('#cook-subnav .subnav-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.querySelectorAll('#main-nav .subnav-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 document.querySelectorAll('.serve-btn').forEach(b => b.addEventListener('click', () => setServings(+b.dataset.serves)));
 document.querySelectorAll('.track-btn').forEach(b => b.addEventListener('click', () => switchTrack(b.dataset.track)));
 document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
@@ -2703,10 +2717,10 @@ menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hi
 document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
 
-// Export/import act on whichever top-level section is showing (Cook ↔ Taste).
-document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); (activeSection === 'taste' ? Savor.exportData : exportData)(); });
+// One export/import for the whole app — no more per-section file formats.
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
 document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
-importFile.addEventListener('change', e => { if (e.target.files[0]) (activeSection === 'taste' ? Savor.importData : importData)(e.target.files[0]); e.target.value = ''; });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 document.getElementById('extra-add').addEventListener('submit', e => {
   e.preventDefault();
   const input = document.getElementById('extra-input');
@@ -3155,7 +3169,7 @@ document.querySelectorAll('#chef-time .chip-btn').forEach(b => b.addEventListene
 document.getElementById('version-label').textContent = VERSION;
 load();
 loadChef();
-switchView('cook');   // render the cook sub-view (home, or a resumed mid-cook challenge)
+switchView('cook');   // land on Cook (home, or a resumed mid-cook challenge)
 
 // Register the cook ladder's sync store. Sync init happens once, below, after the
 // Taste season has registered its own store too.
@@ -3166,20 +3180,22 @@ if (window.HCSync) {
     write: (str) => {                      // remote-apply path — deliberately NOT through save()
       try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
       load();
-      const active = document.querySelector('#cook-subnav .subnav-btn.active');
+      const active = document.querySelector('#main-nav .subnav-btn.active');
       switchView(active ? active.dataset.view : 'cook');
     },
   });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TASTE SEASON  (merged from the former Savor app) — the ten-episode season on
-// the palate. Wrapped in its own scope so its state/functions never collide with
-// the cook side (both once defined load/save/state/switchView/el/…). Reads/writes
-// the SAME localStorage key Savor always used (hill-climbing-savor) so existing
-// data and sync are untouched. It registers its own sync store here; the single
-// HCSync.init below picks up both stores. Exposes only the surface the section
-// switch, deep-links, the shared menu, and the agent interface need.
+// TASTE SEASON  (formerly the standalone Savor app) — the ten-episode season on
+// the palate, now one view of this app alongside Cook/Chef/Shop/Progress.
+// Wrapped in its own scope so its state/functions never collide with the cook
+// side (both once defined load/save/state/el/…). Reads/writes the SAME
+// localStorage key Savor always used (hill-climbing-savor) so existing data and
+// sync are untouched. It registers its own sync store here; the single
+// HCSync.init below picks up both stores. Exposes only the surface the main
+// nav, deep-links, the unified export/import, the Progress view (which hosts
+// the tasting notebook), and the agent interface need.
 // ════════════════════════════════════════════════════════════════════════════
 const Savor = (function () {
   'use strict';
@@ -3499,22 +3515,21 @@ const Savor = (function () {
     };
   }
 
-  // ── View switching (within the Taste section) ────────────────────────────────
-  const SECTIONS = ['watch', 'lessons', 'notebook', 'player', 'contribute'];
+  // ── View switching (within the Taste view: home ↔ player ↔ contribute) ──────
+  // The old Watch/Lessons/Notebook subnav is gone: the episode library lives on
+  // the taste home, and the notebook renders inside the shared Progress view.
+  const SECTIONS = ['watch', 'player', 'contribute'];
   function showSection(name) {
     SECTIONS.forEach(s => document.getElementById(s + '-view').classList.toggle('hidden', s !== name));
   }
   let currentView = 'watch';
   function show(name) {
     currentView = name;
-    document.querySelectorAll('#taste-subnav .subnav-btn').forEach(b => b.classList.toggle('active', b.dataset.tview === name));
     showSection(name);
-    if (name === 'watch') renderWatch();
-    if (name === 'lessons') renderLessons();
-    if (name === 'notebook') renderNotebook();
+    if (name === 'watch') { renderWatch(); renderLessons(); }
     window.scrollTo(0, 0);
   }
-  function activate() { show(currentView); }   // re-render the current taste view when the section is revealed
+  function activate() { show(currentView); }   // re-render the current taste state when the view is revealed
 
   // ── WATCH ─────────────────────────────────────────────────────────────────────
   function el(tag, cls, html) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
@@ -3530,7 +3545,7 @@ const Savor = (function () {
     });
     const done = coreDoneCount();
     document.getElementById('season-count').textContent = done + ' of ' + CORE.length + ' episodes tasted';
-    document.getElementById('watch-kicker').textContent = done === 0 ? 'A cooking show' : (done >= CORE.length ? 'Season one · complete' : 'Season one');
+    document.getElementById('watch-kicker').textContent = done >= CORE.length ? 'The taste season · complete' : 'The taste season';
 
     const resume = document.getElementById('resume-slot');
     resume.innerHTML = '';
@@ -3557,35 +3572,16 @@ const Savor = (function () {
       const tune = el('button', 'btn primary', done === 0 ? 'TUNE IN' : 'TUNE IN →');
       tune.addEventListener('click', () => openEpisode(upcoming.id));
       acts.appendChild(tune);
-      const browse = el('button', 'btn ghost', 'browse all episodes');
-      browse.addEventListener('click', () => show('lessons'));
-      acts.appendChild(browse);
       hero.appendChild(acts);
     } else {
       hero.appendChild(el('div', 'hero-badge-row', '<span class="ep-badge">The season · complete</span>'));
       hero.appendChild(el('div', 'hero-title', 'You can taste, and adjust. That’s cooking.'));
-      hero.appendChild(el('div', 'hero-host', '“You finished the season. Re-taste any episode any time — your palate keeps changing — or take a lesson from the community.”'));
+      hero.appendChild(el('div', 'hero-host', '“You finished the season. Re-taste any episode below any time — your palate keeps changing — or take a lesson from the community.”'));
       const acts = el('div', 'hero-actions');
-      const b1 = el('button', 'btn primary', 'FROM THE COMMUNITY');
-      b1.addEventListener('click', () => show('lessons'));
-      acts.appendChild(b1);
-      const b2 = el('button', 'btn ghost', 'your notebook');
-      b2.addEventListener('click', () => show('notebook'));
-      acts.appendChild(b2);
+      const notes = el('button', 'btn ghost', 'your tasting notes →');
+      notes.addEventListener('click', () => switchView('progress'));
+      acts.appendChild(notes);
       hero.appendChild(acts);
-    }
-
-    const cs = document.getElementById('community-slot');
-    cs.innerHTML = '';
-    const all = communityAll();
-    const guest = all.find(e => !isDone(e.id)) || all[0];
-    if (guest) {
-      const t = el('button', 'teaser', '');
-      t.appendChild(el('div', 'teaser-label', 'From the community' + (guest.mine ? ' · yours' : '')));
-      t.appendChild(el('div', 'teaser-title', guest.title));
-      t.appendChild(el('div', 'teaser-host', guest.host ? '— ' + guest.host : 'a guest lesson'));
-      t.addEventListener('click', () => openEpisode(guest.id));
-      cs.appendChild(t);
     }
 
     renderKitchenBridge();
@@ -3603,33 +3599,33 @@ const Savor = (function () {
     if (nourish && nourish.track === 'general') {
       const pairId = NOURISH_PAIR[nourish.level] || 'c10';
       const pairEp = episodeById(pairId);
-      card.appendChild(el('div', 'teaser-title', 'You’re on the Cook ladder · Level ' + nourish.level));
+      card.appendChild(el('div', 'teaser-title', 'Your cooking ladder · Level ' + nourish.level));
       card.appendChild(el('div', 'bridge-body',
-        'The taste behind it: <b>' + (pairEp ? pairEp.title : 'What does this need?') + '</b>. Watch it here, then go make the dish.'));
+        'The taste behind it: <b>' + (pairEp ? pairEp.title : 'What does this need?') + '</b>. Watch it, then go make the dish.'));
       const acts = el('div', 'bridge-actions');
       if (pairEp) {
         const watch = el('button', 'bridge-link', 'Watch that episode →');
         watch.addEventListener('click', () => openEpisode(pairId));
         acts.appendChild(watch);
       }
-      const open = el('button', 'bridge-link sub', 'Go to the Cook side →');
-      open.addEventListener('click', () => setSection('cook'));
+      const open = el('button', 'bridge-link sub', 'Open Cook →');
+      open.addEventListener('click', () => switchView('cook'));
       acts.appendChild(open);
       card.appendChild(acts);
     } else if (nourish && nourish.track === 'sushi') {
-      card.appendChild(el('div', 'teaser-title', 'You’re on the Sushi track on the Cook side'));
+      card.appendChild(el('div', 'teaser-title', 'You’re on the Sushi track'));
       card.appendChild(el('div', 'bridge-body', 'Tasting sharpens every part of it — season the rice, balance the vinegar, read the char.'));
       const acts = el('div', 'bridge-actions');
-      const open = el('button', 'bridge-link sub', 'Go to the Cook side →');
-      open.addEventListener('click', () => setSection('cook'));
+      const open = el('button', 'bridge-link sub', 'Open Cook →');
+      open.addEventListener('click', () => switchView('cook'));
       acts.appendChild(open);
       card.appendChild(acts);
     } else {
       card.appendChild(el('div', 'teaser-title', 'Learn to make what you taste'));
-      card.appendChild(el('div', 'bridge-body', 'The <b>Cook</b> side teaches you to cook — one dish at a time, adjusting by taste as you go.'));
+      card.appendChild(el('div', 'bridge-body', '<b>Cook</b> teaches you to cook — one dish at a time, adjusting by taste as you go.'));
       const acts = el('div', 'bridge-actions');
-      const open = el('button', 'bridge-link', 'Go to the Cook side →');
-      open.addEventListener('click', () => setSection('cook'));
+      const open = el('button', 'bridge-link', 'Open Cook →');
+      open.addEventListener('click', () => switchView('cook'));
       acts.appendChild(open);
       card.appendChild(acts);
     }
@@ -3785,7 +3781,7 @@ const Savor = (function () {
       });
     } catch (err) { msg.textContent = err.message; return; }
     document.getElementById('contrib-form').reset();
-    show('lessons');
+    show('watch');
   }
 
   // ── NOTEBOOK ──────────────────────────────────────────────────────────────────
@@ -3839,51 +3835,28 @@ const Savor = (function () {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
 
-  // ── Export / import ────────────────────────────────────────────────────────────
-  function exportData() {
-    const payload = { app: 'savor', schema: 1, exported: Date.now(), state };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const d = new Date();
-    a.href = url;
-    a.download = `savor-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // ── Import surface (the host's unified export/import calls these) ─────────────
+  // Apply an incoming taste-season state — a full restore, old Savor exports included.
+  function importState(incoming) {
+    if (!incoming || typeof incoming !== 'object') throw new Error('not a readable taste export');
+    if (incoming.watched && typeof incoming.watched === 'object') state.watched = incoming.watched;
+    if (Array.isArray(incoming.notes)) state.notes = incoming.notes;
+    if (Array.isArray(incoming.myLessons)) state.myLessons = incoming.myLessons.map(normalizeLesson).filter(Boolean);
+    state.current = null;   // don't resume a half-tasting from an import
+    save();
+    show(currentView);
   }
-  async function importData(file) {
-    try {
-      const parsed = JSON.parse(await file.text());
-      const incoming = parsed && parsed.state ? parsed.state : parsed;
-      const single = (parsed && parsed.lesson) ? parsed.lesson
-        : (incoming && !incoming.watched && !incoming.notes && incoming.title) ? incoming : null;
-
-      if (single) {
-        const lesson = normalizeLesson(single);
-        if (!lesson) throw new Error('not a readable lesson');
-        lesson.id = 'm' + Date.now();
-        state.myLessons.push(lesson);
-        save();
-        show('lessons');
-        alert('Added “' + lesson.title + '” to your lessons.');
-        return;
-      }
-
-      if (!incoming || typeof incoming !== 'object') throw new Error('not a Savor export');
-      if (incoming.watched && typeof incoming.watched === 'object') state.watched = incoming.watched;
-      if (Array.isArray(incoming.notes)) state.notes = incoming.notes;
-      if (Array.isArray(incoming.myLessons)) state.myLessons = incoming.myLessons.map(normalizeLesson).filter(Boolean);
-      state.current = null;   // don't resume a half-tasting from an import
-      save();
-      show('notebook');
-      alert('Imported your Savor data.');
-    } catch (err) {
-      alert('Import failed: ' + err.message);
-    }
+  // Receive one shared lesson file onto the community shelf.
+  function receiveLesson(raw) {
+    const lesson = normalizeLesson(raw);
+    if (!lesson) throw new Error('not a readable lesson');
+    lesson.id = 'm' + Date.now();
+    state.myLessons.push(lesson);
+    save();
+    return lesson;
   }
 
-  // ── Events (Taste section only; header/menu are shared, handled by the host) ──
-  document.querySelectorAll('#taste-subnav .subnav-btn').forEach(b => b.addEventListener('click', () => show(b.dataset.tview)));
+  // ── Events (Taste view only; nav/header/menu are shared, handled by the host) ─
   document.getElementById('player-back').addEventListener('click', () => show('watch'));
   document.getElementById('pi-start').addEventListener('click', () => setStage('taste'));
   document.getElementById('pt-back').addEventListener('click', () => setStage('intro'));
@@ -3891,10 +3864,10 @@ const Savor = (function () {
   document.getElementById('pn-save').addEventListener('click', () => finishEpisode(true, document.getElementById('pn-input').value));
   document.getElementById('pn-skip').addEventListener('click', () => finishEpisode(false));
   document.getElementById('pc-done').addEventListener('click', () => show('watch'));
-  document.getElementById('pc-cook').addEventListener('click', (e) => { e.preventDefault(); setSection('cook'); });
+  document.getElementById('pc-cook').addEventListener('click', (e) => { e.preventDefault(); switchView('cook'); });
   document.getElementById('contribute-btn').addEventListener('click', openContribute);
-  document.getElementById('contrib-back').addEventListener('click', () => show('lessons'));
-  document.getElementById('cf-cancel').addEventListener('click', () => show('lessons'));
+  document.getElementById('contrib-back').addEventListener('click', () => show('watch'));
+  document.getElementById('cf-cancel').addEventListener('click', () => show('watch'));
   document.getElementById('contrib-form').addEventListener('submit', saveContribution);
 
   // ── Boot the Taste season (renders into the hidden section until it's revealed) ─
@@ -3916,7 +3889,7 @@ const Savor = (function () {
 
   return {
     activate, show, openEpisode, setStage, finishEpisode, deleteNote, addLesson,
-    exportData, importData, episodeById,
+    importState, receiveLesson, renderNotebook, episodeById,
     hasEpisode: (id) => !!episodeById(id),
     getPlayer: () => player,
     getState: () => state,
@@ -3925,52 +3898,34 @@ const Savor = (function () {
   };
 })();
 
-// ── Top-level section switch: Cook ↔ Taste ──────────────────────────────────
-let activeSection = 'cook';
-function updateMenuForSection() {
-  const taste = activeSection === 'taste';
-  document.getElementById('export-sub').textContent = taste ? 'Your notes and lessons, as a file' : 'Download a backup file';
-  document.getElementById('import-sub').textContent = taste ? 'Restore, or receive a shared lesson' : 'Restore from a backup file';
-}
-function setSection(name) {
-  if (name !== 'cook' && name !== 'taste') return;
-  activeSection = name;
-  document.querySelectorAll('#mode-nav .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.section === name));
-  document.getElementById('cook-section').classList.toggle('hidden', name !== 'cook');
-  document.getElementById('taste-section').classList.toggle('hidden', name !== 'taste');
-  updateMenuForSection();
-  if (name === 'taste') Savor.activate();   // re-render the taste view with fresh cross-side data
-  window.scrollTo(0, 0);
-}
-document.querySelectorAll('#mode-nav .mode-btn').forEach(b => b.addEventListener('click', () => setSection(b.dataset.section)));
-// Cook challenge card → "Taste behind this": jump to the Taste season on that episode.
+// ── Cook ⇄ Taste hand-offs ──────────────────────────────────────────────────
+// Cook challenge card → "Taste behind this": jump to the Taste view on that episode.
 document.getElementById('ch-taste-link').addEventListener('click', (e) => {
   e.preventDefault();
   const id = e.currentTarget.dataset.ep;
-  if (id) { setSection('taste'); Savor.openEpisode(id); }
+  if (id) { switchView('taste'); Savor.openEpisode(id); }
 });
 
 // ── Hash routing ────────────────────────────────────────────────────────────
-// #cook / #taste choose a section; #taste-<id> (or a bare episode id #c4/#g2/#m…)
-// opens the Taste season on that episode — the in-app path taste deep-links use.
+// #cook / #taste choose a view; #taste-<id> (or a bare episode id #c4/#g2/#m…)
+// opens the Taste view on that episode — the in-app path taste deep-links use.
 function applyHash() {
   const h = (location.hash || '').replace(/^#/, '');
   if (!h) return;
-  if (h === 'cook')  { setSection('cook');  return; }
-  if (h === 'taste') { setSection('taste'); return; }
+  if (h === 'cook')  { switchView('cook');  return; }
+  if (h === 'taste') { switchView('taste'); return; }
   let epId = null;
   const m = h.match(/^taste-(.+)$/);
   if (m) epId = m[1];
   else if (/^(c\d+|g\d+|m.+)$/.test(h)) epId = h;
   if (epId && Savor.hasEpisode(epId)) {
-    setSection('taste');
+    switchView('taste');
     Savor.openEpisode(epId);
     history.replaceState(null, '', location.pathname + location.search);   // land clean on reload
   }
 }
 window.addEventListener('hashchange', applyHash);
 
-setSection('cook');
 applyHash();
 
 // ── One cross-device sync init + status chip for the whole app ──────────────
@@ -3988,7 +3943,7 @@ if (window.HC) HC.register({
   app: 'nourish',
   version: VERSION,
   title: 'Nourish',
-  description: 'A kitchen in two halves. COOK: learn to cook through real kitchen challenges on a 2-up/1-down ladder (General and Sushi tracks) with honest self-reported outcomes, plus a shopping list and an optional BYOK chef. TASTE: a ten-episode season on the palate (salt · acid · fat · the five tastes · aroma) with community guest lessons and a tasting notebook.',
+  description: 'One kitchen app, five views (Cook · Taste · Chef · Shop · Progress). COOK: learn to cook through real kitchen challenges on a 2-up/1-down ladder (General and Sushi tracks) with honest self-reported outcomes. TASTE: a ten-episode season on the palate (salt · acid · fat · the five tastes · aroma) with community guest lessons. CHEF: an optional BYOK recipe writer. SHOP: the shopping list. PROGRESS: ladder stats, cook history, and the tasting notebook together.',
   stores: [
     {
       key: STATE_KEY, kind: 'localStorage',
@@ -3998,7 +3953,7 @@ if (window.HC) HC.register({
       syncKey: SYNC_BLOB_KEY,
       afterWrite: () => {
         load();
-        const active = document.querySelector('#cook-subnav .subnav-btn.active');
+        const active = document.querySelector('#main-nav .subnav-btn.active');
         switchView(active ? active.dataset.view : 'cook');
       },
     },
@@ -4142,10 +4097,10 @@ if (window.HC) HC.register({
       handler: () => { removeChefKey(); return { ok: true }; },
     },
 
-    // ── Taste season (merged from Savor) — each calls the same internal
-    //    function the Taste UI calls; parity is preserved. ──
+    // ── Taste season — each calls the same internal function the Taste UI
+    //    calls; parity is preserved. ──
     openEpisode: {
-      description: 'Open a taste episode in the season player — core season, community, or a contributed lesson — switching into the Taste section as the UI does. Persists the resume pointer exactly as the UI does.',
+      description: 'Open a taste episode in the season player — core season, community, or a contributed lesson — switching to the Taste view as the UI does. Persists the resume pointer exactly as the UI does.',
       params: {
         id: "string — episode id (e.g. 'c4', 'g2', or an 'm…' contributed-lesson id); required",
         resume: "boolean — optional; when true and this episode is the saved in-progress tasting, reopen at the taste stage (as the pick-up-where-you-left-off card does)",
@@ -4153,7 +4108,7 @@ if (window.HC) HC.register({
       handler: (p) => {
         const ep = Savor.episodeById(p && p.id);
         if (!ep) throw new Error('No episode with id "' + (p && p.id) + '".');
-        setSection('taste');
+        switchView('taste');
         Savor.openEpisode(ep.id, p && p.resume === true);
         return { ok: true, id: ep.id, title: ep.title };
       },
@@ -4206,11 +4161,11 @@ if (window.HC) HC.register({
     },
   },
   urlParams: {
-    '#cook': 'open the Cook section',
-    '#taste': 'open the Taste season',
-    '#taste-<episodeId>': 'open the Taste season on that episode (e.g. #taste-c4); a bare #c4/#g2/#m… also works — this is how the old Savor deep-links now resolve',
+    '#cook': 'open the Cook view',
+    '#taste': 'open the Taste view',
+    '#taste-<episodeId>': 'open the Taste view on that episode (e.g. #taste-c4); a bare #c4/#g2/#m… also works — this is how the old Savor deep-links now resolve',
   },
-  notes: 'One app, two sections. COOK: the ladder is a 2-up/1-down staircase (Levitt 1971) — two reported clears step the level up, one struggle steps it down, converging near a 71% success rate; the level is a learning edge, not a score. TASTE: episodes are content, not a score — watched marks keep only the first-tasted timestamp; never optimise for completion. Outcomes and tastings are always the person\'s own reports — never invent one. The chef\'s recipe generation and key/consent settings are human acts: no HC action performs network egress or calls the Anthropic API; the chef reads the shared hill-climbing-api-key, which belongs to Companion and is never registered, read, or exported here. Contributed taste lessons have no delete in the UI (an inherited gap, deliberately mirrored). Cook challenge cards cross-link to the paired taste episode in-app.',
+  notes: 'One app, one nav — Cook · Taste · Chef · Shop · Progress. COOK: the ladder is a 2-up/1-down staircase (Levitt 1971) — two reported clears step the level up, one struggle steps it down, converging near a 71% success rate; the level is a learning edge, not a score. TASTE: episodes are content, not a score — watched marks keep only the first-tasted timestamp; never optimise for completion; the tasting notebook renders inside the Progress view. Outcomes and tastings are always the person\'s own reports — never invent one. The chef\'s recipe generation and key/consent settings are human acts: no HC action performs network egress or calls the Anthropic API; the chef reads the shared hill-climbing-api-key, which belongs to Companion and is never registered, read, or exported here. Contributed taste lessons have no delete in the UI (an inherited gap, deliberately mirrored). Cook challenge cards cross-link to the paired taste episode in-app. The app\'s own export is one file holding both halves (schema 2); import also accepts legacy Nourish exports, old standalone Savor exports, and single shared lessons.',
 });
 </script>
 
