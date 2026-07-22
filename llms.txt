@@ -171,16 +171,38 @@ Each app is a single page at the site root. State keys listed are what HC regist
   proposeDistribution, voteOnProposal, resolveProposal, spendTokens, resetBudgets. The
   magistrate is UI-only network, never an HC action — the same human/agent boundary as every
   model call. See GOVERNANCE.md / STATEMENT.md.
+- rooms.html — a single-device prototype of the "rooms" world layer (see "Where this is heading"
+  and ROOMS.md). An EVENT-SOURCED world: every state change is an append-only event, folded into
+  the current world; both humans and LLMs append through the same actions, so you can drive the
+  ENTIRE world via HC. Covers onboarding (name/values/goals-hierarchy/calendar/tasks), rooms +
+  room types + instances + role-scoped permissions (a first-class refusal when an actor is not
+  admitted), clones + time travel (Kin's model, anchored to an event index), and a turn scheduler
+  (immediate with a human present, slow + token-metered without) with a cheap-model moderator + a
+  BYOK research agent. Store: hill-climbing-rooms (synced, sensitive). HC actions (state only):
+  setOwnerName, addValue/editValue/removeValue, addGoal/editGoal/removeGoal, addCalEvent/
+  removeCalEvent, addTask/tagTask/toggleTask/removeTask, addRoomType/setRoomTypePolicy, addRoom/
+  setRoomPolicy/removeRoom, addRole/setRoleAccess, addActor/setActorRole/removeActor, enterRoom,
+  sendMessage, recordResearch, spawnClone, setCloneName/approveCloneName/returnCloneName/cloneSay/
+  removeClone, setBudget/spendTokens/resetBudget, compact. Every model call (agent turns, clone
+  chat, the moderator router, the research agent's web search) is UI-only, never an HC action.
+  Rooms writes ONLY its own store — never a practice store (§1.4 intact); the per-event `actor` is
+  authorship in a new world-layer store, outside §1.4's scope. Single-device: friend/partner are
+  local actors; networked cross-account sharing, sharing a clone with a remote partner, and
+  unattended autonomy are deferred + gated. See ROOMS.md.
 
 ## Where this is heading
 
-Hill Climbing is evolving, in intention, toward a private, two-person, values-constrained
-digital world: pages becoming "rooms," each person able to have an agent-character grounded in
-their own profile that goes on adventures with the other, under a permission model that doubles
-as the consent model for how each person is represented. This is a documented **direction**,
-drafted and pending founder ratification — **not built**. The window.HC contract above is what
-exists today; nothing world-related has shipped. Details: `WORLD_ARCHITECTURE.md` and
-`WORLD_ROADMAP.md` at the repo root.
+Hill Climbing is evolving, in intention, toward a values-constrained digital world: pages
+becoming "rooms," each person able to have an agent-character grounded in their own profile,
+under a permission model that doubles as the consent model for how each person is represented.
+The **single-device** slice of this now exists as a prototype (`rooms.html`, above) — an
+event-sourced world with rooms, roles, permissions, clones, and a turn scheduler, all on one
+device. What remains a documented **direction, drafted and pending founder ratification — not
+built** is everything **cross-user**: a real remote friend/partner on their own device and key,
+sharing a clone with a remote partner, and unattended autonomy. Those are gated on a framing
+decision (public-art vs. private-two-person — the repo holds an unresolved tension here) and, if
+the private framing wins, on a security review + a relational-safety review. Details:
+`ROOMS.md` (the synthesis), `WORLD_ARCHITECTURE.md`, `WORLD_ROADMAP.md` at the repo root.
 
 One ground rule already fixed for when it lands, because it matters to any agent reading this
 file: **agents write the world, never a person's practice.** Character-authored content will

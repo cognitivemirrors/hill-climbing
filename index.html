@@ -125,6 +125,7 @@
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
     .card.kin      { --accent: hsl(38,56%,64%);  --accent-soft: hsla(38,52%,60%,0.45);  --accent-glow: hsla(38,58%,48%,0.16); }
     .card.govern   { --accent: hsl(202,54%,64%); --accent-soft: hsla(202,50%,60%,0.45); --accent-glow: hsla(202,54%,48%,0.16); }
+    .card.rooms    { --accent: hsl(258,52%,72%); --accent-soft: hsla(258,48%,66%,0.45); --accent-glow: hsla(258,54%,54%,0.16); }
     .card.echo     { --accent: hsl(197,72%,68%); --accent-soft: hsla(197,66%,64%,0.45); --accent-glow: hsla(197,72%,56%,0.16); }
     .card.garden   { --accent: hsl(90,42%,66%);  --accent-soft: hsla(90,38%,60%,0.45);  --accent-glow: hsla(90,45%,52%,0.16); }
 
@@ -691,6 +692,20 @@
       </span>
       <h2>Govern</h2>
       <p>Rules, a public magistrate, no ranking — the game itself.</p>
+    </a>
+
+    <a class="card rooms" href="rooms.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="7" y="9" width="15" height="13" rx="1.5"/>
+          <rect x="26" y="9" width="15" height="13" rx="1.5"/>
+          <rect x="7" y="26" width="15" height="13" rx="1.5"/>
+          <rect x="26" y="26" width="15" height="13" rx="1.5"/>
+          <path d="M22 15.5h4M15 22v4M33 22v4"/>
+        </svg>
+      </span>
+      <h2>Rooms</h2>
+      <p>Your world as rooms — profile, clones, turns, permissions.</p>
     </a>
   </nav>
 
@@ -1612,6 +1627,7 @@
         { title: 'Council', href: 'companion.html?mode=council' },
         { title: 'Kin', href: 'kin.html' },
         { title: 'Govern', href: 'govern.html' },
+        { title: 'Rooms', href: 'rooms.html' },
       ],
       stores: [
         {

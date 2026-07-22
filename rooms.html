@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rooms</title>
+<meta name="theme-color" content="#0f1319">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  :root{
+    --bg:#0f1319; --raised:#161c24; --sunk:#0a0d12; --ink:#e7ecf2; --soft:#a8b2c0; --faint:#6f7a8a;
+    --rule:#232c38; --rule2:#33404f; --accent:#5aa6cf; --accent-soft:#3f86ad; --accent-t:rgba(90,166,207,.13);
+    --floor:#c9a24b; --allow:#6fb98f; --refuse:#cf7a5a; --hold:#c9a24b; --alert:#cf7a5a;
+    --human:#5aa6cf; --agent:#b48ad6; --agent-t:rgba(180,138,214,.13);
+    --serif:'Iowan Old Style','Palatino Linotype','Palatino','Georgia',serif;
+    --sans:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'SF Mono','JetBrains Mono',ui-monospace,'Menlo',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  a{color:var(--accent);text-decoration:none}
+  .home{position:fixed;top:.7rem;left:.8rem;color:var(--faint);font-size:1.1rem;z-index:20}
+  .home:hover{color:var(--ink)}
+  #version-label{position:fixed;top:.8rem;right:2.6rem;font-size:.7rem;color:var(--faint);font-family:var(--mono);z-index:20}
+  #menu-btn{position:fixed;top:.6rem;right:.7rem;background:none;border:none;color:var(--faint);font-size:1.3rem;cursor:pointer;z-index:21}
+  #menu-btn:hover{color:var(--ink)}
+  .wrap{max-width:860px;width:100%;margin:0 auto;padding:2.6rem 1.1rem 3rem;flex:1;display:flex;flex-direction:column}
+  h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.15;margin:0}
+  h1{font-size:1.7rem}
+  .lede{color:var(--soft)}
+  .eyebrow{font-family:var(--sans);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  button{font-family:var(--sans)}
+  .btn{background:var(--accent);color:#0a0d12;border:none;border-radius:999px;padding:.55rem 1.1rem;font-weight:700;font-size:.88rem;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--soft);border:1px solid var(--rule2)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .btn.small{padding:.35rem .8rem;font-size:.8rem}
+  .field{width:100%;background:var(--sunk);border:1px solid var(--rule2);border-radius:10px;color:var(--ink);font-family:var(--sans);font-size:.95rem;padding:.6rem .75rem;resize:vertical}
+  .field:focus{outline:none;border-color:var(--accent-soft)}
+  select.field{appearance:none}
+  .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--faint);font-size:.82rem}
+  .card{background:var(--raised);border:1px solid var(--rule);border-radius:13px;padding:1rem 1.1rem}
+  .hidden,.hide{display:none!important}
+
+  .tabs{display:flex;gap:.15rem;border-bottom:1px solid var(--rule);margin:1.1rem 0 1.3rem;flex-wrap:wrap}
+  .tab{background:none;border:none;color:var(--faint);font-weight:600;font-size:.86rem;padding:.5rem .6rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.sel{color:var(--ink);border-bottom-color:var(--accent)}
+
+  .eyebrow-row{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
+  .sect-h{font-family:var(--sans);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:1.3rem 0 .5rem}
+  .empty{text-align:center;color:var(--faint);padding:2rem 1rem}
+
+  /* acting-actor bar */
+  .actbar{display:flex;align-items:center;gap:.5rem;background:var(--sunk);border:1px solid var(--rule2);border-radius:999px;padding:.3rem .3rem .3rem .8rem;flex-wrap:wrap}
+  .actbar .lbl{font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .actbar select{background:var(--raised);border:1px solid var(--rule2);color:var(--ink);border-radius:999px;padding:.3rem .6rem;font-family:var(--sans);font-size:.85rem}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:.3rem;font-size:.74rem;font-weight:700;padding:.14rem .5rem;border-radius:999px;border:1px solid var(--rule2);color:var(--soft)}
+  .chip.human{color:var(--human);border-color:var(--accent-soft);background:var(--accent-t)}
+  .chip.agent{color:var(--agent);border-color:#6d4f88;background:var(--agent-t)}
+  .dot{width:.5rem;height:.5rem;border-radius:999px;background:currentColor;display:inline-block}
+
+  /* room cards */
+  .roomcard{background:var(--raised);border:1px solid var(--rule);border-radius:12px;padding:.85rem 1rem;margin-bottom:.6rem}
+  .roomcard .top{display:flex;justify-content:space-between;gap:.6rem;align-items:baseline}
+  .roomcard .nm{font-family:var(--serif);font-size:1.1rem}
+  .roomcard .ty{font-family:var(--mono);font-size:.68rem;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+  .roomcard .present{display:flex;gap:.35rem;flex-wrap:wrap;margin:.5rem 0}
+  .roomcard .acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem}
+  .lock{color:var(--floor);font-size:.78rem}
+
+  /* conversation */
+  .convo{display:flex;flex-direction:column;gap:.55rem;margin:1rem 0}
+  .msg{border:1px solid var(--rule);border-radius:11px;padding:.6rem .8rem;background:var(--raised)}
+  .msg .who{display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem}
+  .msg .nm{font-family:var(--serif);font-size:.95rem}
+  .msg .bd{color:var(--soft);font-size:.92rem;white-space:pre-wrap}
+  .msg.agent{border-color:#39304a}
+  .msg.research{border-left:3px solid var(--accent);background:var(--sunk)}
+  .msg .src{font-size:.75rem;color:var(--faint);margin-top:.4rem}
+  .msg .src a{word-break:break-all}
+  .typing{display:flex;align-items:center;gap:.5rem;color:var(--soft);font-size:.86rem;padding:.5rem .2rem;font-style:italic}
+  .typing .bd{width:.4rem;height:.4rem;border-radius:999px;background:var(--agent);animation:blink 1.1s infinite}
+  .typing .bd:nth-child(2){animation-delay:.2s}.typing .bd:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .floor-note{color:var(--faint);font-size:.78rem;font-style:italic;border-top:1px solid var(--rule);padding-top:.7rem;margin-top:1rem}
+
+  /* goal tree */
+  .tree{list-style:none;margin:.3rem 0;padding:0}
+  .tree ul{list-style:none;margin:0;padding-left:1.15rem;border-left:1px solid var(--rule)}
+  .tree li{margin:.2rem 0}
+  .node{display:flex;gap:.5rem;align-items:center}
+  .node .t{flex:1}
+  .node .x,.rule .x,.li-x{background:none;border:none;color:var(--faint);cursor:pointer;font-size:1rem;line-height:1}
+  .node .x:hover,.li-x:hover{color:var(--refuse)}
+
+  .rule{display:flex;gap:.6rem;align-items:flex-start;background:var(--raised);border:1px solid var(--rule);border-radius:9px;padding:.55rem .8rem;margin-bottom:.4rem}
+  .rule .txt{flex:1;font-size:.92rem}
+  .composer{display:flex;flex-direction:column;gap:.5rem;margin-top:.5rem}
+  .tag{font-size:.7rem;color:var(--accent);background:var(--accent-t);border:1px solid var(--accent-soft);border-radius:999px;padding:.05rem .45rem}
+
+  /* budget bar */
+  .bar{height:.5rem;background:var(--sunk);border-radius:999px;overflow:hidden;border:1px solid var(--rule2)}
+  .bar > i{display:block;height:100%;background:var(--accent)}
+  .bar > i.floorwarn{background:var(--floor)}
+
+  /* perms grid */
+  .perm{display:grid;grid-template-columns:1fr auto auto auto;gap:.4rem;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--rule)}
+  .perm .rl{font-size:.86rem}
+  .perm label{display:flex;align-items:center;gap:.25rem;font-size:.72rem;color:var(--soft)}
+
+  #menu{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;justify-content:flex-end}
+  #menu.show{display:flex}
+  .menu-panel{background:var(--raised);border:1px solid var(--rule2);border-radius:12px;margin:2.8rem .7rem 0;min-width:12rem;padding:.4rem;height:max-content;max-width:22rem}
+  .menu-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--ink);font-size:.88rem;padding:.55rem .7rem;border-radius:8px;cursor:pointer}
+  .menu-item:hover{background:var(--sunk)}
+  .menu-item.danger{color:var(--alert)}
+  .menu-sub{font-size:.7rem;color:var(--faint);padding:.3rem .7rem}
+  .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--rule2);color:var(--ink);padding:.55rem 1rem;border-radius:999px;font-size:.85rem;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;text-align:center}
+  .toast.show{opacity:1}
+  .logline{font-family:var(--mono);font-size:.74rem;color:var(--soft);border-bottom:1px solid var(--rule);padding:.3rem 0}
+  .logline .ty{color:var(--accent)}
+  .logline .ac{color:var(--agent)}
+  code{font-family:var(--mono);font-size:.8rem;color:var(--soft)}
+</style>
+</head>
+<body>
+<a class="home" href="/index.html" title="Home">◇</a>
+<div id="version-label">v0.1 · rooms</div>
+<button id="menu-btn" title="Menu">⋯</button>
+<main class="wrap" id="root"></main>
+<div id="menu"><div class="menu-panel" id="menu-panel"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="/hc-sync.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
+<script>
+'use strict';
+/* Rooms — a single-device prototype of the "rooms" world layer (see ROOMS.md).
+
+   THE SPINE is an EVENT-SOURCED WORLD LOG: every state change — a value edited, a
+   goal added, a message sent, an actor moved between rooms — is an append-only
+   EVENT. The current world is a REDUCTION over the log (reduce()); an older self is
+   the same reduction stopped earlier (time travel); a clone is a self frozen at a
+   point and set loose to diverge (Kin's model). Both humans and LLMs append through
+   the SAME action functions the UI calls (REQUIREMENTS §1.4 parity), so an LLM can
+   drive the whole world via window.HC.
+
+   BOUNDARY (keeps §1.4 literally true): Rooms writes ONLY its own world store
+   (hill-climbing-rooms). It never writes a practice store (journal/Foresee/goals).
+   The world log records an `actor` on every event — that is AUTHORSHIP in a new
+   world-layer store, OUTSIDE §1.4's practice-store scope (WORLD_ARCHITECTURE §5),
+   not a practice-store provenance field.
+
+   SINGLE-DEVICE ONLY. Friend/partner are LOCAL actors you can act-as; networked
+   cross-account sharing, sharing a clone with a remote partner, and unattended
+   autonomy are deferred + gated (ROOMS.md §11 / §1 framing decision). The only
+   network is the existing BYOK model calls (agent turns, clone chat, the moderator,
+   the research agent) on the shared hill-climbing-api-key.
+
+   Substrate note: production should ride hc-sync's kind:'log' append-only store
+   (union-by-id, LWW-immune). This prototype uses one localStorage blob — fine
+   single-device (no concurrent edits), simplest, matches govern/kin. */
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const VERSION       = 'v0.1 · rooms';
+const STATE_KEY     = 'hill-climbing-rooms';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-rooms';
+const API_KEY_LS    = 'hill-climbing-api-key';
+const API_URL       = 'https://api.anthropic.com/v1/messages';
+const MODEL         = 'claude-opus-4-8';
+const MOD_MODEL     = 'claude-haiku-4-5-20251001';   // the cheap moderator/router
+const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6dGFwcHJrY253b2VibmZkZWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTk1MzY4MDAsImV4cCI6MjAzNTExMjgwMH0.iVskoRy1r_hpxrySkQoWvSV8mBSySF7DjhZDp3v0Nlw';
+const COMPACT_AFTER = 60;   // fold old events into a compaction summary past this many live events
+
+// ── Small helpers ──────────────────────────────────────────────────────────────
+function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+const now = ()=>Date.now();
+function uid(p){ const r=(self.crypto&&crypto.randomUUID)?crypto.randomUUID().slice(0,8):Math.random().toString(36).slice(2,10); return (p||'e')+r+now().toString(36).slice(-4); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),3200); }
+
+// ── API key ────────────────────────────────────────────────────────────────────
+let apiKey='';
+function readApiKey(){ try{ return localStorage.getItem(API_KEY_LS)||''; }catch(_){ return ''; } }
+function writeApiKey(v){ try{ localStorage.setItem(API_KEY_LS,v); }catch(_){} apiKey=v; }
+function clearApiKey(){ try{ localStorage.removeItem(API_KEY_LS); }catch(_){} apiKey=''; }
+
+// ── Anthropic call (mirrors kin/companion's proven browser-direct path) ──────────
+function ApiError(kind,message){ this.kind=kind; this.message=message; }
+const MAX_RETRIES=3, RETRY_BASE_MS=900;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function postWithRetry(body){
+  for(let attempt=0;;attempt++){
+    try{ return await postOnce(body); }
+    catch(err){ if(err&&err.retryable&&attempt<MAX_RETRIES){ await sleep(RETRY_BASE_MS*Math.pow(2,attempt)); continue; } throw err; }
+  }
+}
+async function postOnce(body){
+  let res;
+  try{
+    res = await fetch(API_URL,{ method:'POST', headers:{
+      'content-type':'application/json','x-api-key':apiKey,
+      'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'
+    }, body:JSON.stringify(body) });
+  }catch(_){ const e=new ApiError('network','The connection dropped before Anthropic could answer.'); e.retryable=true; throw e; }
+  if(res.ok) return res.json();
+  let detail=''; try{ const j=await res.json(); detail=j.error&&j.error.message?j.error.message:''; }catch(_){}
+  if(res.status===401){ const e=new ApiError('key','That API key was rejected — set it under the menu.'); throw e; }
+  if(res.status===429){ const e=new ApiError('rate','Anthropic is rate-limiting the key — a moment.'); e.retryable=true; throw e; }
+  const e=new ApiError('http', detail||('The API returned an error ('+res.status+').'));
+  if(res.status>=500) e.retryable=true;
+  throw e;
+}
+function textOf(resp){ try{ return (resp.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim(); }catch(_){ return ''; } }
+function sourcesOf(resp){
+  const out=[];
+  try{ (resp.content||[]).forEach(b=>{
+    (b.citations||[]).forEach(c=>{ if(c.url) out.push({url:c.url,title:c.title||c.url}); });
+  }); }catch(_){}
+  const seen=new Set(); return out.filter(s=>{ if(seen.has(s.url))return false; seen.add(s.url); return true; }).slice(0,8);
+}
+
+// ── The world = { v, onboarded, events:[] } ─────────────────────────────────────
+let world = { v:1, onboarded:false, events:[] };
+function load(){
+  try{ const raw=localStorage.getItem(STATE_KEY); if(raw){ const p=JSON.parse(raw); world={ v:1, onboarded:!!p.onboarded, events:Array.isArray(p.events)?p.events:[] }; } }
+  catch(_){ world={ v:1, onboarded:false, events:[] }; }
+}
+function save(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify(world)); }catch(_){} }
+
+// emit — the single append point. Both UI handlers and HC actions call action
+// functions that call emit(); nothing appends directly. Append-only: we never
+// mutate or drop a prior event (compaction is itself an event, below).
+function emit(type, payload, opts){
+  opts = opts||{};
+  const e = { id:uid(), seq: world.events.length, ts: now(), actor: opts.actor||acting, room: opts.room||null, type, payload:payload||{} };
+  world.events.push(e); save();
+  return e;
+}
+
+// ── reduce(): fold events → derived world state ─────────────────────────────────
+// Starts from the last compaction snapshot (bounded), then applies later events.
+function emptyState(){
+  return { ownerName:'', values:[], goals:[], calendar:[], tasks:[],
+    roomTypes:{}, rooms:{}, roles:{}, actors:{}, clones:{}, messages:{},
+    budget:{ pool:20000, subsistence:2000, cadence:'manual', throttleMs:4000, tickCap:400, spent:{}, lastReset:0 } };
+}
+function reduceUpTo(idx){ // idx = exclusive upper bound (events.length for HEAD)
+  let start=0, st=emptyState();
+  for(let i=Math.min(idx,world.events.length)-1;i>=0;i--){ if(world.events[i].type==='compaction'){ st=clone(world.events[i].payload.snapshot); start=i+1; break; } }
+  for(let i=start;i<Math.min(idx,world.events.length);i++){ applyEvent(st, world.events[i]); }
+  return st;
+}
+function reduce(){ return reduceUpTo(world.events.length); }
+
+function applyEvent(st, e){
+  const p=e.payload||{};
+  switch(e.type){
+    case 'compaction': /* snapshot handled by reduceUpTo */ break;
+    case 'world.init': st.ownerName=p.ownerName||''; break;
+    case 'owner.rename': st.ownerName=p.name||st.ownerName; break;
+    case 'value.add': st.values.push({id:p.id,text:p.text}); break;
+    case 'value.edit': { const v=st.values.find(x=>x.id===p.id); if(v)v.text=p.text; break; }
+    case 'value.remove': st.values=st.values.filter(x=>x.id!==p.id); break;
+    case 'goal.add': st.goals.push({id:p.id,text:p.text,parentId:p.parentId||null}); break;
+    case 'goal.edit': { const g=st.goals.find(x=>x.id===p.id); if(g)g.text=p.text; break; }
+    case 'goal.remove': { const kill=new Set([p.id]); let grew=true; while(grew){ grew=false; st.goals.forEach(g=>{ if(g.parentId&&kill.has(g.parentId)&&!kill.has(g.id)){ kill.add(g.id); grew=true; } }); } st.goals=st.goals.filter(g=>!kill.has(g.id)); st.tasks.forEach(t=>{ t.goalIds=(t.goalIds||[]).filter(id=>!kill.has(id)); }); break; }
+    case 'cal.add': st.calendar.push({id:p.id,title:p.title,date:p.date}); break;
+    case 'cal.remove': st.calendar=st.calendar.filter(x=>x.id!==p.id); break;
+    case 'task.add': st.tasks.push({id:p.id,text:p.text,goalIds:p.goalIds||[],done:false}); break;
+    case 'task.toggle': { const t=st.tasks.find(x=>x.id===p.id); if(t)t.done=!t.done; break; }
+    case 'task.tag': { const t=st.tasks.find(x=>x.id===p.id); if(t){ t.goalIds=t.goalIds||[]; if(p.goalId&&!t.goalIds.includes(p.goalId))t.goalIds.push(p.goalId); } break; }
+    case 'task.untag': { const t=st.tasks.find(x=>x.id===p.id); if(t)t.goalIds=(t.goalIds||[]).filter(g=>g!==p.goalId); break; }
+    case 'task.remove': st.tasks=st.tasks.filter(x=>x.id!==p.id); break;
+    case 'roomtype.add': st.roomTypes[p.id]={label:p.label,verbs:p.verbs||['enter','act','leave'],defaultPolicy:p.defaultPolicy||{}}; break;
+    case 'roomtype.setPolicy': { const rt=st.roomTypes[p.id]; if(rt)rt.defaultPolicy=p.policy||{}; break; }
+    case 'room.add': st.rooms[p.id]={typeId:p.typeId,label:p.label,policy:p.policy||null}; if(!st.messages[p.id])st.messages[p.id]=[]; break;
+    case 'room.setPolicy': { const r=st.rooms[p.id]; if(r)r.policy=p.policy||null; break; }
+    case 'room.remove': delete st.rooms[p.id]; delete st.messages[p.id]; Object.values(st.actors).forEach(a=>{ if(a.room===p.id)a.room=null; }); break;
+    case 'role.add': st.roles[p.id]={label:p.label,defaultRooms:p.defaultRooms||{}}; break;
+    case 'role.setAccess': { const rl=st.roles[p.id]; if(rl){ rl.defaultRooms=rl.defaultRooms||{}; if(p.perms&&p.perms.length) rl.defaultRooms[p.target]=p.perms; else delete rl.defaultRooms[p.target]; } break; }
+    case 'actor.add': st.actors[p.id]={kind:p.kind,label:p.label,role:p.role||'guest',owner:p.owner||'owner',room:p.room||null}; break;
+    case 'actor.setRole': { const a=st.actors[p.id]; if(a)a.role=p.role; break; }
+    case 'actor.remove': delete st.actors[p.id]; break;
+    case 'enter': { const a=st.actors[p.actorId]; if(a)a.room=p.roomId; break; }
+    case 'msg.send': { (st.messages[p.roomId]=st.messages[p.roomId]||[]).push({id:p.id,actorId:e.actor,text:p.text,ts:e.ts,kind:'msg'}); break; }
+    case 'research.result': { (st.messages[p.roomId]=st.messages[p.roomId]||[]).push({id:p.id,actorId:e.actor,text:p.finding,ts:e.ts,kind:'research',question:p.question,sources:p.sources||[]}); break; }
+    case 'clone.spawn': st.clones[p.id]={id:p.id,familyName:p.familyName,givenName:null,bornAtSeq:p.bornAtSeq,bornAt:e.ts,digest:p.digest,seededStores:p.seededStores||[],naming:{proposed:null,rationale:'',status:'proposing',feedback:[]},thread:[]}; break;
+    case 'clone.propose': { const c=st.clones[p.id]; if(c){ c.naming.proposed=p.name; c.naming.rationale=p.rationale||''; c.naming.status='pending'; } break; }
+    case 'clone.approve': { const c=st.clones[p.id]; if(c&&c.naming.proposed){ c.givenName=c.naming.proposed; c.naming.status='approved'; } break; }
+    case 'clone.return': { const c=st.clones[p.id]; if(c){ c.naming.feedback.push({note:p.feedback,at:e.ts}); c.naming.status='proposing'; } break; }
+    case 'clone.say': { const c=st.clones[p.id]; if(c)c.thread.push({role:p.role,text:p.text}); break; }
+    case 'clone.remove': delete st.clones[p.id]; break;
+    case 'budget.set': Object.assign(st.budget, p); break;
+    case 'budget.spend': st.budget.spent[p.actorId]=(st.budget.spent[p.actorId]||0)+(p.amount||0); break;
+    case 'budget.reset': st.budget.spent={}; st.budget.lastReset=e.ts; break;
+  }
+}
+
+// ── Permissions — the authorization ring (agent actions + room access) ───────────
+// Owner may do anything in their own world. Everyone else needs a grant, resolvable
+// from the room's policy (or its type's default) BY ROLE, plus the role's own
+// default-room access. This does NOT gate the owner editing their own data.
+function effPolicy(st, roomId){ const r=st.rooms[roomId]; if(!r)return {}; return r.policy || (st.roomTypes[r.typeId]&&st.roomTypes[r.typeId].defaultPolicy) || {}; }
+function can(st, actorId, roomId, perm){
+  const a=st.actors[actorId]; if(!a) return false;
+  if(a.role==='owner') return true;
+  const r=st.rooms[roomId]; if(!r) return false;
+  const pol=effPolicy(st, roomId);
+  const byRoomRole = pol[a.role]; if(Array.isArray(byRoomRole)&&byRoomRole.includes(perm)) return true;
+  const role=st.roles[a.role];
+  if(role&&role.defaultRooms){ const g=role.defaultRooms[roomId]||role.defaultRooms[r.typeId]; if(Array.isArray(g)&&g.includes(perm)) return true; }
+  return false;
+}
+
+// ── Action functions — the single funnel. UI + HC both call these. ──────────────
+function requireEnter(st, actorId, roomId){ if(!can(st, actorId, roomId, 'enter')) throw new Error('"'+(st.actors[actorId]?st.actors[actorId].label:actorId)+'" is not admitted to that room.'); }
+
+function setOwnerName(name){ name=(name||'').trim(); if(!name) throw new Error('A name is needed.'); if(!world.events.length) emit('world.init',{ownerName:name}); else emit('owner.rename',{name}); return name; }
+function addValue(text){ text=(text||'').trim(); if(!text) throw new Error('Empty value.'); return emit('value.add',{id:uid('v'),text}).payload.id; }
+function editValue(id,text){ emit('value.edit',{id,text:(text||'').trim()}); }
+function removeValue(id){ emit('value.remove',{id}); }
+function addGoal(text,parentId){ text=(text||'').trim(); if(!text) throw new Error('Empty goal.'); return emit('goal.add',{id:uid('g'),text,parentId:parentId||null}).payload.id; }
+function editGoal(id,text){ emit('goal.edit',{id,text:(text||'').trim()}); }
+function removeGoal(id){ emit('goal.remove',{id}); }
+function addCalEvent(title,date){ title=(title||'').trim(); if(!title) throw new Error('Empty event.'); return emit('cal.add',{id:uid('c'),title,date:date||''}).payload.id; }
+function removeCalEvent(id){ emit('cal.remove',{id}); }
+function addTask(text,goalIds){ text=(text||'').trim(); if(!text) throw new Error('Empty task.'); return emit('task.add',{id:uid('t'),text,goalIds:goalIds||[]}).payload.id; }
+function toggleTask(id){ emit('task.toggle',{id}); }
+function removeTask(id){ emit('task.remove',{id}); }
+function addRoomType(label,verbs,defaultPolicy){ label=(label||'').trim(); if(!label) throw new Error('Empty type.'); const id=uid('rt'); emit('roomtype.add',{id,label,verbs:verbs||['enter','act','leave'],defaultPolicy:defaultPolicy||{owner:['enter','act','leave']}}); return id; }
+function setRoomTypePolicy(id,policy){ emit('roomtype.setPolicy',{id,policy}); }
+function addRoom(typeId,label){ const st=reduce(); if(!st.roomTypes[typeId]) throw new Error('No such room type.'); label=(label||'').trim()||st.roomTypes[typeId].label; const id=uid('rm'); emit('room.add',{typeId,id,label}); return id; }
+function setRoomPolicy(id,policy){ emit('room.setPolicy',{id,policy}); }
+function removeRoom(id){ emit('room.remove',{id}); }
+function addRole(label,defaultRooms){ label=(label||'').trim(); if(!label) throw new Error('Empty role.'); const id=uid('rl'); emit('role.add',{id,label,defaultRooms:defaultRooms||{}}); return id; }
+function setRoleAccess(id,target,perms){ emit('role.setAccess',{id,target,perms:perms||[]}); }
+function addActor(kind,label,role){ label=(label||'').trim(); if(!label) throw new Error('Empty actor.'); if(kind!=='human'&&kind!=='agent') throw new Error('kind must be human or agent.'); const id=uid('a'); emit('actor.add',{id,kind,label,role:role||'guest',owner:'owner'}); return id; }
+function setActorRole(id,role){ emit('actor.setRole',{id,role}); }
+function removeActor(id){ if(id==='owner') throw new Error('The owner actor stays.'); emit('actor.remove',{id}); }
+function enterRoom(actorId,roomId){ const st=reduce(); requireEnter(st, actorId, roomId); emit('enter',{actorId,roomId}); }
+function sendMessage(roomId,text){ text=(text||'').trim(); if(!text) throw new Error('Empty message.'); const st=reduce(); if(!can(st, acting, roomId, 'leave')) throw new Error('"'+(st.actors[acting]?st.actors[acting].label:acting)+'" may not leave anything in that room.'); return emit('msg.send',{id:uid('m'),roomId,text},{room:roomId}).payload.id; }
+function recordResearch(roomId,actorId,question,finding,sources){ return emit('research.result',{id:uid('r'),roomId,question,finding,sources:sources||[]},{actor:actorId,room:roomId}).payload.id; }
+
+function spawnClone(atSeq){
+  const upto = (atSeq==null? world.events.length : Math.max(0,Math.min(atSeq, world.events.length)));
+  const st = reduceUpTo(upto);
+  if(!st.ownerName) throw new Error('Set your name first.');
+  const digest = buildSelfDigest(st, upto);
+  const id=uid('kn');
+  emit('clone.spawn',{id,familyName:st.ownerName,bornAtSeq:upto,digest,seededStores:['rooms:world-log']});
+  return id;
+}
+function proposeCloneNameState(id,name,rationale){ name=(name||'').trim(); if(!name) throw new Error('No name proposed.'); emit('clone.propose',{id,name,rationale:rationale||''}); }
+function approveCloneName(id){ const st=reduce(); const c=st.clones[id]; if(!c||!c.naming.proposed) throw new Error('Nothing to approve.'); emit('clone.approve',{id}); }
+function returnCloneName(id,feedback){ emit('clone.return',{id,feedback:(feedback||'').trim()}); }
+function cloneSay(id,role,text){ emit('clone.say',{id,role,text}); }
+function removeClone(id){ emit('clone.remove',{id}); }
+function setBudget(patch){ const b={}; ['pool','subsistence','throttleMs','tickCap','cadence'].forEach(k=>{ if(patch[k]!=null){ b[k]=(k==='cadence')?patch[k]:Math.max(0,Number(patch[k])||0); } }); emit('budget.set',b); }
+function spendTokens(actorId,amount){ amount=Math.max(0,Number(amount)||0); const st=reduce(); const remaining=unattendedRemaining(st); if(amount>remaining) throw new Error('Not enough unattended budget: '+remaining+' left above the subsistence floor.'); emit('budget.spend',{actorId,amount}); }
+function resetBudget(){ emit('budget.reset',{}); }
+function compact(){
+  const n=world.events.length; if(n<=COMPACT_AFTER) throw new Error('Not enough history to compact yet.');
+  const keep=Math.floor(COMPACT_AFTER/2); const cut=n-keep;
+  const snapshot=reduceUpTo(cut);
+  const summary=compactionSummary(snapshot, cut);
+  const head=world.events.slice(0,cut); const tail=world.events.slice(cut);
+  const comp={ id:uid('cmp'), seq:cut, ts:now(), actor:'system', room:null, type:'compaction', payload:{ snapshot, summary, count:head.length } };
+  world.events=[comp].concat(tail.map((e,i)=>Object.assign({},e,{seq:cut+1+i})));
+  save();
+}
+
+// ── Context the LLM sees — the log, rendered + compressed ────────────────────────
+function buildSelfDigest(st, upto){
+  const L=[];
+  L.push('Name: '+st.ownerName);
+  if(st.values.length) L.push('Values:\n'+st.values.map(v=>'• '+v.text).join('\n'));
+  if(st.goals.length){ const roots=st.goals.filter(g=>!g.parentId); L.push('Goals:\n'+roots.map(g=>goalOutline(st,g,0)).join('\n')); }
+  if(st.calendar.length) L.push('Calendar:\n'+st.calendar.map(c=>'• '+(c.date?c.date+' — ':'')+c.title).join('\n'));
+  if(st.tasks.length) L.push('Tasks:\n'+st.tasks.map(t=>'• '+(t.done?'[done] ':'')+t.text).join('\n'));
+  L.push('(frozen from the world log at event '+upto+' of '+world.events.length+')');
+  return L.join('\n\n');
+}
+function goalOutline(st,g,depth){ const kids=st.goals.filter(x=>x.parentId===g.id); return '  '.repeat(depth)+'• '+g.text+(kids.length?'\n'+kids.map(k=>goalOutline(st,k,depth+1)).join('\n'):''); }
+function compactionSummary(st, cut){
+  return 'World state at event '+cut+': owner '+(st.ownerName||'—')+'; '+st.values.length+' values, '+st.goals.length+' goals, '+st.calendar.length+' calendar entries, '+st.tasks.length+' tasks; '+Object.keys(st.rooms).length+' rooms, '+Object.keys(st.actors).length+' actors, '+Object.keys(st.clones).length+' clones.';
+}
+function worldContext(st, roomId, recent){
+  const L=[];
+  const comp=[...world.events].reverse().find(e=>e.type==='compaction');
+  if(comp) L.push('EARLIER (compressed): '+comp.payload.summary);
+  const feed=world.events.filter(e=>['msg.send','research.result','goal.add','value.add','task.add','enter'].includes(e.type)).slice(-(recent||18));
+  if(feed.length) L.push('RECENT WORLD LOG:\n'+feed.map(e=>logLine(st,e)).join('\n'));
+  if(roomId){ const msgs=(st.messages[roomId]||[]).slice(-14); if(msgs.length) L.push('THIS ROOM ("'+(st.rooms[roomId]?st.rooms[roomId].label:roomId)+'"):\n'+msgs.map(m=>actorName(st,m.actorId)+': '+m.text).join('\n')); }
+  return L.join('\n\n');
+}
+function logLine(st,e){ const who=actorName(st,e.actor); const p=e.payload||{};
+  switch(e.type){
+    case 'msg.send': return who+' said: '+String(p.text||'').slice(0,120);
+    case 'research.result': return who+' researched "'+String(p.question||'').slice(0,60)+'"';
+    case 'goal.add': return who+' added goal: '+p.text;
+    case 'value.add': return who+' named a value: '+p.text;
+    case 'task.add': return who+' added task: '+p.text;
+    case 'enter': return who+' entered '+(st.rooms[p.roomId]?st.rooms[p.roomId].label:'a room');
+    default: return who+' '+e.type;
+  }
+}
+function actorName(st,id){ if(id==='system')return 'System'; if(st.actors[id])return st.actors[id].label; if(st.clones[id])return (st.clones[id].givenName||'Unnamed')+' '+st.clones[id].familyName; return id; }
+function actorKind(st,id){ if(st.actors[id])return st.actors[id].kind; if(st.clones[id])return 'agent'; return 'agent'; }
+
+// ── Budget helpers ───────────────────────────────────────────────────────────────
+function totalSpent(st){ return Object.values(st.budget.spent||{}).reduce((a,b)=>a+b,0); }
+function unattendedRemaining(st){ return Math.max(0, st.budget.pool - st.budget.subsistence - totalSpent(st)); }
+
+// ── Presence + the turn scheduler ────────────────────────────────────────────────
+function presentIn(st, roomId){ return Object.keys(st.actors).filter(id=>st.actors[id].room===roomId).map(id=>({id,...st.actors[id]})); }
+function needsModerator(present){ const ag=present.filter(a=>a.kind==='agent').length; const hu=present.filter(a=>a.kind==='human').length; return ag>2 || (ag>=1&&hu>=2); }
+
+// Who responds next. Uses the cheap moderator model only when routing is ambiguous
+// (>2 agents, or 1 agent + 2 humans). Otherwise picks the sole agent / round-robins.
+async function pickResponder(st, roomId){
+  const present=presentIn(st, roomId);
+  const agents=present.filter(a=>a.kind==='agent');
+  if(!agents.length) return null;
+  if(!needsModerator(present) || agents.length===1) return agents[0].id;
+  if(!apiKey){ // deterministic fallback: whoever spoke least recently
+    const msgs=st.messages[roomId]||[]; const lastSpoke={}; msgs.forEach((m,i)=>lastSpoke[m.actorId]=i);
+    return agents.slice().sort((a,b)=>(lastSpoke[a.id]??-1)-(lastSpoke[b.id]??-1))[0].id;
+  }
+  setTyping(roomId, 'the moderator is deciding who speaks…', 'mod');
+  const roster=agents.map(a=>a.id+' = '+a.label).join('\n');
+  const body={ model:MOD_MODEL, max_tokens:80,
+    system:'You are a turn moderator in a shared room. Given the recent conversation and the agents present, pick exactly ONE agent to respond next so the conversation flows naturally. Reply with ONLY that agent\'s id — nothing else. Do not speak in anyone\'s voice.',
+    messages:[{role:'user',content:'Agents present:\n'+roster+'\n\nRecent room:\n'+((st.messages[roomId]||[]).slice(-8).map(m=>actorName(st,m.actorId)+': '+m.text).join('\n')||'(quiet)')+'\n\nReply with one id from the list above.'}] };
+  try{ const resp=await postWithRetry(body); const pick=textOf(resp).trim(); const found=agents.find(a=>pick.includes(a.id)); return (found||agents[0]).id; }
+  catch(_){ return agents[0].id; }
+}
+
+let typingState=null;
+function setTyping(roomId, label, kind){ typingState={roomId,label,kind}; renderTyping(); }
+function clearTyping(){ typingState=null; renderTyping(); }
+
+// One agent turn. Immediate if a human is present; slow (throttled + metered) if not.
+const lastTick={};
+async function runTurn(roomId, opts){
+  opts=opts||{};
+  let st=reduce();
+  const present=presentIn(st, roomId);
+  const humanPresent=present.some(a=>a.kind==='human');
+  if(!apiKey){ toast('Set an API key (menu) to run turns.'); return; }
+  // speed model + budget: unattended advancement is slow + capped by budget above the floor
+  if(!humanPresent){
+    const remaining=unattendedRemaining(st);
+    if(remaining < st.budget.tickCap){ toast('Unattended budget spent — an agent waits for a human.'); return; }
+    const since=now()-(lastTick[roomId]||0);
+    if(since < st.budget.throttleMs){ toast('Advancing slowly — next unattended tick in '+Math.ceil((st.budget.throttleMs-since)/1000)+'s.'); return; }
+    lastTick[roomId]=now();
+  }
+  const speakerId = opts.forceActor || await pickResponder(st, roomId);
+  if(!speakerId){ clearTyping(); toast('No agent is in this room to take a turn.'); return; }
+  if(!can(st, speakerId, roomId, 'act') && !can(st, speakerId, roomId, 'leave')){ clearTyping(); toast('"'+actorName(st,speakerId)+'" may not act in this room.'); return; }
+  setTyping(roomId, actorName(st, speakerId)+' is '+(humanPresent?'':'slowly ')+'typing…', 'agent');
+  const persona = personaFor(st, speakerId);
+  const body={ model:MODEL, max_tokens: humanPresent?400:Math.min(400,st.budget.tickCap),
+    system: persona+'\n\nYou are taking ONE turn in a shared room. Speak in your own voice, briefly (2–4 sentences). You are not an assistant. Do not narrate stage directions.',
+    messages:[{role:'user',content: worldContext(st, roomId, 18)+'\n\nTake your turn now.'}] };
+  try{
+    const resp=await postWithRetry(body);
+    const text=textOf(resp)||'…';
+    clearTyping();
+    // the agent leaves a signed-authorship artifact in the ROOM store (never a practice store)
+    emit('msg.send',{id:uid('m'),roomId,text},{actor:speakerId,room:roomId});
+    const est=Math.max(80, Math.round((text.length||200)/3));
+    if(!humanPresent) emit('budget.spend',{actorId:speakerId,amount:Math.min(est, st.budget.tickCap)});
+    render();
+  }catch(err){ clearTyping(); toast(err.message||'The turn failed.'); }
+}
+
+function personaFor(st, id){
+  if(st.clones[id]){ const c=st.clones[id]; return 'You are '+(c.givenName||'an unnamed child')+' of the '+c.familyName+' line — a character spawned from a life and now diverged into your own person. Your inherited past:\n'+c.digest+'\n\nYou share that past but you are your own person now, not the one who lived it.'; }
+  const a=st.actors[id];
+  return 'You are "'+(a?a.label:id)+'", an actor in this shared world. Your role is "'+(a?a.role:'guest')+'".';
+}
+
+// ── Clone naming (network, UI-only — like kin's proposeName) ─────────────────────
+async function proposeCloneName(id){
+  const st=reduce(); const c=st.clones[id]; if(!c) return;
+  if(!apiKey){ toast('Set an API key to let the clone propose a name (or set one by hand).'); return; }
+  setBusy(true);
+  const fb=c.naming.feedback.map(f=>'- '+f.note).join('\n');
+  const body={ model:MODEL, max_tokens:200,
+    system:'You are a newly-spawned character of the '+c.familyName+' family. You inherited this past:\n'+c.digest+'\n\nYour first act of divergence is to choose your OWN given name (your family name is already '+c.familyName+'). Reply as JSON only: {"name":"...","reason":"one first-person sentence"}.',
+    messages:[{role:'user',content: fb? ('Earlier name attempts were returned with this feedback:\n'+fb+'\nPropose a new given name.') : 'Propose your given name.'}] };
+  try{
+    const resp=await postWithRetry(body); let t=textOf(resp);
+    let name='', reason=''; try{ const j=JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}')+1)); name=j.name; reason=j.reason; }catch(_){ name=t.split('\n')[0].replace(/[^A-Za-z\- ]/g,'').trim().split(' ')[0]; }
+    if(name) proposeCloneNameState(id, name, reason);
+  }catch(err){ toast(err.message||'Name proposal failed.'); }
+  setBusy(false); render();
+}
+async function converseWithClone(id, text){
+  const st=reduce(); const c=st.clones[id]; if(!c) return;
+  if(!apiKey){ toast('Set an API key to talk with the clone.'); return; }
+  cloneSay(id,'user',text); render();
+  setTyping('__clone_'+id, (c.givenName||'The clone')+' is typing…','agent');
+  const convo=(reduce().clones[id].thread||[]).map(m=>({role:m.role,content:m.text}));
+  const body={ model:MODEL, max_tokens:500, system:personaFor(reduce(), id)+'\n\nSpeak in the first person, in your own voice. You are not an assistant.', messages:convo };
+  try{ const resp=await postWithRetry(body); cloneSay(id,'assistant',textOf(resp)||'…'); }
+  catch(err){ toast(err.message||'The reply failed.'); }
+  clearTyping(); render();
+}
+
+// ── Research agent (BYOK web search → a room artifact) ───────────────────────────
+async function doResearch(roomId, question){
+  question=(question||'').trim(); if(!question) return;
+  const st=reduce();
+  if(!apiKey){ toast('Set an API key to run the research agent.'); return; }
+  // ensure a researcher actor exists + is admitted to this room (transient role)
+  let researcher=Object.keys(st.actors).find(k=>st.actors[k].role==='researcher');
+  if(!researcher){ researcher=addActor('agent','Researcher','researcher'); }
+  setTyping(roomId, 'the research agent is searching…','agent');
+  const body={ model:MODEL, max_tokens:900,
+    tools:[{type:'web_search_20250305', name:'web_search', max_uses:5}],
+    system:'You are a research agent in a shared room. Given a question, search the web, then write a concise, well-grounded answer (a short paragraph or two) with the key facts. Cite as you go. Do not speak in anyone else\'s voice.',
+    messages:[{role:'user',content:'Research question: '+question}] };
+  try{
+    const resp=await postWithRetry(body);
+    const finding=textOf(resp)||'(no answer)';
+    const sources=sourcesOf(resp);
+    clearTyping();
+    recordResearch(roomId, researcher, question, finding, sources);
+    render();
+  }catch(err){ clearTyping(); toast(err.message||'Research failed.'); }
+}
+
+// ── Seed a fresh world after onboarding step 1 ───────────────────────────────────
+function seedWorld(){
+  // room types (every screen is a room type), roles, the owner actor, and a couple
+  // of starting rooms. All are events, so the log tells the whole story.
+  const T=(label,verbs)=>addRoomType(label,verbs,{owner:['enter','act','leave']});
+  const tValues=T('values'), tGoals=T('goals'), tCal=T('calendar'), tTasks=T('tasks'),
+        tCommons=T('commons'), tMsg=T('message'), tPrivate=T('private');
+  // roles seeded with STABLE ids the code references (owner is all-access in code)
+  [['owner','Owner'],['guest','Guest'],['friend','Friend'],['partner','Partner'],['character','Character'],['researcher','Researcher']].forEach(([id,label])=> emit('role.add',{id,label,defaultRooms:{}}));
+  // roles → default room access (bullet 22): friends & characters get the commons
+  setRoleAccess('friend', tCommons, ['enter','leave']);
+  setRoleAccess('character', tCommons, ['enter','leave']);
+  emit('actor.add',{id:'owner',kind:'human',label:(reduce().ownerName||'You'),role:'owner',owner:'owner'});
+  const rCommons=addRoom(tCommons,'The Commons'); addRoom(tGoals,'Goals'); addRoom(tMsg,'Messages');
+  emit('enter',{actorId:'owner',roomId:rCommons});
+}
+
+// ═══════════════════════ RENDER ═══════════════════════════════════════════════════
+let view='rooms';        // rooms | profile | actors | clones | budget | log
+let acting='owner';      // the actor whose actions the UI attributes
+let openRoom=null;       // room id when viewing a conversation
+let openClone=null;      // clone id when chatting
+let ttSeq=null;          // time-travel: view the world folded up to this event (null = HEAD)
+let busy=false;
+function setBusy(b){ busy=b; }
+
+function render(){
+  const root=document.getElementById('root'); root.innerHTML='';
+  const st=reduce();
+  if(!world.onboarded){ renderOnboard(root, st); return; }
+  // header
+  const head=el('div','eyebrow-row');
+  head.appendChild(el('div','eyebrow','Rooms · '+(st.ownerName||'your world')));
+  root.appendChild(head);
+  root.appendChild(renderActBar(st));
+  // tabs
+  const tabs=el('div','tabs');
+  [['rooms','Map'],['profile','Profile'],['actors','Actors & roles'],['clones','Clones'],['budget','Budget'],['log','World log']].forEach(([v,lab])=>{
+    const b=el('button','tab'+(view===v?' sel':''),lab); b.onclick=()=>{ view=v; openRoom=null; openClone=null; render(); }; tabs.appendChild(b);
+  });
+  root.appendChild(tabs);
+  const body=el('div'); root.appendChild(body);
+  if(openRoom&&st.rooms[openRoom]) return renderRoom(body, st, openRoom);
+  if(view==='rooms') renderMap(body, st);
+  else if(view==='profile') renderProfile(body, st);
+  else if(view==='actors') renderActors(body, st);
+  else if(view==='clones') renderClones(body, st);
+  else if(view==='budget') renderBudget(body, st);
+  else if(view==='log') renderLog(body, st);
+}
+
+function renderActBar(st){
+  const bar=el('div','actbar');
+  bar.appendChild(el('span','lbl','Acting as'));
+  const sel=el('select');
+  Object.keys(st.actors).forEach(id=>{ const o=el('option',null,st.actors[id].label+' · '+st.actors[id].role); o.value=id; if(id===acting)o.selected=true; sel.appendChild(o); });
+  Object.keys(st.clones).forEach(id=>{ const c=st.clones[id]; if(c.naming.status==='approved'){ const o=el('option',null,(c.givenName||'Unnamed')+' '+c.familyName+' · character'); o.value=id; if(id===acting)o.selected=true; sel.appendChild(o); } });
+  sel.onchange=()=>{ acting=sel.value; render(); };
+  bar.appendChild(sel);
+  const k=actorKind(st,acting);
+  bar.appendChild(el('span','chip '+k, k));
+  return bar;
+}
+
+// ── Onboarding (steps 1–7, each an event) ───────────────────────────────────────
+function renderOnboard(root, st){
+  root.appendChild(el('h1',null,'Build your world'));
+  root.appendChild(el('p','lede','Everything you enter becomes an event in your world log — the same log a character or an LLM later reads and writes. Single device, on your key. Nothing here is shared with anyone.'));
+  const step = !st.ownerName ? 1 : (st.values.length? (st.goals.length? (st.calendar.length? (st.tasks.length? 6 : 5) : 4) : 3) : 2);
+  const c=el('div','card'); c.style.marginTop='1rem';
+
+  if(step===1){
+    c.appendChild(el('div','sect-h','1 · Your name'));
+    c.appendChild(el('p','muted','This is your name in the world, and the family name your clones inherit.'));
+    const i=el('input','field'); i.placeholder='e.g. Kevin';
+    const b=el('button','btn','Begin'); b.style.marginTop='.6rem';
+    b.onclick=()=>{ try{ setOwnerName(i.value); seedWorld(); render(); }catch(e){ toast(e.message); } };
+    c.appendChild(i); c.appendChild(b);
+  } else {
+    c.appendChild(el('div','sect-h', ({2:'2 · Your values',3:'3 · Your goals (a hierarchy)',4:'4 · Key calendar events',5:'5 · Key tasks',6:'Almost there'})[step]));
+    if(step===2){ c.appendChild(quickAdder('Name a value you hold…', v=>addValue(v))); listInline(c, st.values, v=>removeValue(v.id)); }
+    if(step===3){ c.appendChild(el('p','muted','Add top-level goals now; nest sub-goals under them from the Profile tab afterwards.')); c.appendChild(quickAdder('A goal…', v=>addGoal(v,null))); listInline(c, st.goals, g=>removeGoal(g.id)); }
+    if(step===4){ const rowW=el('div'); c.appendChild(quickAdderDated('An event…', (t,d)=>addCalEvent(t,d))); listInline(c, st.calendar.map(x=>({id:x.id,text:(x.date?x.date+' — ':'')+x.title})), x=>removeCalEvent(x.id)); }
+    if(step===5){ c.appendChild(el('p','muted','You can tag tasks to goals later, in Profile.')); c.appendChild(quickAdder('A task…', v=>addTask(v,[]))); listInline(c, st.tasks, t=>removeTask(t.id)); }
+    if(step===6){
+      c.appendChild(el('p','muted','Steps 6–7 of the vision — invite a friend, exchange messages with a partner — are modeled here as LOCAL actors you can "act as." Real networked friends/partners (and sharing a clone with a remote partner) are deferred and gated (see ROOMS.md). Add them now or later from the Actors tab.'));
+      const r=el('div','row');
+      const bf=el('button','btn ghost small','Add a friend actor'); bf.onclick=()=>{ try{ addActor('human','Friend','friend'); toast('Friend added.'); }catch(e){ toast(e.message); } };
+      const bp=el('button','btn ghost small','Add a partner actor'); bp.onclick=()=>{ try{ addActor('human','Partner','partner'); toast('Partner added.'); }catch(e){ toast(e.message); } };
+      r.appendChild(bf); r.appendChild(bp); c.appendChild(r);
+      const done=el('button','btn','Enter the world'); done.style.marginTop='.8rem'; done.onclick=()=>{ world.onboarded=true; save(); view='rooms'; render(); };
+      c.appendChild(done);
+    }
+    if(step>=2&&step<6){ const nx=el('button','btn','Next'); nx.style.marginTop='.7rem'; nx.onclick=()=>render(); const sk=el('button','btn ghost','Skip'); sk.style.marginLeft='.5rem';
+      sk.onclick=()=>{ // seed a placeholder so the step counter advances
+        try{ if(step===2)addValue('(to fill in later)'); if(step===3)addGoal('(a goal to shape)',null); if(step===4)addCalEvent('(an event)',''); if(step===5)addTask('(a task)',[]); render(); }catch(e){ toast(e.message); } };
+      const rr=el('div','row'); rr.appendChild(nx); rr.appendChild(sk); c.appendChild(rr);
+    }
+  }
+  root.appendChild(c);
+}
+function quickAdder(ph, fn){ const w=el('div','composer'); const i=el('input','field'); i.placeholder=ph; const b=el('button','btn small','Add'); b.style.alignSelf='flex-start'; const go=()=>{ try{ if(i.value.trim()){ fn(i.value); i.value=''; render(); } }catch(e){ toast(e.message); } }; b.onclick=go; i.onkeydown=e=>{ if(e.key==='Enter')go(); }; w.appendChild(i); w.appendChild(b); return w; }
+function quickAdderDated(ph, fn){ const w=el('div','composer'); const i=el('input','field'); i.placeholder=ph; const d=el('input','field'); d.type='date'; d.style.maxWidth='12rem'; const b=el('button','btn small','Add'); b.style.alignSelf='flex-start'; const go=()=>{ try{ if(i.value.trim()){ fn(i.value,d.value); i.value=''; render(); } }catch(e){ toast(e.message); } }; b.onclick=go; w.appendChild(i); w.appendChild(d); w.appendChild(b); return w; }
+function listInline(c, items, rm){ if(!items.length)return; const box=el('div'); box.style.marginTop='.5rem'; items.forEach(it=>{ const r=el('div','rule'); r.appendChild(el('div','txt',it.text)); const x=el('button','x','×'); x.onclick=()=>{ try{ rm(it); render(); }catch(e){ toast(e.message); } }; r.appendChild(x); box.appendChild(r); }); c.appendChild(box); }
+
+// ── Map (rooms + room types) ─────────────────────────────────────────────────────
+function renderMap(root, st){
+  root.appendChild(el('p','lede','Every screen is a room; every room has a type. Enter a room to act in it. Permissions are set per room and per room type; roles decide default access.'));
+  root.appendChild(el('div','sect-h','Rooms'));
+  const rooms=Object.keys(st.rooms);
+  if(!rooms.length) root.appendChild(el('div','empty','No rooms yet — add one below.'));
+  rooms.forEach(id=>{
+    const r=st.rooms[id]; const card=el('div','roomcard');
+    const top=el('div','top'); top.appendChild(el('div','nm', r.label)); top.appendChild(el('div','ty', (st.roomTypes[r.typeId]?st.roomTypes[r.typeId].label:'?')+(r.policy?' · custom perms':''))); card.appendChild(top);
+    const pres=el('div','present'); const present=presentIn(st,id);
+    if(present.length) present.forEach(a=>{ const ch=el('span','chip '+a.kind); ch.appendChild(el('span','dot')); ch.appendChild(document.createTextNode(a.label)); pres.appendChild(ch); });
+    else pres.appendChild(el('span','muted','empty'));
+    card.appendChild(pres);
+    const acts=el('div','acts');
+    const canEnter=can(st, acting, id, 'enter');
+    const enterB=el('button','btn small'+(canEnter?'':' ghost'), (st.actors[acting]&&st.actors[acting].room===id)?'Open':'Enter');
+    enterB.onclick=()=>{ try{ if(st.actors[acting]&&st.actors[acting].room!==id) enterRoom(acting,id); openRoom=id; render(); }catch(e){ toast(e.message); } };
+    if(!canEnter){ enterB.disabled=true; enterB.title='Acting actor is not admitted'; const lk=el('span','lock',' 🔒 not admitted as '+(st.actors[acting]?st.actors[acting].role:'?')); acts.appendChild(enterB); acts.appendChild(lk); }
+    else acts.appendChild(enterB);
+    const permB=el('button','btn small ghost','Permissions'); permB.onclick=()=>openPolicyEditor(id,'room'); acts.appendChild(permB);
+    const x=el('button','btn small ghost','Remove'); x.onclick=()=>{ if(confirm('Remove room "'+r.label+'"? Its messages go with it.')){ try{ removeRoom(id); render(); }catch(e){ toast(e.message); } } }; acts.appendChild(x);
+    card.appendChild(acts); root.appendChild(card);
+  });
+  // add room
+  const add=el('div','card'); add.style.marginTop='.6rem';
+  add.appendChild(el('div','sect-h','Add a room'));
+  const rowA=el('div','row'); const sel=el('select','field'); sel.style.maxWidth='12rem';
+  Object.keys(st.roomTypes).forEach(tid=>{ const o=el('option',null,st.roomTypes[tid].label); o.value=tid; sel.appendChild(o); });
+  const nm=el('input','field'); nm.placeholder='room name (optional)'; nm.style.maxWidth='14rem';
+  const b=el('button','btn small','Add room'); b.onclick=()=>{ try{ addRoom(sel.value, nm.value); nm.value=''; render(); }catch(e){ toast(e.message); } };
+  rowA.appendChild(sel); rowA.appendChild(nm); rowA.appendChild(b); add.appendChild(rowA);
+  add.appendChild(el('p','muted','Two rooms of the same type are fine — a second goals room is just another instance.'));
+  root.appendChild(add);
+  // room types
+  root.appendChild(el('div','sect-h','Room types'));
+  Object.keys(st.roomTypes).forEach(tid=>{
+    const rt=st.roomTypes[tid]; const r=el('div','rule');
+    const t=el('div','txt'); t.appendChild(el('div',null,rt.label)); t.appendChild(el('div','muted','verbs: '+(rt.verbs||[]).join(', ')));
+    r.appendChild(t);
+    const pb=el('button','btn small ghost','Type permissions'); pb.onclick=()=>openPolicyEditor(tid,'type'); r.appendChild(pb);
+    root.appendChild(r);
+  });
+  const at=el('div','composer'); const ti=el('input','field'); ti.placeholder='new room type name…'; const tb=el('button','btn small','Add type'); tb.style.alignSelf='flex-start';
+  tb.onclick=()=>{ try{ addRoomType(ti.value); ti.value=''; render(); }catch(e){ toast(e.message); } }; at.appendChild(ti); at.appendChild(tb); root.appendChild(at);
+}
+
+// policy editor (role → perms), for a room or a room type
+function openPolicyEditor(id, kind){
+  const st=reduce();
+  const isRoom = kind==='room';
+  const obj = isRoom? st.rooms[id] : st.roomTypes[id];
+  const label = isRoom? obj.label : obj.label;
+  const base = isRoom? (obj.policy || (st.roomTypes[obj.typeId]&&st.roomTypes[obj.typeId].defaultPolicy) || {}) : (obj.defaultPolicy||{});
+  const draft = clone(base);
+  const panel=document.getElementById('menu-panel'); panel.innerHTML='';
+  panel.appendChild(el('div','menu-sub', (isRoom?'Room permissions — ':'Room-type permissions — ')+label));
+  Object.keys(st.roles).forEach(rid=>{
+    if(rid==='owner')return; // owner is all-access in code
+    const row=el('div','perm'); row.appendChild(el('div','rl', st.roles[rid].label));
+    ['enter','act','leave'].forEach(perm=>{
+      const lab=el('label'); const cb=el('input'); cb.type='checkbox'; cb.checked=(draft[rid]||[]).includes(perm);
+      cb.onchange=()=>{ draft[rid]=draft[rid]||[]; if(cb.checked){ if(!draft[rid].includes(perm))draft[rid].push(perm); } else { draft[rid]=draft[rid].filter(x=>x!==perm); } if(!draft[rid].length)delete draft[rid]; };
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(perm)); row.appendChild(lab);
+    });
+    panel.appendChild(row);
+  });
+  const save=el('button','menu-item','Save permissions'); save.style.color='var(--accent)';
+  save.onclick=()=>{ try{ if(isRoom) setRoomPolicy(id, draft); else setRoomTypePolicy(id, draft); document.getElementById('menu').classList.remove('show'); render(); toast('Permissions saved.'); }catch(e){ toast(e.message); } };
+  panel.appendChild(save);
+  if(isRoom){ const clr=el('button','menu-item','Clear override (inherit the type)'); clr.onclick=()=>{ setRoomPolicy(id,null); document.getElementById('menu').classList.remove('show'); render(); }; panel.appendChild(clr); }
+  document.getElementById('menu').classList.add('show');
+}
+
+// ── Room conversation ────────────────────────────────────────────────────────────
+function renderRoom(root, st, id){
+  const r=st.rooms[id];
+  const back=el('button','btn small ghost','‹ Map'); back.onclick=()=>{ openRoom=null; render(); }; root.appendChild(back);
+  const h=el('div','eyebrow-row'); h.style.marginTop='.6rem'; h.appendChild(el('h1',null,r.label)); root.appendChild(h);
+  const present=presentIn(st,id);
+  const pres=el('div','present'); present.forEach(a=>{ const ch=el('span','chip '+a.kind); ch.appendChild(el('span','dot')); ch.appendChild(document.createTextNode(a.label)); pres.appendChild(ch); });
+  root.appendChild(pres);
+  if(needsModerator(present)) root.appendChild(el('p','muted','This room has '+present.filter(a=>a.kind==='agent').length+' agents / '+present.filter(a=>a.kind==='human').length+' humans — a moderator will pick who responds. (Two humans is the world\'s ceiling — owner + partner.)'));
+
+  // who's present controls (move actors in/out)
+  const move=el('div','row'); move.style.margin='.4rem 0';
+  Object.keys(st.actors).forEach(aid=>{ const a=st.actors[aid]; if(a.room===id)return; const b=el('button','btn small ghost','+ '+a.label); b.title='bring '+a.label+' into this room'; b.onclick=()=>{ try{ enterRoom(aid,id); render(); }catch(e){ toast(e.message); } }; move.appendChild(b); });
+  if(move.children.length){ root.appendChild(el('div','muted','Bring an actor in (clones appear here once made an actor):')); root.appendChild(move); }
+
+  // transcript
+  const convo=el('div','convo'); const msgs=st.messages[id]||[];
+  if(!msgs.length) convo.appendChild(el('div','empty','Nothing left here yet. Say something, or run an agent turn.'));
+  msgs.forEach(m=>{
+    const kind=actorKind(st,m.actorId);
+    const box=el('div','msg '+(m.kind==='research'?'research':(kind==='agent'?'agent':'')));
+    const who=el('div','who'); who.appendChild(el('span','chip '+kind, kind)); who.appendChild(el('span','nm', actorName(st,m.actorId)));
+    box.appendChild(who);
+    if(m.kind==='research') box.appendChild(el('div','muted','researched: '+m.question));
+    box.appendChild(el('div','bd', m.text));
+    if(m.sources&&m.sources.length){ const s=el('div','src','Sources: '); m.sources.forEach((src,i)=>{ const a=el('a',null,(i+1)+'. '+(src.title||src.url)); a.href=src.url; a.target='_blank'; a.rel='noopener'; s.appendChild(a); s.appendChild(document.createTextNode('  ')); }); box.appendChild(s); }
+    convo.appendChild(box);
+  });
+  root.appendChild(convo);
+  root.appendChild(document.getElementById('typing-slot')||typingSlot());
+
+  // composer — act as the current actor (if allowed to leave)
+  const canLeave=can(st, acting, id, 'leave');
+  const comp=el('div','composer');
+  const ta=el('textarea','field'); ta.rows=2; ta.placeholder=canLeave? ('say something as '+(st.actors[acting]?st.actors[acting].label:acting)+'…') : ('“'+(st.actors[acting]?st.actors[acting].label:acting)+'” may not leave anything here');
+  ta.disabled=!canLeave;
+  const send=el('button','btn small','Send'); send.disabled=!canLeave;
+  send.onclick=()=>{ try{ if(ta.value.trim()){ // ensure acting actor is present
+    if(st.actors[acting]&&st.actors[acting].room!==id) enterRoom(acting,id);
+    sendMessage(id, ta.value); ta.value=''; render(); } }catch(e){ toast(e.message); } };
+  comp.appendChild(ta); comp.appendChild(send); root.appendChild(comp);
+
+  // turn scheduler controls
+  const humanPresent=present.some(a=>a.kind==='human');
+  const sched=el('div','row'); sched.style.marginTop='.6rem';
+  const runB=el('button','btn small', humanPresent?'Run an agent turn (immediate)':'Let the room drift (one slow tick)');
+  runB.onclick=()=>runTurn(id);
+  sched.appendChild(runB);
+  const remaining=unattendedRemaining(st);
+  sched.appendChild(el('span','muted', humanPresent? 'a human is here — agents respond at once' : ('no human here — slow, '+remaining+' unattended tokens above the floor')));
+  root.appendChild(sched);
+
+  // research trigger
+  const res=el('div','composer'); res.style.marginTop='.6rem';
+  const ri=el('input','field'); ri.placeholder='ask the research agent a question…';
+  const rb=el('button','btn small ghost','Research this'); rb.style.alignSelf='flex-start';
+  rb.onclick=()=>{ const q=ri.value; ri.value=''; doResearch(id, q); };
+  res.appendChild(ri); res.appendChild(rb); root.appendChild(res);
+
+  root.appendChild(el('div','floor-note','Agents leave signed artifacts in this room only — never in a practice store. The moderator routes turns but never speaks in anyone\'s voice.'));
+}
+function typingSlot(){ const s=el('div'); s.id='typing-slot'; return s; }
+function renderTyping(){ let slot=document.getElementById('typing-slot'); if(!slot) return; slot.innerHTML=''; if(typingState && (typingState.roomId===openRoom || (openClone&&typingState.roomId==='__clone_'+openClone))){ const t=el('div','typing'); t.appendChild(el('span','bd')); t.appendChild(el('span','bd')); t.appendChild(el('span','bd')); t.appendChild(el('span',null,typingState.label)); slot.appendChild(t); } }
+
+// ── Profile (values / goals hierarchy / calendar / tasks) ────────────────────────
+function renderProfile(root, st){
+  root.appendChild(el('p','lede','Your world state — folded from the log. Every edit here appends a new event. An LLM acting as you could make these same edits via window.HC.'));
+  // values
+  root.appendChild(el('div','sect-h','Values'));
+  st.values.forEach(v=>{ const r=el('div','rule'); r.appendChild(el('div','txt',v.text)); const x=el('button','x','×'); x.onclick=()=>{ removeValue(v.id); render(); }; r.appendChild(x); root.appendChild(r); });
+  root.appendChild(quickAdder('add a value…', v=>addValue(v)));
+  // goals (hierarchy)
+  root.appendChild(el('div','sect-h','Goals (hierarchy)'));
+  const roots=st.goals.filter(g=>!g.parentId);
+  const tree=el('ul','tree'); roots.forEach(g=>tree.appendChild(goalNode(st,g))); root.appendChild(tree);
+  root.appendChild(quickAdder('add a top-level goal…', v=>addGoal(v,null)));
+  // calendar
+  root.appendChild(el('div','sect-h','Calendar'));
+  st.calendar.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(c=>{ const r=el('div','rule'); r.appendChild(el('div','txt',(c.date?c.date+' — ':'')+c.title)); const x=el('button','x','×'); x.onclick=()=>{ removeCalEvent(c.id); render(); }; r.appendChild(x); root.appendChild(r); });
+  root.appendChild(quickAdderDated('add an event…', (t,d)=>addCalEvent(t,d)));
+  // tasks (tagged to goals)
+  root.appendChild(el('div','sect-h','Tasks (tag to goals)'));
+  st.tasks.forEach(t=>{
+    const r=el('div','rule'); const tx=el('div','txt');
+    const line=el('div'); const cb=el('input'); cb.type='checkbox'; cb.checked=t.done; cb.style.marginRight='.4rem'; cb.onchange=()=>{ toggleTask(t.id); render(); };
+    line.appendChild(cb); line.appendChild(document.createTextNode(t.text)); tx.appendChild(line);
+    const tagRow=el('div','row'); tagRow.style.marginTop='.3rem';
+    (t.goalIds||[]).forEach(gid=>{ const g=st.goals.find(x=>x.id===gid); if(g){ const tg=el('span','tag',g.text); tagRow.appendChild(tg); } });
+    // add-tag select
+    const sel=el('select','field'); sel.style.maxWidth='12rem'; sel.style.fontSize='.78rem'; const o0=el('option',null,'tag to a goal…'); o0.value=''; sel.appendChild(o0);
+    st.goals.forEach(g=>{ if((t.goalIds||[]).includes(g.id))return; const o=el('option',null,g.text); o.value=g.id; sel.appendChild(o); });
+    sel.onchange=()=>{ if(sel.value){ tagTask(t.id, sel.value); render(); } };
+    tagRow.appendChild(sel); tx.appendChild(tagRow);
+    r.appendChild(tx); const x=el('button','x','×'); x.onclick=()=>{ removeTask(t.id); render(); }; r.appendChild(x); root.appendChild(r);
+  });
+  root.appendChild(quickAdder('add a task…', v=>addTask(v,[])));
+}
+function goalNode(st,g){
+  const li=el('li'); const node=el('div','node');
+  node.appendChild(el('span','t',g.text));
+  const addSub=el('button','li-x','＋'); addSub.title='add a sub-goal'; addSub.onclick=()=>{ const t=prompt('Sub-goal of "'+g.text+'":'); if(t&&t.trim()){ try{ addGoal(t,g.id); render(); }catch(e){ toast(e.message); } } }; node.appendChild(addSub);
+  const x=el('button','li-x','×'); x.onclick=()=>{ if(confirm('Remove "'+g.text+'" and its sub-goals?')){ removeGoal(g.id); render(); } }; node.appendChild(x);
+  li.appendChild(node);
+  const kids=st.goals.filter(x=>x.parentId===g.id);
+  if(kids.length){ const ul=el('ul'); kids.forEach(k=>ul.appendChild(goalNode(st,k))); li.appendChild(ul); }
+  return li;
+}
+// tagging needs an event; add a lightweight one via emit + reduce handling
+function tagTask(taskId, goalId){ emit('task.tag',{id:taskId, goalId}); }
+
+// ── Actors & roles ───────────────────────────────────────────────────────────────
+function renderActors(root, st){
+  root.appendChild(el('p','lede','Actors act in the world — human or agent, the same way. Roles set default room access. "Act as" (top) lets you take a turn as any actor, so you can model a friend or partner on one device.'));
+  root.appendChild(el('div','sect-h','Actors'));
+  Object.keys(st.actors).forEach(id=>{
+    const a=st.actors[id]; const r=el('div','rule'); const t=el('div','txt');
+    const top=el('div','row'); top.appendChild(el('span','chip '+a.kind,a.kind)); top.appendChild(el('span','nm',a.label)); t.appendChild(top);
+    const roleRow=el('div','row'); roleRow.style.marginTop='.3rem'; roleRow.appendChild(el('span','muted','role'));
+    const sel=el('select','field'); sel.style.maxWidth='10rem'; sel.style.fontSize='.8rem';
+    Object.keys(st.roles).forEach(rid=>{ const o=el('option',null,st.roles[rid].label); o.value=rid; if(a.role===rid)o.selected=true; sel.appendChild(o); });
+    sel.onchange=()=>{ setActorRole(id, sel.value); render(); }; sel.disabled=(id==='owner');
+    roleRow.appendChild(sel);
+    roleRow.appendChild(el('span','muted', a.room?('in '+(st.rooms[a.room]?st.rooms[a.room].label:'?')):'nowhere'));
+    t.appendChild(roleRow); r.appendChild(t);
+    if(id!=='owner'){ const x=el('button','x','×'); x.onclick=()=>{ try{ removeActor(id); if(acting===id)acting='owner'; render(); }catch(e){ toast(e.message); } }; r.appendChild(x); }
+    root.appendChild(r);
+  });
+  const add=el('div','row'); add.style.marginTop='.5rem';
+  const ksel=el('select','field'); ksel.style.maxWidth='8rem'; ['human','agent'].forEach(k=>{ const o=el('option',null,k); o.value=k; ksel.appendChild(o); });
+  const nm=el('input','field'); nm.placeholder='name'; nm.style.maxWidth='10rem';
+  const rsel=el('select','field'); rsel.style.maxWidth='9rem'; Object.keys(st.roles).forEach(rid=>{ const o=el('option',null,st.roles[rid].label); o.value=rid; rsel.appendChild(o); });
+  const b=el('button','btn small','Add actor'); b.onclick=()=>{ try{ addActor(ksel.value, nm.value, rsel.value); nm.value=''; render(); }catch(e){ toast(e.message); } };
+  add.appendChild(ksel); add.appendChild(nm); add.appendChild(rsel); add.appendChild(b); root.appendChild(add);
+
+  root.appendChild(el('div','sect-h','Roles & default room access'));
+  Object.keys(st.roles).forEach(rid=>{
+    const rl=st.roles[rid]; const card=el('div','card'); card.style.marginBottom='.5rem';
+    card.appendChild(el('div',null, rl.label + (rid==='owner'?' — all-access (in code)':'')));
+    if(rid!=='owner'){
+      const grants=rl.defaultRooms||{};
+      const keys=Object.keys(grants);
+      if(keys.length){ keys.forEach(k=>{ const lab=(st.rooms[k]?st.rooms[k].label:(st.roomTypes[k]?st.roomTypes[k].label+' (type)':k)); card.appendChild(el('div','muted','• '+lab+': '+grants[k].join(', '))); }); }
+      else card.appendChild(el('div','muted','no default grants (relies on per-room permissions)'));
+      const row=el('div','row'); row.style.marginTop='.4rem';
+      const tsel=el('select','field'); tsel.style.maxWidth='12rem'; const o0=el('option',null,'grant a room type…'); o0.value=''; tsel.appendChild(o0);
+      Object.keys(st.roomTypes).forEach(tid=>{ const o=el('option',null,st.roomTypes[tid].label+' (type)'); o.value=tid; tsel.appendChild(o); });
+      const grant=el('button','btn small ghost','Grant enter+leave'); grant.onclick=()=>{ if(tsel.value){ setRoleAccess(rid, tsel.value, ['enter','leave']); render(); } };
+      row.appendChild(tsel); row.appendChild(grant); card.appendChild(row);
+    }
+    root.appendChild(card);
+  });
+  const ar=el('div','composer'); const ai=el('input','field'); ai.placeholder='new role name…'; const ab=el('button','btn small','Add role'); ab.style.alignSelf='flex-start'; ab.onclick=()=>{ try{ addRole(ai.value); ai.value=''; render(); }catch(e){ toast(e.message); } }; ar.appendChild(ai); ar.appendChild(ab); root.appendChild(ar);
+}
+
+// ── Clones + time travel ─────────────────────────────────────────────────────────
+function renderClones(root, st){
+  if(openClone&&st.clones[openClone]) return renderCloneChat(root, st, openClone);
+  root.appendChild(el('p','lede','A clone is you, frozen at a point in the log, set loose to diverge (Kin\'s model). Family name is yours; the clone proposes its own given name. Spawn from now, or travel back and spawn an older you.'));
+  // time-travel control
+  const tt=el('div','card'); tt.style.marginBottom='.8rem';
+  tt.appendChild(el('div','sect-h','Time travel'));
+  const n=world.events.length;
+  const cur = ttSeq==null? n : ttSeq;
+  const sl=el('input'); sl.type='range'; sl.min='1'; sl.max=String(n); sl.value=String(cur); sl.style.width='100%';
+  const lab=el('div','muted','viewing the world folded up to event '+cur+' of '+n+(ttSeq==null?' (now)':' (past)'));
+  sl.oninput=()=>{ ttSeq = (Number(sl.value)>=n? null : Number(sl.value)); lab.textContent='viewing the world folded up to event '+(ttSeq==null?n:ttSeq)+' of '+n+(ttSeq==null?' (now)':' (past)'); renderTTPreview(prev, ttSeq==null?n:ttSeq); };
+  tt.appendChild(sl); tt.appendChild(lab);
+  const prev=el('div'); prev.style.marginTop='.5rem'; tt.appendChild(prev); renderTTPreview(prev, cur);
+  const spawn=el('button','btn small'); spawn.textContent = ttSeq==null? 'Spawn a clone from now' : ('Spawn a clone from event '+ttSeq);
+  spawn.onclick=()=>{ try{ const id=spawnClone(ttSeq==null?null:ttSeq); toast('Clone spawned — it will propose a name.'); if(apiKey) proposeCloneName(id); render(); }catch(e){ toast(e.message); } };
+  tt.appendChild(spawn); root.appendChild(tt);
+  // clone roster
+  root.appendChild(el('div','sect-h','Your clones'));
+  const ids=Object.keys(st.clones);
+  if(!ids.length) root.appendChild(el('div','empty','No clones yet.'));
+  ids.forEach(id=>{
+    const c=st.clones[id]; const card=el('div','roomcard');
+    const top=el('div','top'); top.appendChild(el('div','nm', (c.givenName||'Unnamed')+' '+c.familyName)); top.appendChild(el('div','ty','born @event '+c.bornAtSeq)); card.appendChild(top);
+    if(c.naming.status!=='approved'){
+      card.appendChild(el('div','muted', c.naming.status==='pending'? ('proposes “'+c.naming.proposed+'” — '+c.naming.rationale) : 'awaiting a name proposal'));
+      const row=el('div','acts');
+      if(c.naming.status==='pending'){ const ap=el('button','btn small','Bless “'+c.naming.proposed+'”'); ap.onclick=()=>{ try{ approveCloneName(id); render(); }catch(e){ toast(e.message); } }; const rt=el('button','btn small ghost','Send back'); rt.onclick=()=>{ const f=prompt('Feedback for the name:'); if(f!=null){ returnCloneName(id,f); if(apiKey)proposeCloneName(id); render(); } }; row.appendChild(ap); row.appendChild(rt); }
+      else { const pr=el('button','btn small','Ask it to propose'); pr.onclick=()=>proposeCloneName(id); const mn=el('button','btn small ghost','Name by hand'); mn.onclick=()=>{ const nnm=prompt('Give it a name:'); if(nnm&&nnm.trim()){ proposeCloneNameState(id,nnm,'(named by hand)'); render(); } }; row.appendChild(pr); row.appendChild(mn); }
+      card.appendChild(row);
+    } else {
+      const row=el('div','acts');
+      const chat=el('button','btn small','Chat'); chat.onclick=()=>{ openClone=id; render(); };
+      const promote=el('button','btn small ghost', st.actors[id]?'is an actor':'Make an actor');
+      promote.disabled=!!st.actors[id];
+      promote.onclick=()=>{ // promote clone to an actor so it can be placed in rooms and take turns
+        emit('actor.add',{id, kind:'agent', label:(c.givenName||'Unnamed')+' '+c.familyName, role:'character', owner:'owner'}); toast('Now an actor — place it in a room to take turns.'); render(); };
+      row.appendChild(chat); row.appendChild(promote); card.appendChild(row);
+    }
+    const x=el('button','btn small ghost','Delete'); x.onclick=()=>{ if(confirm('Delete this clone?')){ removeClone(id); if(st.actors[id])removeActor(id); render(); } }; card.appendChild(x);
+    root.appendChild(card);
+  });
+}
+function renderTTPreview(host, upto){ host.innerHTML=''; const past=reduceUpTo(upto); host.appendChild(el('div','muted','Then: '+(past.ownerName||'—')+' · '+past.values.length+' values · '+past.goals.length+' goals · '+past.tasks.length+' tasks · '+Object.keys(past.clones).length+' clones')); }
+function renderCloneChat(root, st, id){
+  const c=st.clones[id];
+  const back=el('button','btn small ghost','‹ Clones'); back.onclick=()=>{ openClone=null; render(); }; root.appendChild(back);
+  root.appendChild(el('h1',null,(c.givenName||'Unnamed')+' '+c.familyName));
+  root.appendChild(el('p','muted','Born from your world log at event '+c.bornAtSeq+'. It shares that past but is its own person now.'));
+  const convo=el('div','convo'); (c.thread||[]).forEach(m=>{ const box=el('div','msg '+(m.role==='assistant'?'agent':'')); const who=el('div','who'); who.appendChild(el('span','chip '+(m.role==='assistant'?'agent':'human'), m.role==='assistant'?'agent':'you')); who.appendChild(el('span','nm', m.role==='assistant'?((c.givenName||'')+' '+c.familyName):'You')); box.appendChild(who); box.appendChild(el('div','bd',m.text)); convo.appendChild(box); });
+  if(!c.thread.length) convo.appendChild(el('div','empty','Say hello.'));
+  root.appendChild(convo);
+  root.appendChild(document.getElementById('typing-slot')||typingSlot());
+  const comp=el('div','composer'); const ta=el('textarea','field'); ta.rows=2; ta.placeholder='talk to '+(c.givenName||'the clone')+'…';
+  const b=el('button','btn small','Send'); b.onclick=()=>{ if(ta.value.trim()){ const t=ta.value; ta.value=''; converseWithClone(id, t); } };
+  comp.appendChild(ta); comp.appendChild(b); root.appendChild(comp);
+}
+
+// ── Budget ───────────────────────────────────────────────────────────────────────
+function renderBudget(root, st){
+  root.appendChild(el('p','lede','The token budget sets how far agents advance without a human in the room. Metering is a hard rule — no spending what you don\'t have — above a subsistence floor no setting strips (the care value, made material).'));
+  const b=st.budget; const spent=totalSpent(st); const remaining=unattendedRemaining(st);
+  const bar=el('div','bar'); const usable=Math.max(1,b.pool-b.subsistence); const i=el('i'); const pct=Math.min(100, Math.round((spent/usable)*100)); i.style.width=pct+'%'; if(remaining<b.tickCap)i.className='floorwarn'; bar.appendChild(i); root.appendChild(bar);
+  root.appendChild(el('div','muted', 'pool '+b.pool+' · subsistence floor '+b.subsistence+' · spent '+spent+' · '+remaining+' left for unattended turns'));
+  const card=el('div','card'); card.style.marginTop='.8rem';
+  const num=(label, val, fn, hint)=>{ const row=el('div','row'); row.style.margin='.35rem 0'; const l=el('label','muted',label); l.style.minWidth='11rem'; row.appendChild(l); const inp=el('input','field'); inp.type='number'; inp.value=val; inp.style.maxWidth='9rem'; inp.onchange=()=>{ try{ fn(inp.value); render(); }catch(e){ toast(e.message); } }; row.appendChild(inp); if(hint)row.appendChild(el('span','muted',hint)); return row; };
+  card.appendChild(num('Surplus pool (tokens)', b.pool, v=>setBudget({pool:v})));
+  card.appendChild(num('Subsistence floor', b.subsistence, v=>setBudget({subsistence:v}), 'never spent by unattended turns'));
+  card.appendChild(num('Unattended per-tick cap', b.tickCap, v=>setBudget({tickCap:v}), 'max tokens per slow tick'));
+  card.appendChild(num('Slow-tick throttle (ms)', b.throttleMs, v=>setBudget({throttleMs:v}), 'min gap between unattended turns'));
+  const reset=el('button','btn small ghost','Reset spend (jubilee)'); reset.style.marginTop='.5rem'; reset.onclick=()=>{ resetBudget(); render(); toast('Spend reset. The record is untouched.'); };
+  card.appendChild(reset); root.appendChild(card);
+  root.appendChild(el('div','floor-note','Speed rule: a human in the room → agents respond immediately; no human → agents advance slowly (throttled) and only while budget remains above the floor. Unattended background stepping (a runtime with no one watching) is deferred + gated — here you step it by hand.'));
+}
+
+// ── World log ────────────────────────────────────────────────────────────────────
+function renderLog(root, st){
+  root.appendChild(el('p','lede','The append-only world log — the spine. State is a fold over this; it is also exactly what an LLM acting in the world reads as context. Old spans compress into a single summary event.'));
+  const n=world.events.length;
+  const r=el('div','row'); r.appendChild(el('span','muted', n+' events'));
+  const cb=el('button','btn small ghost', n>COMPACT_AFTER?'Compact old history':'Compact (needs '+(COMPACT_AFTER+1)+'+ events)'); cb.disabled=n<=COMPACT_AFTER; cb.onclick=()=>{ try{ compact(); render(); toast('Old history folded into a summary event.'); }catch(e){ toast(e.message); } };
+  r.appendChild(cb);
+  const ctxB=el('button','btn small ghost','Show LLM context'); ctxB.onclick=()=>{ const panel=document.getElementById('menu-panel'); panel.innerHTML=''; panel.appendChild(el('div','menu-sub','What an agent in the Commons sees')); const pre=el('div','logline'); pre.style.whiteSpace='pre-wrap'; pre.style.fontFamily='var(--mono)'; const commons=Object.keys(st.rooms).find(k=>st.actors.owner&&st.rooms[k]); pre.textContent=worldContext(st, commons, 18); panel.appendChild(pre); document.getElementById('menu').classList.add('show'); };
+  r.appendChild(ctxB); root.appendChild(r);
+  const box=el('div'); box.style.marginTop='.6rem';
+  world.events.slice().reverse().slice(0,200).forEach(e=>{
+    const line=el('div','logline');
+    if(e.type==='compaction'){ line.appendChild(el('span','ty','[compaction] ')); line.appendChild(document.createTextNode(e.payload.summary)); }
+    else { const s=el('span','ty', e.type+' '); line.appendChild(s); const a=el('span','ac', actorName(st,e.actor)+' '); line.appendChild(a); line.appendChild(document.createTextNode(logDetail(e))); }
+    box.appendChild(line);
+  });
+  root.appendChild(box);
+}
+function logDetail(e){ const p=e.payload||{}; return [p.text,p.label,p.name,p.title,p.question, (p.roomId?('→ '+p.roomId):null)].filter(Boolean).join(' ').slice(0,120); }
+
+// ── Menu / export / import / erase ───────────────────────────────────────────────
+function setMenu(o){ document.getElementById('menu').classList.toggle('show',o); if(o) renderMenu(); }
+function renderMenu(){
+  const p=document.getElementById('menu-panel'); p.innerHTML='';
+  const add=(l,fn,c)=>{ const b=el('button','menu-item'+(c?' '+c:''),l); b.onclick=()=>{ document.getElementById('menu').classList.remove('show'); fn(); }; p.appendChild(b); };
+  add('Export world', exportData);
+  add('Import world', importData);
+  add('API key', ()=>{ const k=prompt('Anthropic key (sk-ant-…). Blank to remove.',''); if(k===null)return; if(k.trim()===''){ clearApiKey(); toast('Key removed.'); } else if(k.trim().startsWith('sk-ant-')){ writeApiKey(k.trim()); toast('Key set.'); } else toast('Not an sk-ant- key.'); render(); });
+  p.appendChild(el('div','menu-sub','—'));
+  add('About Rooms', ()=>{ toast('A single-device prototype of the world layer. See ROOMS.md.'); });
+  add('Delete everything', eraseEverything, 'danger');
+}
+function exportData(){ const b=new Blob([JSON.stringify({app:'rooms',schema:1,exported:new Date().toISOString(),world})],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='rooms-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function importData(){ const i=document.createElement('input'); i.type='file'; i.accept='application/json'; i.onchange=async()=>{ const f=i.files[0]; if(!f)return; try{ const p=JSON.parse(await f.text()); const w=p.world||p; world={ v:1, onboarded:!!w.onboarded, events:Array.isArray(w.events)?w.events:[] }; save(); render(); toast('Imported.'); }catch(e){ toast('Import failed.'); } }; i.click(); }
+let eraseArmed=false;
+function eraseEverything(){ if(!eraseArmed){ eraseArmed=true; toast('Tap Delete everything again to erase this whole world.'); setTimeout(()=>eraseArmed=false,4000); setMenu(true); return; } eraseArmed=false; world={v:1,onboarded:false,events:[]}; save(); acting='owner'; view='rooms'; openRoom=null; openClone=null; render(); }
+
+// ── Boot ─────────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent=VERSION;
+document.getElementById('menu-btn').onclick=()=>setMenu(true);
+document.getElementById('menu').onclick=e=>{ if(e.target.id==='menu') document.getElementById('menu').classList.remove('show'); };
+load(); apiKey=readApiKey(); render();
+
+if(window.HCSync){
+  HCSync.registerStore({ key:SYNC_BLOB_KEY, kind:'blob',
+    read:()=>localStorage.getItem(STATE_KEY)||JSON.stringify(world),
+    write:(str)=>{ try{ localStorage.setItem(STATE_KEY,str); }catch(_){} load(); render(); } });
+  if(window.HCSyncChip) HCSyncChip.mount({position:'bottom-left'});
+  HCSync.init({ supabaseUrl:SUPABASE_URL, supabaseAnonKey:SUPABASE_ANON_KEY, appId:'rooms' });
+}
+
+// ── Agent interface — state mutations only; every model call (turns, clone chat,
+// the moderator, the research agent) is UI-only, the same human/agent boundary as
+// every BYOK surface in the suite. An LLM can drive the ENTIRE world through these. ─
+if(window.HC) HC.register({
+  app:'rooms', version:VERSION, title:'Rooms',
+  description:'A single-device prototype of the "rooms" world layer (ROOMS.md). An event-sourced world: every state change is an append-only event, folded into the current world; both humans and LLMs append through the same actions (REQUIREMENTS §1.4). Onboarding (name/values/goals-hierarchy/calendar/tasks); rooms + room types + instances + role-scoped permissions; clones + time travel (Kin\'s model); a turn scheduler (immediate with a human present, slow + token-metered without) with a cheap-model moderator; a BYOK research agent. Rooms writes only its own world store — never a practice store. Cross-account sharing, remote partner clone-sharing, and unattended autonomy are deferred + gated. Public seed data.',
+  stores:[
+    { key:STATE_KEY, kind:'localStorage', syncKey:SYNC_BLOB_KEY, sensitivity:'sensitive',
+      description:'The event-sourced world: an append-only log of every state change (values, goals hierarchy, calendar, tasks, rooms, room types, roles, actors, clones, messages, budget), plus an onboarding flag. State is a reduction over the log; older spans fold into compaction events. Agents author only world/room events here — never a practice store.',
+      schema:'{ v:1, onboarded:bool, events:[ { id, seq, ts, actor, room, type, payload } ] }  // types: world.init, owner.rename, value.*, goal.*, cal.*, task.*, roomtype.*, room.*, role.*, actor.*, enter, msg.send, research.result, clone.*, budget.*, compaction',
+      afterWrite:()=>{ load(); render(); } },
+  ],
+  actions:{
+    setOwnerName:{ description:'Set the world owner\'s name (and the family name clones inherit). The first call bootstraps the world.', params:{ name:'string' }, handler:(p)=>setOwnerName(p.name) },
+    addValue:{ description:'Add a value to the profile.', params:{ text:'string' }, handler:(p)=>addValue(p.text) },
+    editValue:{ description:'Edit a value.', params:{ id:'value id', text:'string' }, handler:(p)=>editValue(p.id,p.text) },
+    removeValue:{ description:'Remove a value.', params:{ id:'value id' }, handler:(p)=>removeValue(p.id) },
+    addGoal:{ description:'Add a goal, optionally nested under a parent goal (a hierarchy).', params:{ text:'string', parentId:'parent goal id or null' }, handler:(p)=>addGoal(p.text,p.parentId) },
+    editGoal:{ description:'Edit a goal.', params:{ id:'goal id', text:'string' }, handler:(p)=>editGoal(p.id,p.text) },
+    removeGoal:{ description:'Remove a goal and its sub-goals; untags affected tasks.', params:{ id:'goal id' }, handler:(p)=>removeGoal(p.id) },
+    addCalEvent:{ description:'Add a calendar event.', params:{ title:'string', date:'YYYY-MM-DD or empty' }, handler:(p)=>addCalEvent(p.title,p.date) },
+    removeCalEvent:{ description:'Remove a calendar event.', params:{ id:'event id' }, handler:(p)=>removeCalEvent(p.id) },
+    addTask:{ description:'Add a task, optionally tagged to one or more goals.', params:{ text:'string', goalIds:'array of goal ids' }, handler:(p)=>addTask(p.text,p.goalIds) },
+    tagTask:{ description:'Tag a task to a goal.', params:{ id:'task id', goalId:'goal id' }, handler:(p)=>tagTask(p.id,p.goalId) },
+    toggleTask:{ description:'Toggle a task done/undone.', params:{ id:'task id' }, handler:(p)=>toggleTask(p.id) },
+    removeTask:{ description:'Remove a task.', params:{ id:'task id' }, handler:(p)=>removeTask(p.id) },
+    addRoomType:{ description:'Add a room type (every screen is a room type).', params:{ label:'string', verbs:'array like ["enter","act","leave"]', defaultPolicy:'{ [roleId]: perms[] }' }, handler:(p)=>addRoomType(p.label,p.verbs,p.defaultPolicy) },
+    setRoomTypePolicy:{ description:'Set a room type\'s default permission policy (by role).', params:{ id:'room type id', policy:'{ [roleId]: perms[] }' }, handler:(p)=>setRoomTypePolicy(p.id,p.policy) },
+    addRoom:{ description:'Add a room (an instance of a type — a second goals room is just another instance).', params:{ typeId:'room type id', label:'string' }, handler:(p)=>addRoom(p.typeId,p.label) },
+    setRoomPolicy:{ description:'Override a room\'s permission policy (null inherits the type default).', params:{ id:'room id', policy:'{ [roleId]: perms[] } or null' }, handler:(p)=>setRoomPolicy(p.id,p.policy) },
+    removeRoom:{ description:'Remove a room and its messages.', params:{ id:'room id' }, handler:(p)=>removeRoom(p.id) },
+    addRole:{ description:'Add a role (a bundle of default room access).', params:{ label:'string', defaultRooms:'{ [roomId|typeId]: perms[] }' }, handler:(p)=>addRole(p.label,p.defaultRooms) },
+    setRoleAccess:{ description:'Set a role\'s default access to a room or room type.', params:{ id:'role id', target:'room id or room type id', perms:'array of perms (empty to revoke)' }, handler:(p)=>setRoleAccess(p.id,p.target,p.perms) },
+    addActor:{ description:'Add an actor (human or agent) with a role.', params:{ kind:"'human' | 'agent'", label:'string', role:'role id' }, handler:(p)=>addActor(p.kind,p.label,p.role) },
+    setActorRole:{ description:'Change an actor\'s role.', params:{ id:'actor id', role:'role id' }, handler:(p)=>setActorRole(p.id,p.role) },
+    removeActor:{ description:'Remove an actor (not the owner).', params:{ id:'actor id' }, handler:(p)=>removeActor(p.id) },
+    enterRoom:{ description:'Move an actor into a room. Refused if the actor is not admitted (the authorization ring — refusals are first-class).', params:{ actorId:'actor id', roomId:'room id' }, handler:(p)=>enterRoom(p.actorId,p.roomId) },
+    sendMessage:{ description:'Leave a message in a room, authored by the current acting actor. Refused if that actor may not leave here.', params:{ roomId:'room id', text:'string' }, handler:(p)=>sendMessage(p.roomId,p.text) },
+    recordResearch:{ description:'Record a research artifact (finding + sources) left by an agent in a room. (The web search itself is UI-only.)', params:{ roomId:'room id', actorId:'author actor id', question:'string', finding:'string', sources:'array of {url,title}' }, handler:(p)=>recordResearch(p.roomId,p.actorId,p.question,p.finding,p.sources) },
+    spawnClone:{ description:'Spawn a clone frozen from the world log (at the given event index, or HEAD). It inherits a frozen digest and diverges. Proposes its own given name.', params:{ atSeq:'event index to freeze at, or null for now' }, handler:(p)=>spawnClone(p.atSeq) },
+    setCloneName:{ description:'Record a proposed given name for a clone (the naming handshake; the network proposal is UI-only).', params:{ id:'clone id', name:'string', rationale:'string' }, handler:(p)=>proposeCloneNameState(p.id,p.name,p.rationale) },
+    approveCloneName:{ description:'Approve a clone\'s proposed given name.', params:{ id:'clone id' }, handler:(p)=>approveCloneName(p.id) },
+    returnCloneName:{ description:'Return a clone\'s proposed name with feedback (reopens proposing).', params:{ id:'clone id', feedback:'string' }, handler:(p)=>returnCloneName(p.id,p.feedback) },
+    cloneSay:{ description:'Append a turn to a clone\'s diverging thread (the network reply is UI-only).', params:{ id:'clone id', role:"'user' | 'assistant'", text:'string' }, handler:(p)=>cloneSay(p.id,p.role,p.text) },
+    removeClone:{ description:'Delete a clone.', params:{ id:'clone id' }, handler:(p)=>removeClone(p.id) },
+    setBudget:{ description:'Set the token budget that governs unattended agent advancement.', params:{ pool:'tokens', subsistence:'floor tokens', tickCap:'max tokens per slow tick', throttleMs:'min ms between unattended ticks' }, handler:(p)=>setBudget(p) },
+    spendTokens:{ description:'Meter spend against the unattended budget. Refused if it would breach the subsistence floor — you cannot spend what you do not have.', params:{ actorId:'actor id', amount:'positive token count' }, handler:(p)=>spendTokens(p.actorId,p.amount) },
+    resetBudget:{ description:'Reset spend to zero (a jubilee). Leaves the log untouched.', params:{}, handler:()=>resetBudget() },
+    compact:{ description:'Fold the oldest span of the log into a single compaction summary event (the "context, compressed" step). Append-only: the summary replaces the span as one event.', params:{}, handler:()=>compact() },
+  },
+  notes:'Single-device prototype. The model calls (agent turns via runTurn, clone naming/chat, the moderator router, the research agent\'s web search) are UI-only — never HC actions, matching every BYOK surface in the suite. Rooms writes ONLY its own store (never a practice store), so REQUIREMENTS §1.4 stays literally true; the world log\'s per-event `actor` is authorship in a new world-layer store, outside §1.4\'s practice-store scope (WORLD_ARCHITECTURE §5). Cross-account friend/partner, remote clone-sharing, and unattended autonomy are deferred + gated on the framing decision + security/relational-safety reviews (ROOMS.md §1/§11). Public seed data.',
+});
+</script>
+</body>
+</html>
