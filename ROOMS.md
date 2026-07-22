@@ -69,16 +69,20 @@ These cannot both be the top-level frame for the cross-user surface. Three coher
    vision's *range* (public exhibition *and* intimate correspondence), and it maps cleanly onto
    the "permissions per room type" primitive the vision already asks for.
 
-**Recommendation:** resolution **3**, staged. Build the **single-device** world now (§11 Phase R1
-— safe under *all three* framings, because nothing leaves the device and no one else's data is
-touched), and let the framing decision gate only the **cross-user** phase (§11 Phase R2), where it
-actually bites. This lets the vision become playable immediately without pre-deciding the hardest
-values question, and it keeps the honest posture the docs already hold: **the private↔public
-boundary is a permission on a room, and permissions are the vision's own primitive.**
+**Decision — founder, 2026-07-22: resolution 3, hybrid + staged.** The world is **public by
+default** (the art frame), with a **private room *type*** whose contents never become public seed
+data and whose cross-user sharing carries the full consent / crypto / relational apparatus. This is
+built on the vision's own primitive — the private↔public boundary is a **permission on a room
+type** (§3). Build the **single-device** world now (§11 Phase R1 — safe under this framing because
+nothing leaves the device and no one else's data is touched); the framing now gates only *how* the
+**cross-user** phase (§11 Phase R2) is built, not *whether*.
 
-Whatever the founder chooses, **the single-device prototype (§13) is unaffected** — it neither
-publishes data nor shares across accounts. The framing decision is real but it is not a blocker
-for the first build.
+**Ratification still owed (§12):** the decision is made, but its **binding-doc wording** is not yet
+written — `STATEMENT.md`'s "no privacy frame / moved past the two-person world" needs a carve-out
+for the private room type, and `CONSTRAINTS.md` **S8 / P11 / §5-world** need ratifying *scoped to
+that private surface*. Those are substantive binding amendments, drafted in §12 and awaiting the
+founder's explicit sign-off on wording (per the amendment norm). **The single-device prototype
+(§13) is unaffected either way** — it neither publishes data nor shares across accounts.
 
 ---
 
@@ -262,11 +266,14 @@ concrete as a **turn scheduler**:
   present, it names **which single actor responds next**. Exactly one actor is "holding the floor"
   at a time; a clear **thinking/typing indicator** shows who. The moderator **only routes** — it
   never speaks in an actor's voice (the `GOVERNANCE.md` "no allow-with-modification" discipline: an
-  AI must not author *content* in another's voice). **The "two humans" case is the ceiling, not a
-  door:** two humans in a room is the two-person world's *maximum* (owner + partner, `CONSTRAINTS.md`
-  §10 Q4 "two only, binding"). A *third* human is a "not a product" tripwire (`WORLD_ARCHITECTURE.md`
-  §8) that forces a fresh values re-ratification — the moderator handles up to two humans because
-  that is all the world is allowed to hold, not because more are invited.
+  AI must not author *content* in another's voice). **On "two humans":** the binding "two only"
+  ceiling (owner + partner, `CONSTRAINTS.md` §10 Q4) is a *cross-user Phase-2* concern — it is
+  **not** encoded in the single-device prototype, where you can add any number of local actors to
+  model turn-taking, and where the moderator simply routes among whoever is present. The ceiling
+  governs real *networked* humans (a third account is a "not a product" tripwire,
+  `WORLD_ARCHITECTURE.md` §8, forcing a fresh values re-ratification), and that surface is gated
+  (§11 Phase R2). The prototype does not enforce a human cap because single-device local actors are
+  not the thing the ceiling is about.
 - **Turn-based first.** All of the above runs **when a human runs a turn** in the single-device
   prototype (§13). Genuinely *unattended* stepping (a browser runtime at the origin, on the owner's
   key) is `WORLD_ARCHITECTURE.md` Layer 6 / roadmap Phase 4 — deferred, and it needs the turn logic
@@ -281,14 +288,15 @@ concrete as a **turn scheduler**:
 > available resources.
 
 `companion.html` already has BYOK **web search + fetch**. The vision asks for one step more: a
-**triggerable sub-agent** that, given a question, runs its own small loop (search → fetch → read →
-synthesize) and returns a cited answer as a **room artifact**, rather than the main conversant
+**triggerable sub-agent** that, given a question, runs its own small loop (web-search → synthesize,
+with citations) and returns a cited answer as a **room artifact**, rather than the main conversant
 doing it inline. Concretely:
 
 - A **research role/actor** is spawned for the question, admitted to the room as a transient actor,
-  runs a bounded loop against available resources (web via the existing companion search/fetch;
-  and, where permitted, `HC.read` over rooms the researcher's role may enter), and **leaves a
-  signed research artifact** in the room (finding + sources). Its spend counts against the room's
+  runs a bounded loop against available resources (the prototype wires Anthropic's server-side
+  `web_search` tool with citations; a `web_fetch` step and `HC.read` over rooms the researcher's
+  role may enter are natural extensions), and **leaves a signed research artifact** in the room
+  (finding + sources). Its spend counts against the room's
   token budget (§6), so research is metered like any other agent action.
 - Because it writes only a **room artifact** (never a practice store, never world state), it obeys
   the one-way rule and §1.4 automatically.
@@ -325,9 +333,17 @@ prototype and cross-user (gated) later.
 
 ## 9. The vision, bullet by bullet
 
-Status legend: **built** = shipping code today · **drafted** = specified in a design doc, not built
-· **new** = this doc introduces it · **gated** = needs the framing decision (§1) and/or a hard
-review before real cross-user content.
+Status legend: **built** = shipping as an established suite app/slice · **drafted** = specified in a
+design doc · **new** = this doc introduces it as a world-layer concept · **gated** = needs the
+framing decision (§1) and/or a hard review before real cross-user content.
+
+**Important:** these labels describe each bullet's maturity as a *suite-wide, cross-user-capable*
+feature — **not** whether the `rooms.html` v0.1 prototype demonstrates it. The prototype (§13) now
+**realizes single-device** most of the "new"/"drafted"/"partially built" rows below (the
+event-sourced log, room types + instances, roles + permissions, time travel, the turn scheduler +
+moderator, the research agent). So "new" here means "new as a *world-layer* concept," even where
+the prototype already shows it locally; what stays genuinely unbuilt is the **cross-user** cluster
+(6/7/14) and unattended autonomy.
 
 *(This table is completed against the code-level reconciliation in §10; see BACKLOG for the
 per-item build tracking.)*
@@ -438,16 +454,21 @@ Turn-based first, single-device before cross-user, gates enforced — consistent
 Per the standing norm, a substantive change to a binding doc is surfaced, not made unilaterally.
 This direction would need:
 
-- **The §1 framing decision recorded** — whichever of the three resolutions wins is a
-  charter-level statement about what the world *is*, and belongs in `STATEMENT.md` /
-  `CONSTRAINTS.md`. The current contradiction between `STATEMENT.md` (public, no gates) and the
-  vision (private partner) is unresolved binding-level ambiguity.
-- **If the private/hybrid framing wins:** ratify the already-drafted `CONSTRAINTS.md` **S8**
-  (relational harm), **P11** (representation self-governed), and the **§5 world anti-engagement
-  amendment** (no turn-timers, no "partner is waiting," no completion pressure — the intimate-turn
-  loop is the strongest pull), and add the `REQUIREMENTS.md` world-data section (room artifact
-  store, shared-room keys with the security-review prerequisite, autonomy guardrails, a relational
-  adverse-event path). These are currently marked *"binds only upon founder ratification via §6."*
+- **The §1 framing decision — DECIDED (hybrid, staged); binding wording still owed.** The founder
+  chose public-by-default + a private room type (2026-07-22). This is a charter-level statement
+  about what the world *is*, so it belongs in `STATEMENT.md` / `CONSTRAINTS.md` — but the *wording*
+  is a substantive binding amendment and is **not written yet** (drafted here, awaiting explicit
+  sign-off per the amendment norm). Specifically: `STATEMENT.md`'s "no privacy frame / moved past
+  the two-person world" needs a **carve-out** stating that a designated **private room type** is
+  *not* public seed data and carries the two-person world's protections.
+- **Because hybrid won, ratify (scoped to the private room type):** the already-drafted
+  `CONSTRAINTS.md` **S8** (relational harm), **P11** (representation self-governed), and the **§5
+  world anti-engagement amendment** (no turn-timers, no "partner is waiting," no completion
+  pressure — the intimate-turn loop is the strongest pull) — each **scoped to the private surface**,
+  since the public surface keeps the art frame — and add the `REQUIREMENTS.md` world-data section
+  (room artifact store, shared-room keys with the security-review prerequisite, autonomy
+  guardrails, a relational adverse-event path). These are currently marked *"binds only upon
+  founder ratification via §6."*
 - **REQUIREMENTS §1.4 stays literally true** under the "agents write the world, humans write their
   practice" rule (`WORLD_ARCH.` §5): the world log and room artifacts are a *new* store class agents
   may author; practice stores stay human-authored and provenance-free.
@@ -468,8 +489,9 @@ A single-file, single-device, BYOK prototype that makes the model tangible and p
 
 - **Onboarding** (steps 1–5): name, values, a **hierarchical** goals tree, calendar events, tasks
   tagged to goals — each captured as an event on the world log.
-- **The world log**: append-only, event-sourced; the current state is a fold; a menu action shows
-  the raw log and a compaction that summarizes old spans (the "context, compressed" made visible).
+- **The world log**: append-only, event-sourced; the current state is a fold; a **World-log tab**
+  shows the raw log and lets you compact old spans into a summary event, and a "Show LLM context"
+  action renders exactly what an agent in a room sees (the "context, compressed" made visible).
 - **Rooms**: a map of rooms; each screen is a room type; you can **add a second room of a type**
   (e.g. a second goals room); per-room and per-room-type **permissions**; **roles** with default
   room access.
@@ -484,8 +506,8 @@ A single-file, single-device, BYOK prototype that makes the model tangible and p
   subsistence floor); **background agents stay in their room**; a **cheap-model moderator** picks
   the next speaker when a room has >2 agents or 1 agent + 2 humans; a **thinking/typing indicator**
   shows who holds the floor.
-- **A research agent** trigger in conversation: a bounded search→fetch→synthesize loop that leaves a
-  cited research artifact in the room.
+- **A research agent** trigger in conversation: a bounded web-search→synthesize loop (Anthropic's
+  `web_search` tool, with citations) that leaves a cited research artifact in the room.
 - Wired into the suite properly: `window.HC` manifest (world log + room stores + actions), opt-in
   encrypted sync of the world store, `llms.txt`, the PWA precache, and the usage/hub surfaces as
   appropriate.
@@ -499,8 +521,10 @@ not the world with two real people in it.
 
 ## 14. Open questions for the founder
 
-1. **The framing (§1).** Public art, private two-person, or hybrid-with-a-private-room-type? This is
-   the one decision that gates the cross-user phase. (Recommendation: hybrid, staged.)
+1. **The framing (§1) — DECIDED (founder, 2026-07-22): hybrid, staged.** Public by default + a
+   private room *type* that carries the full consent/crypto/relational apparatus. What remains is
+   ratifying the binding-doc *wording* (§12: a `STATEMENT.md` carve-out for the private room type +
+   `CONSTRAINTS.md` S8/P11/§5-world scoped to it) before any cross-user content ships.
 2. **Is Rooms a new surface or a mode over the existing suite?** (`WORLD_ARCH.` §10 Q2.) The
    prototype is a standalone `rooms.html` (like `kin`/`govern` — each world slice shipped standalone
    first); the eventual integration could fold the practice pages in as room types.

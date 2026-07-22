@@ -199,10 +199,13 @@ The **single-device** slice of this now exists as a prototype (`rooms.html`, abo
 event-sourced world with rooms, roles, permissions, clones, and a turn scheduler, all on one
 device. What remains a documented **direction, drafted and pending founder ratification — not
 built** is everything **cross-user**: a real remote friend/partner on their own device and key,
-sharing a clone with a remote partner, and unattended autonomy. Those are gated on a framing
-decision (public-art vs. private-two-person — the repo holds an unresolved tension here) and, if
-the private framing wins, on a security review + a relational-safety review. Details:
-`ROOMS.md` (the synthesis), `WORLD_ARCHITECTURE.md`, `WORLD_ROADMAP.md` at the repo root.
+sharing a clone with a remote partner, and unattended autonomy. The founder has decided the framing
+(2026-07-22): **hybrid — public by default, plus a private room type** that never becomes public
+seed data and carries the full consent/crypto/relational apparatus; the single-device prototype is
+unaffected. The binding-doc *wording* for that (a `STATEMENT.md` carve-out + `CONSTRAINTS.md`
+S8/P11/§5-world scoped to the private surface) is still owed, and cross-user private-room content
+also needs a security review + a relational-safety review before it ships. Details: `ROOMS.md`
+(the synthesis), `WORLD_ARCHITECTURE.md`, `WORLD_ROADMAP.md` at the repo root.
 
 One ground rule already fixed for when it lands, because it matters to any agent reading this
 file: **agents write the world, never a person's practice.** Character-authored content will

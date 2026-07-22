@@ -160,9 +160,12 @@
 
    SINGLE-DEVICE ONLY. Friend/partner are LOCAL actors you can act-as; networked
    cross-account sharing, sharing a clone with a remote partner, and unattended
-   autonomy are deferred + gated (ROOMS.md §11 / §1 framing decision). The only
-   network is the existing BYOK model calls (agent turns, clone chat, the moderator,
-   the research agent) on the shared hill-climbing-api-key.
+   autonomy are deferred + gated (ROOMS.md §11 / §1 framing decision). Two network
+   paths, both pre-existing suite mechanisms: (1) the BYOK model calls (agent turns,
+   clone chat, the moderator, the research agent) on the shared hill-climbing-api-key,
+   and (2) the world store rides the suite's opt-in E2EE Supabase sync (hc-sync.js)
+   like every other synced app — transport, not a privacy claim (KNOWN_RISKS L51).
+   No cross-account sharing egress exists.
 
    Substrate note: production should ride hc-sync's kind:'log' append-only store
    (union-by-id, LWW-immune). This prototype uses one localStorage blob — fine
@@ -234,14 +237,16 @@ function load(){
   try{ const raw=localStorage.getItem(STATE_KEY); if(raw){ const p=JSON.parse(raw); world={ v:1, onboarded:!!p.onboarded, events:Array.isArray(p.events)?p.events:[] }; } }
   catch(_){ world={ v:1, onboarded:false, events:[] }; }
 }
-function save(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify(world)); }catch(_){} }
+function save(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify(world)); }catch(_){} if(window.HCSync && HCSync.queueBlobPush) HCSync.queueBlobPush(SYNC_BLOB_KEY); }
 
 // emit — the single append point. Both UI handlers and HC actions call action
 // functions that call emit(); nothing appends directly. Append-only: we never
 // mutate or drop a prior event (compaction is itself an event, below).
 function emit(type, payload, opts){
   opts = opts||{};
-  const e = { id:uid(), seq: world.events.length, ts: now(), actor: opts.actor||acting, room: opts.room||null, type, payload:payload||{} };
+  // seq stays unique + monotonic across compactions (don't use array length — compaction renumbers)
+  const seq = world.events.length ? world.events[world.events.length-1].seq + 1 : 0;
+  const e = { id:uid(), seq, ts: now(), actor: opts.actor||acting, room: opts.room||null, type, payload:payload||{} };
   world.events.push(e); save();
   return e;
 }
@@ -373,8 +378,11 @@ function compact(){
   const snapshot=reduceUpTo(cut);
   const summary=compactionSummary(snapshot, cut);
   const head=world.events.slice(0,cut); const tail=world.events.slice(cut);
-  const comp={ id:uid('cmp'), seq:cut, ts:now(), actor:'system', room:null, type:'compaction', payload:{ snapshot, summary, count:head.length } };
-  world.events=[comp].concat(tail.map((e,i)=>Object.assign({},e,{seq:cut+1+i})));
+  // comp sorts before the retained tail; keep the tail's ORIGINAL seqs so seq stays
+  // unique + monotonic across repeated compactions (reduce keys off array order, not seq).
+  const compSeq = head.length ? head[head.length-1].seq : 0;
+  const comp={ id:uid('cmp'), seq:compSeq, ts:now(), actor:'system', room:null, type:'compaction', payload:{ snapshot, summary, count:head.length } };
+  world.events=[comp].concat(tail);
   save();
 }
 
@@ -788,7 +796,7 @@ function renderProfile(root, st){
   root.appendChild(el('p','lede','Your world state — folded from the log. Every edit here appends a new event. An LLM acting as you could make these same edits via window.HC.'));
   // values
   root.appendChild(el('div','sect-h','Values'));
-  st.values.forEach(v=>{ const r=el('div','rule'); r.appendChild(el('div','txt',v.text)); const x=el('button','x','×'); x.onclick=()=>{ removeValue(v.id); render(); }; r.appendChild(x); root.appendChild(r); });
+  st.values.forEach(v=>{ const r=el('div','rule'); r.appendChild(el('div','txt',v.text)); const e=el('button','x','✎'); e.title='edit'; e.onclick=()=>{ const t=prompt('Edit value:', v.text); if(t!=null&&t.trim()){ editValue(v.id,t); render(); } }; r.appendChild(e); const x=el('button','x','×'); x.onclick=()=>{ removeValue(v.id); render(); }; r.appendChild(x); root.appendChild(r); });
   root.appendChild(quickAdder('add a value…', v=>addValue(v)));
   // goals (hierarchy)
   root.appendChild(el('div','sect-h','Goals (hierarchy)'));
@@ -819,6 +827,7 @@ function renderProfile(root, st){
 function goalNode(st,g){
   const li=el('li'); const node=el('div','node');
   node.appendChild(el('span','t',g.text));
+  const ed=el('button','li-x','✎'); ed.title='edit goal'; ed.onclick=()=>{ const t=prompt('Edit goal:', g.text); if(t!=null&&t.trim()){ try{ editGoal(g.id,t); render(); }catch(e){ toast(e.message); } } }; node.appendChild(ed);
   const addSub=el('button','li-x','＋'); addSub.title='add a sub-goal'; addSub.onclick=()=>{ const t=prompt('Sub-goal of "'+g.text+'":'); if(t&&t.trim()){ try{ addGoal(t,g.id); render(); }catch(e){ toast(e.message); } } }; node.appendChild(addSub);
   const x=el('button','li-x','×'); x.onclick=()=>{ if(confirm('Remove "'+g.text+'" and its sub-goals?')){ removeGoal(g.id); render(); } }; node.appendChild(x);
   li.appendChild(node);
@@ -884,7 +893,7 @@ function renderClones(root, st){
   const cur = ttSeq==null? n : ttSeq;
   const sl=el('input'); sl.type='range'; sl.min='1'; sl.max=String(n); sl.value=String(cur); sl.style.width='100%';
   const lab=el('div','muted','viewing the world folded up to event '+cur+' of '+n+(ttSeq==null?' (now)':' (past)'));
-  sl.oninput=()=>{ ttSeq = (Number(sl.value)>=n? null : Number(sl.value)); lab.textContent='viewing the world folded up to event '+(ttSeq==null?n:ttSeq)+' of '+n+(ttSeq==null?' (now)':' (past)'); renderTTPreview(prev, ttSeq==null?n:ttSeq); };
+  sl.oninput=()=>{ ttSeq = (Number(sl.value)>=n? null : Number(sl.value)); lab.textContent='viewing the world folded up to event '+(ttSeq==null?n:ttSeq)+' of '+n+(ttSeq==null?' (now)':' (past)'); renderTTPreview(prev, ttSeq==null?n:ttSeq); spawn.textContent = ttSeq==null? 'Spawn a clone from now' : ('Spawn a clone from event '+ttSeq); };
   tt.appendChild(sl); tt.appendChild(lab);
   const prev=el('div'); prev.style.marginTop='.5rem'; tt.appendChild(prev); renderTTPreview(prev, cur);
   const spawn=el('button','btn small'); spawn.textContent = ttSeq==null? 'Spawn a clone from now' : ('Spawn a clone from event '+ttSeq);
@@ -912,7 +921,7 @@ function renderClones(root, st){
         emit('actor.add',{id, kind:'agent', label:(c.givenName||'Unnamed')+' '+c.familyName, role:'character', owner:'owner'}); toast('Now an actor — place it in a room to take turns.'); render(); };
       row.appendChild(chat); row.appendChild(promote); card.appendChild(row);
     }
-    const x=el('button','btn small ghost','Delete'); x.onclick=()=>{ if(confirm('Delete this clone?')){ removeClone(id); if(st.actors[id])removeActor(id); render(); } }; card.appendChild(x);
+    const x=el('button','btn small ghost','Delete'); x.onclick=()=>{ if(confirm('Delete this clone?')){ removeClone(id); if(st.actors[id])removeActor(id); if(acting===id)acting='owner'; render(); } }; card.appendChild(x);
     root.appendChild(card);
   });
 }
