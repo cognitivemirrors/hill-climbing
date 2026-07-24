@@ -90,7 +90,7 @@
 </head>
 <body>
 <a class="home" href="/index.html" title="Home">◇</a>
-<div class="corner" id="version-label">v0.1 · kin</div>
+<div class="corner" id="version-label">v0.2 · kin</div>
 <button id="menu-btn" title="Menu">⋯</button>
 
 <main class="wrap" id="root"></main>
@@ -109,7 +109,7 @@
    HC surface exposes only the state mutations — the same human/agent split as the
    rest of the suite. All app data is treated as fictional seed data. */
 
-const VERSION       = 'v0.1 · kin';
+const VERSION       = 'v0.2 · kin';
 const STATE_KEY     = 'hill-climbing-kin';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-kin';
 const MODEL         = 'claude-opus-4-8';
@@ -496,7 +496,7 @@ function renderChat(r, c){
     const th=document.querySelector('.thread'); if(th) th.scrollTop=th.scrollHeight;
   };
   send.onclick=go;
-  ta.onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); go(); } };
+  ta.onkeydown=e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); go(); } };
   comp.appendChild(ta); comp.appendChild(send); r.appendChild(comp);
   const th=document.querySelector('.thread'); if(th) th.scrollTop=th.scrollHeight;
 }
