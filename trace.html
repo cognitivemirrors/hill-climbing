@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Trace · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Trace">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Trace (wet lacquer) ────────────────
+         A warm vermilion-rose: pigment still wet on the brush. Sits
+         apart from anime's violet and echo's moonlit blue. */
+      --accent:      hsl(6,78%,70%);
+      --accent-soft: hsla(6,72%,64%,0.5);
+      --accent-glow: hsla(6,78%,56%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    #version-label {
+      position: fixed; top: 22px; left: 62px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    header { max-width: 720px; margin: 0 auto 22px; text-align: center; }
+    header h1 {
+      font-family: var(--font-display); font-weight: normal;
+      font-size: 30px; letter-spacing: 0.04em; color: var(--text);
+    }
+    header p { font-size: 13px; color: var(--mid); margin-top: 4px; letter-spacing: 0.04em; }
+
+    /* ── stage ──────────────────────────────────────────────────── */
+    .stage {
+      position: relative; max-width: 720px; margin: 0 auto;
+      aspect-ratio: 4 / 3; border-radius: 16px; overflow: hidden;
+      border: 1px solid var(--line); background: #06070c;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    }
+    #view { display: block; width: 100%; height: 100%; }
+
+    #rec-badge {
+      position: absolute; top: 12px; left: 12px; display: none;
+      align-items: center; gap: 7px; padding: 5px 11px;
+      border-radius: 999px; background: rgba(10,10,16,0.72);
+      font-size: 11.5px; letter-spacing: 0.08em; color: rgba(255,255,255,0.85);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    #rec-badge.on { display: flex; }
+    #rec-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4d68; animation: blink 1.1s ease infinite; }
+    @keyframes blink { 50% { opacity: 0.25; } }
+
+    .overlay {
+      position: absolute; inset: 0; z-index: 5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 28px; text-align: center;
+      background: rgba(8,9,15,0.9); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    .overlay.hidden { display: none; }
+    .overlay .lens { width: 40px; height: 40px; color: var(--accent-soft); }
+    .overlay h2 { font-family: var(--font-display); font-weight: normal; font-size: 22px; }
+    .overlay p { font-size: 13.5px; color: var(--mid); max-width: 400px; }
+    .overlay .note {
+      display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--dim);
+      border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+    }
+    .overlay .note svg { width: 13px; height: 13px; flex: none; }
+
+    /* ── buttons & chips ────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 140px; height: 44px; border-radius: 22px; padding: 0 24px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.1em;
+      transition: border-color var(--ease), color var(--ease), background var(--ease), opacity var(--ease);
+    }
+    .btn:hover:not(:disabled) { border-color: var(--accent-soft); color: var(--accent); }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); }
+
+    .chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 20px auto 0; max-width: 720px; }
+    .chip {
+      font-family: var(--font-ui); cursor: pointer; font-size: 12px; letter-spacing: 0.08em;
+      padding: 7px 16px; border-radius: 999px; color: var(--mid);
+      border: 1px solid var(--line); background: transparent;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .chip:hover { color: var(--text); border-color: var(--line-strong); }
+    .chip.active { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-glow); }
+
+    .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 18px auto 0; max-width: 720px; }
+    #status { text-align: center; font-size: 11.5px; color: var(--dim); letter-spacing: 0.08em; margin-top: 16px; min-height: 18px; }
+
+    footer {
+      max-width: 560px; margin: 46px auto 0; text-align: center;
+      font-size: 12px; color: var(--dim); line-height: 1.7;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 58px 12px 60px; }
+      #version-label { display: none; }
+      .btn { min-width: 120px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div id="version-label">v0.1 · trace</div>
+
+<header>
+  <h1>Trace</h1>
+  <p>paint with your body — motion is the brush</p>
+</header>
+
+<div class="stage">
+  <canvas id="view" width="720" height="540"></canvas>
+
+  <div id="rec-badge"><span class="dot"></span><span id="rec-time">0:00</span></div>
+
+  <div class="overlay" id="overlay">
+    <svg class="lens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 19c5 0 8-6 8-10a8 8 0 1 0-16 0c0 4 3 10 8 10Z" transform="rotate(45 12 12)"/>
+      <path d="M9.5 14.5c1.5 1.5 3.5 1.5 5 0"/>
+    </svg>
+    <h2 id="ov-title">Leave a wake</h2>
+    <p id="ov-body">The camera watches where you move, and your movement lays down paint.
+      Slow sweeps wash; sharp gestures spark. The painting stays until you clear it —
+      and you can record the making of it as a short film.</p>
+    <div class="note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+      </svg>
+      <span>Everything runs on your device. No video ever leaves this browser.</span>
+    </div>
+    <button class="btn primary" id="start-btn">Enable camera</button>
+  </div>
+</div>
+
+<div class="chips" id="sym-chips" role="group" aria-label="Symmetry">
+  <button class="chip active" data-sym="free">Free</button>
+  <button class="chip" data-sym="mirror">Mirror</button>
+  <button class="chip" data-sym="mandala">Mandala</button>
+</div>
+
+<div class="actions">
+  <button class="btn" id="ghost-btn" disabled>Ghost: on</button>
+  <button class="btn" id="clear-btn" disabled>Clear</button>
+  <button class="btn" id="snap-btn" disabled>Snapshot</button>
+  <button class="btn" id="rec-btn" disabled>Record</button>
+</div>
+
+<div id="status"></div>
+
+<footer>
+  A painting made of movement — nothing to win, nothing kept unless you keep it.
+  Frames are compared and thrown away on your machine; only the paint remains,
+  and only until you clear it.
+</footer>
+
+<script src="/hc-agent.js"></script>
+<script>
+'use strict';
+
+// ── Trace · v0.1 ────────────────────────────────────────────────────────────
+// Paint animations with your body. Per frame:
+//   1. mirror the webcam onto a small work canvas
+//   2. luma-diff against the previous frame → a spatial motion map
+//      (the same frame-differencing idea as the old stillness mode, but
+//       keeping WHERE you moved instead of collapsing it to one number)
+//   3. each moving cell deposits a soft radial dab of paint onto a persistent
+//      paint canvas — stronger motion → bigger, brighter dab; hue drifts
+//      slowly with time so a long session moves through the spectrum
+//   4. composite: dark ground + optional faint camera ghost + the paint
+// No models, no network, no storage. The painting lives in the canvas only.
+
+const VERSION = 'v0.1 · trace';
+document.getElementById('version-label').textContent = VERSION;
+
+// ── Tunables ────────────────────────────────────────────────────────────────
+const WORK_W = 96;            // motion-map resolution (cells across)
+const PIXEL_THRESHOLD = 14;   // luma diff (0..255) that counts as "moved"
+const DAB_ALPHA = 0.09;       // base opacity of one paint dab (additive — dwell should smoulder, not blow out white)
+const HUE_DRIFT = 4.5;        // degrees of hue per second — a slow spectrum walk
+const GHOST_ALPHA = 0.10;     // how present the camera ghost is
+
+// ── DOM ─────────────────────────────────────────────────────────────────────
+const view     = document.getElementById('view');
+const dispCtx  = view.getContext('2d');
+const overlay  = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const ghostBtn = document.getElementById('ghost-btn');
+const clearBtn = document.getElementById('clear-btn');
+const snapBtn  = document.getElementById('snap-btn');
+const recBtn   = document.getElementById('rec-btn');
+const recBadge = document.getElementById('rec-badge');
+const recTime  = document.getElementById('rec-time');
+const statusEl = document.getElementById('status');
+
+// hidden source video + offscreen canvases
+const video = document.createElement('video');
+video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+const work    = document.createElement('canvas');            // small: motion map
+const workCtx = work.getContext('2d', { willReadFrequently: true });
+const paint   = document.createElement('canvas');             // full-res: the painting
+const paintCtx = paint.getContext('2d');
+
+let stream = null, running = false, rafId = 0;
+let prevLuma = null;               // Float32Array of last frame's luma
+let symmetry = 'free';             // 'free' | 'mirror' | 'mandala'
+let ghost = true;                  // faint camera underlay
+let hueBase = 8;                   // wet-lacquer red to start; drifts with time
+let lastT = 0;
+
+function setStatus(t) { statusEl.textContent = t; }
+
+// ── Camera ──────────────────────────────────────────────────────────────────
+async function startCamera() {
+  startBtn.disabled = true;
+  setStatus('Waking the camera…');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+  } catch (err) {
+    startBtn.disabled = false;
+    if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+      showOverlayMessage('Camera blocked',
+        'Your browser blocked camera access. Allow it for this page in the site settings, then reload.');
+    } else if (err && err.name === 'NotFoundError') {
+      showOverlayMessage('No camera found', 'This device does not seem to have a camera available.');
+    } else {
+      showOverlayMessage('Could not start the camera', (err && err.message) ? err.message : 'Unknown error.');
+    }
+    setStatus('');
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  await new Promise(res => {
+    if (video.readyState >= 2) res();
+    else video.onloadedmetadata = res;
+  });
+
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  work.width = WORK_W; work.height = Math.round(WORK_W * vh / vw);
+  const dispW = Math.min(960, vw * 1.5), dispH = Math.round(dispW * vh / vw);
+  view.width = dispW; view.height = dispH;
+  paint.width = dispW; paint.height = dispH;
+  view.style.aspectRatio = vw + ' / ' + vh;
+  document.querySelector('.stage').style.aspectRatio = vw + ' / ' + vh;
+
+  // if the camera drops (unplug / revoke), stop cleanly
+  stream.getVideoTracks()[0].addEventListener('ended', () => {
+    stopRecording();
+    running = false; cancelAnimationFrame(rafId);
+    showOverlayMessage('Camera disconnected', 'The camera stopped. Reload the page to start again.');
+  });
+
+  prevLuma = null;
+  overlay.classList.add('hidden');
+  ghostBtn.disabled = false;
+  clearBtn.disabled = false;
+  snapBtn.disabled = false;
+  recBtn.disabled = false;
+  running = true;
+  lastT = performance.now();
+  setStatus('On-device · painting');
+  frame();
+}
+
+function showOverlayMessage(title, body) {
+  document.getElementById('ov-title').textContent = title;
+  document.getElementById('ov-body').textContent = body;
+  overlay.classList.remove('hidden');
+}
+
+// ── The loop ────────────────────────────────────────────────────────────────
+function frame() {
+  if (!running) return;
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  hueBase = (hueBase + HUE_DRIFT * dt) % 360;
+
+  const w = work.width, h = work.height;
+  // mirrored draw so the wake follows you like a mirror does
+  workCtx.save();
+  workCtx.scale(-1, 1);
+  workCtx.drawImage(video, -w, 0, w, h);
+  workCtx.restore();
+
+  const data = workCtx.getImageData(0, 0, w, h).data;
+  const n = w * h;
+  const luma = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    luma[i] = 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+  }
+
+  if (prevLuma) {
+    const sx = paint.width / w, sy = paint.height / h;
+    paintCtx.globalCompositeOperation = 'lighter';
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        const d = Math.abs(luma[i] - prevLuma[i]);
+        if (d < PIXEL_THRESHOLD) continue;
+        // strength 0..1: how hard this cell moved
+        const s = Math.min(1, (d - PIXEL_THRESHOLD) / 80);
+        dab(x * sx + sx / 2, y * sy + sy / 2, s);
+      }
+    }
+    paintCtx.globalCompositeOperation = 'source-over';
+  }
+  prevLuma = luma;
+
+  // ── composite ──
+  dispCtx.globalAlpha = 1;
+  dispCtx.fillStyle = '#06070c';
+  dispCtx.fillRect(0, 0, view.width, view.height);
+  if (ghost) {
+    dispCtx.save();
+    dispCtx.globalAlpha = GHOST_ALPHA;
+    dispCtx.scale(-1, 1);
+    dispCtx.drawImage(video, -view.width, 0, view.width, view.height);
+    dispCtx.restore();
+  }
+  dispCtx.drawImage(paint, 0, 0);
+
+  rafId = requestAnimationFrame(frame);
+}
+
+// One soft dab of paint, replicated per the symmetry mode.
+// Slow, small motion → tight deep-toned dot; hard motion → wide bright bloom.
+function dab(px, py, s) {
+  const cx = paint.width / 2, cy = paint.height / 2;
+  const pts = [[px, py]];
+  if (symmetry === 'mirror' || symmetry === 'mandala') pts.push([paint.width - px, py]);
+  if (symmetry === 'mandala') {
+    pts.push([px, paint.height - py], [paint.width - px, paint.height - py]);
+  }
+  const r = 3 + s * 14;
+  const hue = (hueBase + (px - cx) / paint.width * 40 + 360) % 360;
+  const alpha = DAB_ALPHA * (0.35 + 0.65 * s);
+  for (const [x, y] of pts) {
+    const g = paintCtx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'hsla(' + hue + ',82%,' + (46 + s * 12) + '%,' + alpha + ')');
+    g.addColorStop(1, 'hsla(' + hue + ',82%,40%,0)');
+    paintCtx.fillStyle = g;
+    paintCtx.beginPath();
+    paintCtx.arc(x, y, r, 0, Math.PI * 2);
+    paintCtx.fill();
+  }
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+function setSymmetry(mode) {
+  if (mode !== 'free' && mode !== 'mirror' && mode !== 'mandala') return false;
+  symmetry = mode;
+  document.querySelectorAll('#sym-chips .chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.sym === mode));
+  return true;
+}
+document.querySelectorAll('#sym-chips .chip').forEach(c =>
+  c.addEventListener('click', () => setSymmetry(c.dataset.sym)));
+
+function toggleGhost() {
+  ghost = !ghost;
+  ghostBtn.textContent = 'Ghost: ' + (ghost ? 'on' : 'off');
+}
+ghostBtn.addEventListener('click', toggleGhost);
+
+function clearPainting() {
+  paintCtx.clearRect(0, 0, paint.width, paint.height);
+  setStatus('Cleared — a fresh ground');
+}
+clearBtn.addEventListener('click', clearPainting);
+
+// ── Snapshot ────────────────────────────────────────────────────────────────
+function snapshot() {
+  if (!running) return;
+  view.toBlob(blob => {
+    if (!blob) return;
+    downloadBlob(blob, 'trace-' + stamp() + '.png');
+    setStatus('Snapshot saved');
+  }, 'image/png');
+}
+snapBtn.addEventListener('click', snapshot);
+
+// ── Recording (MediaRecorder over the display canvas stream) ────────────────
+let recorder = null, recChunks = [], recStart = 0, recTimer = 0;
+function pickMime() {
+  const opts = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  for (const m of opts) if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+function toggleRecording() { recorder ? stopRecording() : startRecording(); }
+recBtn.addEventListener('click', toggleRecording);
+
+function startRecording() {
+  if (!running || recorder) return;
+  if (!window.MediaRecorder || !view.captureStream) {
+    setStatus('Recording is not supported in this browser'); return;
+  }
+  const mime = pickMime();
+  const capStream = view.captureStream(30);
+  try {
+    recorder = mime ? new MediaRecorder(capStream, { mimeType: mime }) : new MediaRecorder(capStream);
+  } catch (e) { setStatus('Could not start recording'); recorder = null; return; }
+
+  recChunks = [];
+  recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(recChunks, { type: mime || 'video/webm' });
+    if (blob.size) downloadBlob(blob, 'trace-' + stamp() + '.webm');
+    recChunks = [];
+  };
+  recorder.start();
+
+  recStart = performance.now();
+  recBadge.classList.add('on');
+  recBtn.textContent = 'Stop';
+  recBtn.style.borderColor = '#ff4d68';
+  updateRecTime();
+  recTimer = setInterval(updateRecTime, 250);
+}
+function stopRecording() {
+  if (!recorder) return;
+  try { recorder.stop(); } catch (e) {}
+  recorder = null;
+  clearInterval(recTimer);
+  recBadge.classList.remove('on');
+  recBtn.textContent = 'Record';
+  recBtn.style.borderColor = '';
+  setStatus('Film saved');
+}
+function updateRecTime() {
+  const s = Math.floor((performance.now() - recStart) / 1000);
+  recTime.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+// ── Utils ───────────────────────────────────────────────────────────────────
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function stamp() {
+  const d = new Date(), p = x => String(x).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+startBtn.addEventListener('click', startCamera);
+
+// ── Agent interface ─────────────────────────────────────────────────────────
+if (window.HC) HC.register({
+  app: 'trace',
+  version: VERSION,
+  title: 'Trace',
+  description: 'Paint animations with your body — webcam motion deposits paint onto a persistent canvas (free / mirror / mandala symmetry); snapshot the painting or record the making of it. No stored state; the painting lives only in the canvas.',
+  stores: [],
+  actions: {
+    startCamera: {
+      description: 'Enable the webcam and begin painting from motion, same as the Enable camera button.',
+      params: {},
+      handler: async () => { await startCamera(); return { ok: true }; },
+    },
+    setSymmetry: {
+      description: 'Switch the symmetry mode, same as clicking a symmetry chip.',
+      params: { mode: "'free'|'mirror'|'mandala' — required" },
+      handler: (p) => {
+        if (!setSymmetry(p && p.mode)) throw new Error('unknown symmetry "' + (p && p.mode) + '"');
+        return { ok: true };
+      },
+    },
+    toggleGhost: {
+      description: 'Toggle the faint camera underlay, same as the Ghost button.',
+      params: {},
+      handler: () => { toggleGhost(); return { ok: true, ghost: ghost }; },
+    },
+    clearPainting: {
+      description: 'Clear the paint canvas to a fresh ground, same as the Clear button.',
+      params: {},
+      handler: () => { clearPainting(); return { ok: true }; },
+    },
+    snapshot: {
+      description: 'Save the current composite as a PNG download, same as the Snapshot button. No-ops if the camera is not running.',
+      params: {},
+      handler: () => { snapshot(); return { ok: true }; },
+    },
+    toggleRecording: {
+      description: 'Start or stop recording the painting being made (WebM download on stop), same as the Record button.',
+      params: {},
+      handler: () => { toggleRecording(); return { ok: true }; },
+    },
+  },
+});
+</script>
+</body>
+</html>

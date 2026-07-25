@@ -134,6 +134,11 @@ Each app is a single page at the site root. State keys listed are what HC regist
 - garden.html — a zen stone-garden Sokoban, twelve levels, unlimited undo, no clock. Store:
   hill-climbing-garden (device-local). Actions: openLevel, move, undo, restart. Completion
   comes only from actually solving — same as a human.
+- trace.html — paint animations with your body: webcam motion deposits paint onto a
+  persistent canvas (free / mirror / mandala symmetry); snapshot the painting or record the
+  making of it (WebM). No persistent state and no network — frames are compared and thrown
+  away on-device; the painting lives only in the canvas until cleared. Actions: startCamera,
+  setSymmetry, toggleGhost, clearPainting, snapshot, toggleRecording.
 - anime.html — a webcam cel-shading experiment. No persistent state; frames are made and
   thrown away. Actions: startCamera, snapshot, toggleRecording, setPreset, setParam —
   in-memory filter state only; nothing persists.
