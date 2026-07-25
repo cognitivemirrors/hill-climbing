@@ -159,7 +159,7 @@
     <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
   </svg>
 </a>
-<div id="version-label">v0.1 · trace</div>
+<div id="version-label">v0.2 · trace</div>
 
 <header>
   <h1>Trace</h1>
@@ -178,8 +178,9 @@
     </svg>
     <h2 id="ov-title">Leave a wake</h2>
     <p id="ov-body">The camera watches where you move, and your movement lays down paint.
-      Slow sweeps wash; sharp gestures spark. The painting stays until you clear it —
-      and you can record the making of it as a short film.</p>
+      <strong>Brush</strong> follows your strongest gesture in one stroke — pause and the pen
+      lifts. <strong>Wake</strong> lets your whole body wash across the canvas. The painting
+      stays until you clear it — and you can record the making of it as a short film.</p>
     <div class="note">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
@@ -190,7 +191,12 @@
   </div>
 </div>
 
-<div class="chips" id="sym-chips" role="group" aria-label="Symmetry">
+<div class="chips" id="mode-chips" role="group" aria-label="Paint mode">
+  <button class="chip active" data-paint="brush">Brush</button>
+  <button class="chip" data-paint="wake">Wake</button>
+</div>
+
+<div class="chips" id="sym-chips" role="group" aria-label="Symmetry" style="margin-top:10px;">
   <button class="chip active" data-sym="free">Free</button>
   <button class="chip" data-sym="mirror">Mirror</button>
   <button class="chip" data-sym="mandala">Mandala</button>
@@ -215,27 +221,36 @@
 <script>
 'use strict';
 
-// ── Trace · v0.1 ────────────────────────────────────────────────────────────
+// ── Trace · v0.2 ────────────────────────────────────────────────────────────
 // Paint animations with your body. Per frame:
 //   1. mirror the webcam onto a small work canvas
 //   2. luma-diff against the previous frame → a spatial motion map
 //      (the same frame-differencing idea as the old stillness mode, but
 //       keeping WHERE you moved instead of collapsing it to one number)
-//   3. each moving cell deposits a soft radial dab of paint onto a persistent
-//      paint canvas — stronger motion → bigger, brighter dab; hue drifts
+//   3. paint, in one of two modes:
+//      · Brush (default) — the motion map condenses to its strongest cluster
+//        (usually a hand) and a smoothed continuous stroke follows it; no
+//        motion above the floor = the pen lifts. Control.
+//      · Wake — every coherently-moving cell deposits a soft radial dab
+//        (isolated noise cells are gated out). The whole-body wash.
+//      Either way: stronger motion → bigger/brighter marks; hue drifts
 //      slowly with time so a long session moves through the spectrum
 //   4. composite: dark ground + optional faint camera ghost + the paint
+//      (+ in Brush mode, a cursor ring showing where the brush is)
 // No models, no network, no storage. The painting lives in the canvas only.
 
-const VERSION = 'v0.1 · trace';
+const VERSION = 'v0.2 · trace';
 document.getElementById('version-label').textContent = VERSION;
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 const WORK_W = 96;            // motion-map resolution (cells across)
 const PIXEL_THRESHOLD = 14;   // luma diff (0..255) that counts as "moved"
-const DAB_ALPHA = 0.09;       // base opacity of one paint dab (additive — dwell should smoulder, not blow out white)
+const DAB_ALPHA = 0.09;       // base opacity of one wake dab (additive — dwell should smoulder, not blow out white)
 const HUE_DRIFT = 4.5;        // degrees of hue per second — a slow spectrum walk
-const GHOST_ALPHA = 0.10;     // how present the camera ghost is
+const GHOST_ALPHA = 0.16;     // how present the camera ghost is
+const BRUSH_FLOOR = 20;       // peak diff needed to keep the brush down (below = pen lifts)
+const BRUSH_RADIUS = 10;      // cells around the peak that pull the brush centroid
+const BRUSH_EASE = 0.35;      // position smoothing (higher = snappier, lower = silkier)
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
 const view     = document.getElementById('view');
@@ -260,10 +275,13 @@ const paintCtx = paint.getContext('2d');
 
 let stream = null, running = false, rafId = 0;
 let prevLuma = null;               // Float32Array of last frame's luma
+let paintMode = 'brush';           // 'brush' | 'wake'
 let symmetry = 'free';             // 'free' | 'mirror' | 'mandala'
 let ghost = true;                  // faint camera underlay
 let hueBase = 8;                   // wet-lacquer red to start; drifts with time
 let lastT = 0;
+let brushPos = null;               // smoothed [x,y] on the paint canvas, null = pen up
+let brushW = 6;                    // smoothed stroke width
 
 function setStatus(t) { statusEl.textContent = t; }
 
@@ -320,7 +338,7 @@ async function startCamera() {
   recBtn.disabled = false;
   running = true;
   lastT = performance.now();
-  setStatus('On-device · painting');
+  setStatus('On-device · ' + paintMode);
   frame();
 }
 
@@ -353,19 +371,8 @@ function frame() {
   }
 
   if (prevLuma) {
-    const sx = paint.width / w, sy = paint.height / h;
-    paintCtx.globalCompositeOperation = 'lighter';
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x;
-        const d = Math.abs(luma[i] - prevLuma[i]);
-        if (d < PIXEL_THRESHOLD) continue;
-        // strength 0..1: how hard this cell moved
-        const s = Math.min(1, (d - PIXEL_THRESHOLD) / 80);
-        dab(x * sx + sx / 2, y * sy + sy / 2, s);
-      }
-    }
-    paintCtx.globalCompositeOperation = 'source-over';
+    if (paintMode === 'brush') brushPass(luma, prevLuma, w, h);
+    else wakePass(luma, prevLuma, w, h);
   }
   prevLuma = luma;
 
@@ -382,22 +389,62 @@ function frame() {
   }
   dispCtx.drawImage(paint, 0, 0);
 
+  // brush cursor — see where the pen is before you commit paint
+  if (paintMode === 'brush' && brushPos) {
+    dispCtx.beginPath();
+    dispCtx.arc(brushPos[0], brushPos[1], brushW + 5, 0, Math.PI * 2);
+    dispCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    dispCtx.lineWidth = 1.5;
+    dispCtx.stroke();
+  }
+
   rafId = requestAnimationFrame(frame);
 }
 
-// One soft dab of paint, replicated per the symmetry mode.
-// Slow, small motion → tight deep-toned dot; hard motion → wide bright bloom.
-function dab(px, py, s) {
-  const cx = paint.width / 2, cy = paint.height / 2;
+// A point, replicated per the symmetry mode. Parallel arrays: transforming two
+// points gives matching pairs at each index (needed for stroke segments).
+function symPoints(px, py) {
   const pts = [[px, py]];
   if (symmetry === 'mirror' || symmetry === 'mandala') pts.push([paint.width - px, py]);
   if (symmetry === 'mandala') {
     pts.push([px, paint.height - py], [paint.width - px, paint.height - py]);
   }
+  return pts;
+}
+
+// ── Wake — every coherently-moving cell deposits a dab ─────────────────────
+// A cell only paints if at least two of its neighbours also moved: isolated
+// sensor-noise flickers stop painting, coherent body movement still does.
+let movedMask = null;
+function wakePass(luma, prev, w, h) {
+  const n = w * h;
+  if (!movedMask || movedMask.length !== n) movedMask = new Uint8Array(n);
+  for (let i = 0; i < n; i++) movedMask[i] = Math.abs(luma[i] - prev[i]) >= PIXEL_THRESHOLD ? 1 : 0;
+  const sx = paint.width / w, sy = paint.height / h;
+  paintCtx.globalCompositeOperation = 'lighter';
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (!movedMask[i]) continue;
+      const nb = movedMask[i - 1] + movedMask[i + 1] + movedMask[i - w] + movedMask[i + w]
+               + movedMask[i - w - 1] + movedMask[i - w + 1] + movedMask[i + w - 1] + movedMask[i + w + 1];
+      if (nb < 2) continue;
+      const d = Math.abs(luma[i] - prev[i]);
+      // strength 0..1: how hard this cell moved
+      const s = Math.min(1, (d - PIXEL_THRESHOLD) / 80);
+      dab(x * sx + sx / 2, y * sy + sy / 2, s);
+    }
+  }
+  paintCtx.globalCompositeOperation = 'source-over';
+}
+
+// One soft dab of paint, replicated per the symmetry mode.
+// Slow, small motion → tight deep-toned dot; hard motion → wide bright bloom.
+function dab(px, py, s) {
   const r = 3 + s * 14;
-  const hue = (hueBase + (px - cx) / paint.width * 40 + 360) % 360;
+  const hue = (hueBase + (px - paint.width / 2) / paint.width * 40 + 360) % 360;
   const alpha = DAB_ALPHA * (0.35 + 0.65 * s);
-  for (const [x, y] of pts) {
+  for (const [x, y] of symPoints(px, py)) {
     const g = paintCtx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, 'hsla(' + hue + ',82%,' + (46 + s * 12) + '%,' + alpha + ')');
     g.addColorStop(1, 'hsla(' + hue + ',82%,40%,0)');
@@ -408,7 +455,81 @@ function dab(px, py, s) {
   }
 }
 
+// ── Brush — one smoothed stroke follows the strongest motion cluster ────────
+function brushPass(luma, prev, w, h) {
+  const n = w * h;
+  // 1. peak cell
+  let best = 0, bi = -1;
+  for (let i = 0; i < n; i++) {
+    const d = Math.abs(luma[i] - prev[i]);
+    if (d > best) { best = d; bi = i; }
+  }
+  if (best < BRUSH_FLOOR) { brushPos = null; return; }   // pen up
+
+  // 2. weighted centroid of moving cells near the peak (locks onto the hand,
+  //    not the whole body)
+  const bx = bi % w, by = (bi / w) | 0;
+  let sxw = 0, syw = 0, sw = 0;
+  for (let y = Math.max(0, by - BRUSH_RADIUS); y <= Math.min(h - 1, by + BRUSH_RADIUS); y++) {
+    for (let x = Math.max(0, bx - BRUSH_RADIUS); x <= Math.min(w - 1, bx + BRUSH_RADIUS); x++) {
+      const d = Math.abs(luma[y * w + x] - prev[y * w + x]);
+      if (d < PIXEL_THRESHOLD) continue;
+      sxw += x * d; syw += y * d; sw += d;
+    }
+  }
+  if (!sw) { brushPos = null; return; }
+  const tx = (sxw / sw + 0.5) * (paint.width / w);
+  const ty = (syw / sw + 0.5) * (paint.height / h);
+  const s = Math.min(1, (best - BRUSH_FLOOR) / 90);
+  const targetW = 4 + s * 16;
+
+  if (!brushPos) {                                        // pen down — new stroke
+    brushPos = [tx, ty];
+    brushW = targetW;
+    return;
+  }
+  // teleport guard: the strongest cluster jumped across the frame (hand swap,
+  // someone walked by) — lift and re-place rather than slash across the canvas
+  const jump = Math.hypot(tx - brushPos[0], ty - brushPos[1]);
+  if (jump > paint.width * 0.4) { brushPos = [tx, ty]; brushW = targetW; return; }
+
+  const px0 = brushPos[0], py0 = brushPos[1];
+  brushPos = [px0 + (tx - px0) * BRUSH_EASE, py0 + (ty - py0) * BRUSH_EASE];
+  brushW += (targetW - brushW) * 0.25;
+
+  const hue = (hueBase + (brushPos[0] - paint.width / 2) / paint.width * 40 + 360) % 360;
+  const a = symPoints(px0, py0), b = symPoints(brushPos[0], brushPos[1]);
+  paintCtx.globalCompositeOperation = 'lighter';
+  paintCtx.lineCap = 'round'; paintCtx.lineJoin = 'round';
+  for (let i = 0; i < a.length; i++) {
+    // wide soft halo + brighter core = a wet, glowing stroke
+    paintCtx.beginPath();
+    paintCtx.moveTo(a[i][0], a[i][1]); paintCtx.lineTo(b[i][0], b[i][1]);
+    paintCtx.strokeStyle = 'hsla(' + hue + ',82%,46%,0.10)';
+    paintCtx.lineWidth = brushW * 2.4;
+    paintCtx.stroke();
+    paintCtx.beginPath();
+    paintCtx.moveTo(a[i][0], a[i][1]); paintCtx.lineTo(b[i][0], b[i][1]);
+    paintCtx.strokeStyle = 'hsla(' + hue + ',85%,' + (50 + s * 14) + '%,0.4)';
+    paintCtx.lineWidth = brushW;
+    paintCtx.stroke();
+  }
+  paintCtx.globalCompositeOperation = 'source-over';
+}
+
 // ── Controls ────────────────────────────────────────────────────────────────
+function setPaintMode(mode) {
+  if (mode !== 'brush' && mode !== 'wake') return false;
+  paintMode = mode;
+  brushPos = null;   // pen lifts across a mode switch
+  document.querySelectorAll('#mode-chips .chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.paint === mode));
+  if (running) setStatus('On-device · ' + mode);
+  return true;
+}
+document.querySelectorAll('#mode-chips .chip').forEach(c =>
+  c.addEventListener('click', () => setPaintMode(c.dataset.paint)));
+
 function setSymmetry(mode) {
   if (mode !== 'free' && mode !== 'mirror' && mode !== 'mandala') return false;
   symmetry = mode;
@@ -514,13 +635,21 @@ if (window.HC) HC.register({
   app: 'trace',
   version: VERSION,
   title: 'Trace',
-  description: 'Paint animations with your body — webcam motion deposits paint onto a persistent canvas (free / mirror / mandala symmetry); snapshot the painting or record the making of it. No stored state; the painting lives only in the canvas.',
+  description: 'Paint animations with your body — webcam motion paints onto a persistent canvas. Brush mode: one smoothed stroke follows the strongest motion cluster (pause = pen up). Wake mode: every coherently-moving cell deposits paint. Free / mirror / mandala symmetry; snapshot the painting or record the making of it. No stored state; the painting lives only in the canvas.',
   stores: [],
   actions: {
     startCamera: {
       description: 'Enable the webcam and begin painting from motion, same as the Enable camera button.',
       params: {},
       handler: async () => { await startCamera(); return { ok: true }; },
+    },
+    setPaintMode: {
+      description: 'Switch between the Brush (single stroke follows strongest motion) and Wake (whole-body wash) paint modes, same as clicking a mode chip.',
+      params: { mode: "'brush'|'wake' — required" },
+      handler: (p) => {
+        if (!setPaintMode(p && p.mode)) throw new Error('unknown paint mode "' + (p && p.mode) + '"');
+        return { ok: true };
+      },
     },
     setSymmetry: {
       description: 'Switch the symmetry mode, same as clicking a symmetry chip.',
