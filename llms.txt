@@ -1,7 +1,7 @@
 # Hill Climbing
 
 > A suite of contemplative practice apps — meditation, breathwork, journaling, cooking & tasting,
-> comedy, calibration, goals, workouts — plus two quiet games, behind one hub.
+> comedy, calibration, goals, workouts, singing — plus two quiet games, behind one hub.
 > Single-file HTML apps, no build, no backend of our own. Everything below is for you, an agent
 > acting on behalf of the person who uses this suite. Humans and agents are first-class peers
 > here: every state mutation you can make routes through the same code path a human tap does,
@@ -122,6 +122,17 @@ Each app is a single page at the site root. State keys listed are what HC regist
   (synced; weights canonically in lbs). Actions: startWorkout, finishWorkout, discardWorkout,
   addExercise, addExerciseToWorkout, addSet, removeSet, removeEntry, toggleDone, setValue,
   startTimer, logTime, deleteWorkout, toggleUnits, deleteEverything.
+- sing.html — learn-to-sing practice: a 10-level ladder of small vocal exercises (breath →
+  pitch-matching → phrases by ear → whole songs → performing) climbed by self-reported
+  outcomes, plus a songbook of songs being learned. In-exercise instruments: reference bells
+  (the suite's pentatonic strike) and a live microphone tuner — mic audio is analysed
+  frame-by-frame on-device and discarded, never recorded, stored, or sent; nothing the tuner
+  detects is written to state or moves the ladder. A once-per-visit warmup gate precedes the
+  first exercise (care, not tracking — warmups are never recorded or scored). Store:
+  hill-climbing-sing (synced). Actions: newChallenge, warmedUp, skipChallenge, tooEasy,
+  sangIt, reportOutcome, leaveTrying, playReference, startTuner, stopTuner, addSong,
+  toggleSongReady, deleteSong. Outcome-recording rules apply: record only what the person
+  reports, including songbook "can sing it through" stars.
 - remind.html — a plain reminders list you log to yourself: text + an optional local due
   datetime ("YYYY-MM-DDTHH:mm", or null for "someday"), grouped Overdue / Today / Upcoming /
   Someday / Done. No streaks or nagging. Store: hill-climbing-remind (synced). Actions:

@@ -5,9 +5,9 @@
 
    Loaded as a CLASSIC <script> (like hc-sync.js / hc-sync-chip.js), AFTER
    hc-sync.js and BEFORE each app's own script, so it can register its sync
-   store before the app calls HCSync.init(). Loaded by the seven practice apps
+   store before the app calls HCSync.init(). Loaded by the eight practice apps
    that log usage (meditate · breathe · nourish · levity · foresee · climb ·
-   train — Nourish logs both its cook and taste sessions), the hub, and
+   train · sing — Nourish logs both its cook and taste sessions), the hub, and
    companion (read-only).
 
    ── Why a log store, not the blob everything else uses ──────────────────────

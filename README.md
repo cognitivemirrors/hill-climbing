@@ -1,6 +1,6 @@
 # Hill Climbing
 
-Eleven small practices — plus two quiet games — grown into **Governance, the Game**, a public-data art project (see `STATEMENT.md`). A single static site (installable as a PWA), no build step, no backend of our own, no account required. A few clearly-marked features can reach the network **only if you turn them on** (see [State & data](#state--data)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
+Twelve small practices — plus two quiet games — grown into **Governance, the Game**, a public-data art project (see `STATEMENT.md`). A single static site (installable as a PWA), no build step, no backend of our own, no account required. A few clearly-marked features can reach the network **only if you turn them on** (see [State & data](#state--data)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
 
 A landing **hub** (`index.html`) links to the practices:
 
@@ -14,6 +14,7 @@ A landing **hub** (`index.html`) links to the practices:
 | **Foresee** | `foresee.html` | Calibration training — one-line predictions about your own life with stated confidence, resolved against reality and Brier-scored into the ladder. |
 | **Climb** | `climb.html` | A goals-and-steps tracker with an honest, on-device history of your own follow-through. No due dates, points, or streaks by design. |
 | **Train** | `train.html` | A workout logger — exercises and sets with quiet progressive-overload defaults. |
+| **Sing** | `sing.html` | Learn to sing by climbing a 10-level ladder of small vocal exercises — breath, pitch-matching, phrases by ear, whole songs, performing — with reference bells and an optional live microphone tuner (heard on-device, never recorded), plus a songbook of songs you're learning. |
 | **Echo** | `echo.html` | A listening game: five stones voice a growing bell phrase you tap back. No fail state; one quiet record. |
 | **Garden** | `garden.html` | A zen stone-garden Sokoban — twelve levels, unlimited undo, no clock. |
 | **Council** | `council.html` | An LLM "board of directors" you bring a decision to — four directors and a Chair (now a mode of Companion; the old URL still lands there). Uses your own Anthropic API key. |
@@ -26,7 +27,7 @@ The hub also shows a quiet weekly-usage dashboard (which practices you touched e
 
 Open the hub URL in a modern browser and pick a practice. Each app links back to the hub via the home icon, top-left. Install to your home screen (PWA) for a full-screen, offline experience.
 
-Most apps need nothing but the page: **Meditate**, **Breathe**, **Nourish**, **Levity**, **Foresee**, **Climb**, and **Train** all run without a camera; **Reflect** is just writing. **Anime** needs a camera. The AI apps (**Council**, **Companion**, and Nourish's optional chef mode) need your own Anthropic API key, which you paste once and it's stored locally.
+Most apps need nothing but the page: **Meditate**, **Breathe**, **Nourish**, **Levity**, **Foresee**, **Climb**, and **Train** all run without a camera; **Reflect** is just writing. **Anime** needs a camera. **Sing**'s optional tuner asks for the microphone — heard live for pitch on-device, never recorded or sent. The AI apps (**Council**, **Companion**, and Nourish's optional chef mode) need your own Anthropic API key, which you paste once and it's stored locally.
 
 ## Devices
 

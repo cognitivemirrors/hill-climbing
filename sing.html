@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0b12">
+  <title>Sing · Hill Climbing</title>
+  <!-- ── PWA: installable app shell ───────────────────────────── -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Sing">
+  <style>
+    :root {
+      /* ── Hill Climbing — shared design tokens ─────────────────── */
+      --bg-base: #0a0b12;
+      --panel:   rgba(255,255,255,0.04);
+      --line:    rgba(255,255,255,0.10);
+      --line-strong: rgba(255,255,255,0.20);
+      --text:  rgba(255,255,255,0.86);
+      --mid:   rgba(255,255,255,0.55);
+      --dim:   rgba(255,255,255,0.34);
+      --faint: rgba(255,255,255,0.16);
+      --font-display: Georgia, 'Times New Roman', serif;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      --radius-pill: 999px;
+      --ease: 0.25s ease;
+      /* ── Per-practice accent — Sing (an orchid) ───────────────────
+         Sits between Anime's violet (288°) and Levity's rose (348°):
+         a voice raised in a dark room. Distinct from every sibling. */
+      --accent:      hsl(315,64%,70%);
+      --accent-soft: hsla(315,58%,64%,0.5);
+      --accent-glow: hsla(315,64%,56%,0.16);
+      --bg: var(--bg-base);        /* legacy alias */
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-base); color: var(--text); }
+    body {
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      padding: 64px 20px 80px;
+      background:
+        radial-gradient(ellipse 120% 48% at 50% -6%, var(--accent-glow), transparent 60%) fixed,
+        var(--bg-base);
+    }
+
+    /* ── top bar ────────────────────────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 10;
+      background: linear-gradient(var(--bg) 55%, rgba(12,14,20,0));
+      pointer-events: none;
+    }
+    .corner {
+      position: fixed; top: 16px; font-size: 11px; color: var(--dim);
+      letter-spacing: 0.06em; z-index: 11;
+    }
+    #version-label { top: 22px; left: 62px; }
+
+    /* Corner menu — a single icon that opens a small data-management dropdown. */
+    #menu { position: fixed; top: 11px; right: 18px; z-index: 12; }
+    #menu-btn {
+      width: 34px; height: 34px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); background: transparent; cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #menu-btn:hover, #menu.open #menu-btn { color: var(--accent); border-color: var(--accent-soft); }
+    #menu-btn svg { width: 16px; height: 16px; display: block; }
+    #menu-panel {
+      position: absolute; top: 42px; right: 0; width: 232px;
+      background: rgba(20,20,34,0.97); border: 1px solid var(--line);
+      border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 8px; animation: fadeUp 0.18s ease;
+    }
+    .menu-head {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim); padding: 8px 10px 6px;
+    }
+    .menu-item {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); cursor: pointer;
+      font-family: var(--font-ui); transition: background 0.15s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.06); }
+    .menu-item-title { font-size: 14px; letter-spacing: 0.02em; }
+    .menu-item-sub { font-size: 11px; color: var(--dim); }
+    .menu-note { font-size: 10.5px; color: var(--faint); padding: 8px 10px 4px; line-height: 1.5; }
+
+    /* Home / all-practices link — returns to the hub. */
+    #home-link {
+      position: fixed; top: 11px; left: 18px; z-index: 12;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--dim); text-decoration: none;
+      cursor: pointer; user-select: none;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #home-link:hover { color: var(--accent); border-color: var(--accent-soft); }
+    #home-link svg { width: 16px; height: 16px; display: block; }
+
+    #mode-nav {
+      position: fixed; top: 11px; left: 50%; transform: translateX(-50%); z-index: 11;
+      display: flex; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 3px; gap: 2px;
+    }
+    .mode-btn {
+      padding: 5px 15px; border-radius: 14px; border: none; background: transparent;
+      color: var(--dim); font-size: 11px; letter-spacing: 0.07em; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    main { max-width: 600px; margin: 0 auto; }
+    .panel { animation: fadeUp 0.35s ease; }
+
+    /* ── shared buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-ui); cursor: pointer;
+      min-width: 168px; height: 46px; border-radius: 23px; padding: 0 28px;
+      border: 1.5px solid rgba(255,255,255,0.24); background: transparent; color: var(--text);
+      font-size: 13px; letter-spacing: 0.12em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.05); }
+    .btn:disabled { opacity: 0.34; cursor: default; }
+    .btn.primary { border-color: var(--accent-soft); color: var(--accent); }
+    .btn.primary:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); }
+    .btn.ghost {
+      min-width: 0; height: auto; padding: 9px 12px; border: none;
+      color: var(--dim); font-size: 12px; letter-spacing: 0.08em;
+    }
+    .btn.ghost:hover:not(:disabled) { color: var(--text); background: transparent; }
+
+    /* ── home panel ─────────────────────────────────────────────── */
+    #home-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); margin-bottom: 26px; }
+
+    /* the climb — ten rungs, current highlighted, climbed ones filled */
+    .ladder { display: flex; gap: 6px; align-items: flex-end; height: 48px; margin-bottom: 28px; }
+    .rung {
+      width: 16px; border-radius: 4px; background: var(--faint);
+      transition: background 0.4s ease, height 0.4s ease;
+    }
+    .rung.climbed { background: var(--accent-soft); }
+    .rung.current { background: var(--accent); box-shadow: 0 0 18px var(--accent-glow); }
+
+    .level-num {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 3.1rem; line-height: 1; color: var(--text);
+      text-shadow: 0 0 36px var(--accent-glow); margin-bottom: 8px;
+    }
+    .level-theme {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1.05rem; color: var(--mid); margin-bottom: 22px;
+    }
+    .home-stats { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-bottom: 6px; }
+    .home-ahead { font-size: 11px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 34px; }
+    .home-ahead b { color: var(--accent); font-weight: 400; }
+    .home-hint { margin-top: 22px; font-size: 11.5px; color: var(--faint); line-height: 1.6; max-width: 320px; }
+
+    /* ── warmup panel ───────────────────────────────────────────── */
+    #warmup-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 14px; }
+    .warm-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.7rem;
+      line-height: 1.25; color: var(--text); margin: 10px 0 24px;
+    }
+    .warm-steps { max-width: 420px; text-align: left; margin-bottom: 24px; }
+    .warm-steps ol { margin: 0; padding-left: 24px; }
+    .warm-steps li { font-size: 14px; line-height: 1.62; color: var(--mid); margin-bottom: 12px; padding-left: 4px; }
+    .warm-steps li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
+    .warm-note {
+      font-family: var(--font-display); font-style: italic; font-size: 13.5px;
+      line-height: 1.62; color: var(--mid); max-width: 400px;
+      border-left: 2px solid var(--accent-soft); padding-left: 14px; text-align: left;
+      margin-bottom: 30px;
+    }
+    .warm-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+    /* ── challenge card ─────────────────────────────────────────── */
+    .card {
+      width: 100%; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 22px 24px 24px; animation: fadeUp 0.35s ease;
+    }
+    .card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .skill-tag {
+      font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 999px; padding: 4px 11px;
+    }
+    .time-chip { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; white-space: nowrap; }
+    .card-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.55rem;
+      line-height: 1.25; color: var(--text); margin-bottom: 18px;
+    }
+    .block-label { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+    .challenge-brief { font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 20px; }
+    .info-block { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+    .info-block p { font-size: 13.5px; line-height: 1.62; color: var(--mid); }
+    .info-block.tell p { color: var(--text); }
+    .info-block.tell .block-label { color: var(--accent); }
+    .info-block.steps ol { margin: 0; padding-left: 22px; }
+    .info-block.steps li { font-size: 13.5px; line-height: 1.6; color: var(--mid); margin-bottom: 8px; padding-left: 4px; }
+    .info-block.steps li:last-child { margin-bottom: 0; }
+    .info-block.steps li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+    /* ── the instruments: reference bells + tuner ───────────────── */
+    .tools { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+    .tools .block-label { color: var(--accent); }
+    .tools-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+    .tool-btn {
+      font-family: var(--font-ui); cursor: pointer;
+      padding: 8px 16px; border-radius: 999px;
+      border: 1px solid var(--line-strong); background: transparent; color: var(--text);
+      font-size: 12px; letter-spacing: 0.06em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .tool-btn:hover { border-color: var(--accent-soft); }
+    .tool-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    .meter { margin: 14px 0 4px; }
+    .meter-note {
+      font-family: var(--font-display); font-size: 2rem; line-height: 1.1;
+      color: var(--text); text-align: center; margin-bottom: 8px;
+      transition: text-shadow 0.2s ease, color 0.2s ease;
+    }
+    .meter.lit .meter-note { color: var(--accent); text-shadow: 0 0 24px var(--accent-glow); }
+    .meter-band {
+      position: relative; height: 10px; max-width: 260px; margin: 0 auto 8px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    }
+    .meter-center {
+      position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1.5px;
+      background: var(--line-strong); transform: translateX(-50%);
+    }
+    .meter-needle {
+      position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
+      background: var(--dim); transform: translate(-50%, -50%);
+      transition: left 0.12s linear, background 0.2s ease, opacity 0.3s ease;
+    }
+    .meter.lit .meter-needle { background: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+    .meter.idle .meter-needle { opacity: 0; }
+    .meter-caption {
+      font-size: 11px; color: var(--dim); letter-spacing: 0.06em; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .tools-note { font-size: 11px; color: var(--faint); line-height: 1.6; margin-top: 10px; }
+
+    .card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 18px; margin-top: 26px; }
+    #too-easy-btn { color: var(--faint); }
+    #too-easy-btn:hover:not(:disabled) { color: var(--accent); }
+
+    /* ── trying / report panel ──────────────────────────────────── */
+    #trying-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 8px; }
+    .try-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; }
+    .try-title {
+      font-family: var(--font-display); font-weight: 400; font-size: 1.7rem;
+      line-height: 1.25; color: var(--text); margin: 14px 0 20px; max-width: 460px;
+    }
+    .try-tell {
+      font-family: var(--font-display); font-style: italic; font-size: 1.02rem;
+      line-height: 1.6; color: var(--mid); max-width: 420px;
+      border-left: 2px solid var(--accent-soft); padding-left: 16px; text-align: left; margin-bottom: 30px;
+    }
+    .report-q { font-size: 13px; letter-spacing: 0.04em; color: var(--text); margin-bottom: 18px; }
+    .outcomes { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+    .outcome-btn {
+      display: flex; align-items: center; gap: 14px; width: 100%;
+      padding: 15px 18px; border-radius: 14px; cursor: pointer; text-align: left;
+      background: var(--panel); border: 1px solid var(--line); color: var(--text);
+      font-family: var(--font-ui); font-size: 14.5px; letter-spacing: 0.02em;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .outcome-btn:hover { background: rgba(255,255,255,0.06); border-color: var(--oc); }
+    .outcome-swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; background: var(--oc); }
+    .outcome-sub { color: var(--dim); font-size: 12px; letter-spacing: 0.02em; margin-left: auto; }
+    .try-note { margin-top: 26px; font-size: 11px; color: var(--faint); letter-spacing: 0.04em; max-width: 380px; line-height: 1.6; }
+
+    /* ── result panel ───────────────────────────────────────────── */
+    #result-panel { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 26px; }
+    .result-line {
+      font-family: var(--font-display); font-size: 1.5rem; line-height: 1.45;
+      color: var(--text); max-width: 440px; margin-bottom: 16px;
+    }
+    .result-sub { font-size: 13px; color: var(--mid); letter-spacing: 0.03em; max-width: 380px; margin-bottom: 36px; line-height: 1.6; }
+    .result-sub b { color: var(--accent); font-weight: 400; }
+    .result-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+    /* ── progress view ──────────────────────────────────────────── */
+    .prog-summary { display: flex; gap: 14px; margin-bottom: 30px; flex-wrap: wrap; }
+    .stat {
+      flex: 1; min-width: 96px; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 16px 18px; text-align: center;
+    }
+    .stat-num { font-family: var(--font-display); font-size: 1.8rem; color: var(--text); line-height: 1; }
+    .stat-cap { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-top: 8px; }
+
+    .section-label {
+      font-family: var(--font-display); font-size: 13px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 14px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .skills-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 34px; }
+    .skill-chip {
+      font-size: 12px; letter-spacing: 0.03em; padding: 6px 12px; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--faint); background: var(--panel);
+    }
+    .skill-chip.learned { color: var(--accent); border-color: var(--accent-soft); }
+    .skill-chip .n { color: var(--dim); }
+
+    .hist-day { margin-bottom: 22px; }
+    .hist-day-h {
+      font-family: var(--font-display); font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+    }
+    .hist-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hist-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .hist-title { font-size: 13.5px; color: var(--text); flex: 1; }
+    .hist-outcome { font-size: 11px; letter-spacing: 0.04em; color: var(--dim); white-space: nowrap; }
+
+    .empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 16px; margin-top: 60px; line-height: 1.9; }
+
+    /* ── songbook (songs you're learning) ───────────────────────── */
+    #songbook-view { padding-bottom: 84px; }   /* clearance for the fixed composer */
+    .sb-head { text-align: center; margin-bottom: 20px; }
+    .sb-title { font-family: var(--font-display); font-weight: 400; font-size: 1.5rem; color: var(--text); }
+    .sb-sub { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; margin-top: 5px; }
+    .sb-count { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); text-align: center; margin-bottom: 16px; }
+    .sb-list { display: flex; flex-direction: column; gap: 2px; max-width: 460px; margin: 0 auto; }
+    .sb-row {
+      display: flex; align-items: flex-start; gap: 12px; width: 100%;
+      padding: 13px 12px; border-radius: 12px; background: transparent;
+      transition: background 0.15s;
+    }
+    .sb-row:hover { background: rgba(255,255,255,0.04); }
+    .sb-star {
+      flex: none; width: 30px; height: 30px; margin-top: -2px; padding: 0;
+      background: transparent; border: none; cursor: pointer; color: var(--faint);
+      font-size: 17px; line-height: 1; border-radius: 8px; transition: color 0.2s, transform 0.15s;
+    }
+    .sb-star:hover { color: var(--accent); }
+    .sb-row.ready .sb-star { color: var(--accent); }
+    .sb-text {
+      flex: 1; min-width: 0; font-family: var(--font-display); font-size: 15px;
+      line-height: 1.55; color: var(--text); white-space: pre-wrap; word-break: break-word;
+    }
+    .sb-remove {
+      flex: none; width: 30px; height: 30px; margin-top: -2px; padding: 0;
+      background: transparent; border: none; color: var(--faint); font-size: 20px; line-height: 1;
+      cursor: pointer; border-radius: 8px; transition: color 0.2s;
+    }
+    .sb-remove:hover { color: hsl(8,62%,62%); }
+    .sb-empty { font-family: var(--font-display); font-style: italic; text-align: center; color: var(--dim); font-size: 15px; margin-top: 44px; line-height: 1.9; }
+    .sb-hint { text-align: center; font-size: 11px; color: var(--faint); margin-top: 24px; line-height: 1.6; max-width: 420px; margin-left: auto; margin-right: auto; }
+    /* add-song composer, fixed to the bottom of the Songbook view */
+    .sb-add {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+      padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(to top, var(--bg-base) 0%, var(--bg-base) 70%, rgba(10,11,18,0) 100%);
+    }
+    .sb-add-inner { display: flex; gap: 8px; max-width: 460px; margin: 0 auto; }
+    .sb-add input {
+      flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 10px; color: var(--text); font-family: var(--font-ui);
+      font-size: 16px;   /* ≥16px so iOS Safari doesn't auto-zoom on focus */
+      padding: 11px 14px; outline: none; transition: border-color 0.2s;
+    }
+    .sb-add input:focus { border-color: var(--accent-soft); }
+    .sb-add input::placeholder { color: var(--faint); }
+    .sb-add-btn {
+      flex: none; padding: 0 18px; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 1.5px solid var(--accent-soft); color: var(--accent);
+      font-family: var(--font-ui); font-size: 13px; letter-spacing: 0.08em;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .sb-add-btn:hover { background: var(--accent-glow); border-color: var(--accent); }
+
+    /* ── utils ──────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 560px) {
+      body { padding: 60px 14px 70px; }
+      #version-label { display: none; }
+      .level-num { font-size: 2.6rem; }
+      .card-title { font-size: 1.4rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .card { animation: none; }
+      .rung { transition: none; }
+      .meter-needle { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar"></div>
+<a id="home-link" href="index.html" title="All practices" aria-label="All practices">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.8V19h13V9.8"/>
+  </svg>
+</a>
+<div class="corner" id="version-label">v0.1 · sing</div>
+<nav id="mode-nav">
+  <button class="mode-btn active" data-view="practice">Practice</button>
+  <button class="mode-btn"        data-view="songbook">Songbook</button>
+  <button class="mode-btn"        data-view="progress">Progress</button>
+</nav>
+<div id="menu">
+  <button id="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+    </svg>
+  </button>
+  <div id="menu-panel" class="hidden" role="menu">
+    <div class="menu-head">Your data</div>
+    <button class="menu-item" id="export-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Export</span>
+      <span class="menu-item-sub">Download a backup file</span>
+    </button>
+    <button class="menu-item" id="import-btn" type="button" role="menuitem">
+      <span class="menu-item-title">Import</span>
+      <span class="menu-item-sub">Restore from a backup file</span>
+    </button>
+    <div class="menu-note">Your progress and songbook stay in this browser — and sync when you sign in at the hub. The microphone, when you turn the tuner on, is listened to live and never recorded.</div>
+  </div>
+  <input type="file" id="import-file" accept="application/json" class="hidden">
+</div>
+
+<main>
+  <!-- ══ PRACTICE ══════════════════════════════════════════════ -->
+  <section id="practice-view">
+
+    <!-- home / idle -->
+    <div id="home-panel" class="panel">
+      <div class="kicker" id="home-kicker">Your singing ladder</div>
+      <div class="ladder" id="ladder" aria-hidden="true"></div>
+      <div class="level-num" id="home-level">1</div>
+      <div class="level-theme" id="home-theme">breath — the engine</div>
+      <div class="home-stats" id="home-stats">nothing sung yet</div>
+      <div class="home-ahead" id="home-ahead"></div>
+      <button class="btn primary" id="new-challenge-btn">NEW EXERCISE</button>
+      <div class="home-hint" id="home-hint"></div>
+    </div>
+
+    <!-- warmup gate — shown once per visit, before the first fresh exercise -->
+    <div id="warmup-panel" class="panel hidden">
+      <div class="kicker">Before you sing</div>
+      <div class="warm-title">One gentle minute first</div>
+      <div class="warm-steps">
+        <ol>
+          <li>Three relieved sighs — a soft “haaa” that starts a little high and falls wherever it wants.</li>
+          <li>A lip trill or a quiet hum, sliding lazily up and down. (If lip trills sputter, “ng” — the end of “sing” — works just as well.)</li>
+          <li>One slow, quiet siren on “oo” — bottom to top to bottom, smaller and softer at the top, never louder.</li>
+        </ol>
+      </div>
+      <div class="warm-note">Quieter than you think — warm voices climb, forced ones strain. And if anything hurts (hurts, not tires), stop for the day. A voice rebuilds overnight, not mid-session.</div>
+      <div class="warm-actions">
+        <button class="btn primary" id="warmed-up-btn">WARMED UP</button>
+        <button class="btn ghost" id="already-warm-btn">already warm</button>
+      </div>
+    </div>
+
+    <!-- a served challenge, pre-attempt -->
+    <div id="challenge-panel" class="panel hidden">
+      <div class="card">
+        <div class="card-top">
+          <span class="skill-tag" id="ch-skill">skill</span>
+          <span class="time-chip" id="ch-time">~ min</span>
+        </div>
+        <div class="card-title" id="ch-title">title</div>
+        <div class="block-label">The exercise</div>
+        <div class="challenge-brief" id="ch-brief">brief</div>
+        <div class="tools hidden" id="ch-tools">
+          <div class="block-label">Your instruments</div>
+          <div class="tools-row">
+            <button class="tool-btn hidden" id="hear-btn" type="button">hear it</button>
+            <button class="tool-btn" id="tuner-btn" type="button" aria-pressed="false">tuner: off</button>
+          </div>
+          <div class="meter idle hidden" id="meter" aria-live="off">
+            <div class="meter-note" id="meter-note">—</div>
+            <div class="meter-band"><div class="meter-center"></div><div class="meter-needle" id="meter-needle" style="left:50%"></div></div>
+            <div class="meter-caption" id="meter-caption">listening…</div>
+          </div>
+          <div class="tools-note" id="tools-note">Sing in whatever octave is comfortable — the tuner listens for the note, not the octave. It’s an instrument, not a judge: nothing it shows moves the ladder, only what you report. The microphone is heard live and never recorded.</div>
+        </div>
+        <div class="info-block steps" id="ch-steps-block">
+          <div class="block-label">How to do it</div>
+          <ol id="ch-steps"></ol>
+        </div>
+        <div class="info-block why">
+          <div class="block-label">Why it works</div>
+          <p id="ch-teaches">teaches</p>
+        </div>
+        <div class="info-block tell">
+          <div class="block-label">You've nailed it when</div>
+          <p id="ch-tell">tell</p>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn primary" id="sang-it-btn">I SANG IT</button>
+        <button class="btn ghost" id="skip-btn">show another</button>
+        <button class="btn ghost" id="too-easy-btn">too easy ↑</button>
+      </div>
+    </div>
+
+    <!-- committed: sang it, now report -->
+    <div id="trying-panel" class="panel hidden">
+      <div class="kicker">You sang it</div>
+      <div class="try-title" id="try-title">title</div>
+      <div class="try-tell" id="try-tell">tell</div>
+      <div class="report-q">How did it go?</div>
+      <div class="outcomes" id="outcomes"></div>
+      <div class="try-note">Honest answers tune the difficulty. Your ear improves before your voice does — hearing that you’re off IS the progress.</div>
+      <div class="try-actions">
+        <button class="btn ghost" id="back-to-challenge-btn">‹ back to the exercise</button>
+        <button class="btn ghost" id="leave-btn">leave without recording</button>
+      </div>
+    </div>
+
+    <!-- result after reporting -->
+    <div id="result-panel" class="panel hidden">
+      <div class="result-line" id="result-line">—</div>
+      <div class="result-sub" id="result-sub"></div>
+      <div class="result-actions">
+        <button class="btn primary" id="next-challenge-btn">NEXT EXERCISE</button>
+        <button class="btn ghost" id="done-btn">done for now</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ SONGBOOK ══════════════════════════════════════════════ -->
+  <section id="songbook-view" class="hidden">
+    <div class="sb-head">
+      <div class="sb-title">Songbook</div>
+      <div class="sb-sub">The songs you’re learning.</div>
+    </div>
+    <div class="sb-count" id="sb-count"></div>
+    <div class="sb-list" id="sb-list"></div>
+    <div id="sb-empty" class="sb-empty hidden">
+      Nothing here yet.<br>Add a song you’d love to be able to sing.
+    </div>
+    <div class="sb-hint">Tap the star when you can sing a song all the way through from memory. The upper rungs of the ladder work from this list — a repertoire is the practice made visible.</div>
+
+    <!-- add-song composer, fixed to the bottom -->
+    <form class="sb-add" id="sb-add">
+      <div class="sb-add-inner">
+        <input type="text" id="sb-input" placeholder="Add a song…" maxlength="120" autocomplete="off" aria-label="Add a song to your songbook">
+        <button type="submit" class="sb-add-btn">add</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ══ PROGRESS ══════════════════════════════════════════════ -->
+  <section id="progress-view" class="hidden">
+    <div class="prog-summary">
+      <div class="stat"><div class="stat-num" id="p-level">1</div><div class="stat-cap">level</div></div>
+      <div class="stat"><div class="stat-num" id="p-done">0</div><div class="stat-cap">exercises sung</div></div>
+      <div class="stat"><div class="stat-num" id="p-skills">0</div><div class="stat-cap">skills</div></div>
+    </div>
+
+    <div class="section-label">Tools in hand</div>
+    <div class="skills-grid" id="skills-grid"></div>
+
+    <div class="section-label">History</div>
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty hidden">
+      Nothing sung yet.<br>Your first exercise will land here.
+    </div>
+  </section>
+</main>
+
+<!-- ── Cross-device sync engine + status chip (opt-in, E2E-encrypted) ──── -->
+<script src="/hc-sync.js"></script>
+<script src="/hc-usage.js"></script>
+<script src="/hc-sync-chip.js"></script>
+<script src="/hc-agent.js"></script>
+
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const VERSION  = 'v0.1 · sing';
+const STATE_KEY = 'hill-climbing-sing';
+const SYNC_BLOB_KEY = 'ls:hill-climbing-sing';   // this app's registered E2E-sync doc (see hc-sync.js)
+const LVL_MIN = 1;
+const LVL_MAX = 10;
+
+// Human labels for each vocal tool a challenge can teach.
+const SKILL_LABELS = {
+  breath:   'Breath',
+  pitch:    'Finding pitch',
+  steady:   'Holding steady',
+  range:    'Range',
+  interval: 'Intervals',
+  phrase:   'Phrases by ear',
+  line:     'Lines of a song',
+  song:     'Whole songs',
+  dynamics: 'Dynamics & tone',
+  perform:  'Performing',
+};
+
+// One-line theme shown under the big level number on the home screen.
+const LEVEL_THEMES = {
+  1:  'breath — the engine',
+  2:  'finding a pitch',
+  3:  'holding it steady',
+  4:  'range — sirens & slides',
+  5:  'intervals — the space between',
+  6:  'phrases by ear',
+  7:  'lines of a song',
+  8:  'a whole song',
+  9:  'soft, loud, and open',
+  10: 'singing for someone',
+};
+function levelTheme(lvl) { return LEVEL_THEMES[lvl] || ''; }
+
+// Three honest self-reports. "rang" and "found" both count as a clear for the
+// 2-up/1-down staircase; "slipped" is the single down-step. No red, no shame —
+// a note that wouldn't sit today is the rep that trains the ear.
+const OUTCOMES = {
+  rang:    { label: 'Rang true',       sub: 'found it and held it',   success: true,  color: 'hsl(315,64%,70%)' },
+  found:   { label: 'Found it',        sub: 'wandered, then landed',  success: true,  color: 'hsl(38,72%,64%)'  },
+  slipped: { label: 'Couldn’t find it', sub: 'today — that’s the rep', success: false, color: 'hsl(210,55%,66%)' },
+};
+
+// Reference notes — the suite's signature pentatonic bells (same scale as Echo).
+const NOTE_FREQ = { A3: 220.00, C4: 261.63, D4: 293.66, E4: 329.63, G4: 392.00 };
+
+// The ladder. Each challenge is a doable exercise that teaches one real,
+// transferable vocal tool. Ordered by difficulty (level 1–10, two or three per
+// level so "show another" and "too easy" have somewhere to go).
+// `tone`: reference-bell note names (a single note becomes the tuner's target);
+// `tuner`: offer the tuner with no target (it just names what it hears).
+const CHALLENGES = [
+  // ── L1 — breath, the engine ─────────────────────────────────────
+  { id:'sigh-slide', level:1, skill:'breath', time:'3 min', title:'The relieved sigh',
+    brief:'Let out three big, genuinely relieved sighs — a light “haaa” that starts a little high and slides down to wherever it wants to rest.',
+    steps:[
+      'Breathe in low and easy — let your belly move, not your shoulders.',
+      'Sigh out on a soft “haaa”, letting the pitch fall on its own.',
+      'Three times, each one lazier than the last.'],
+    teaches:'Singing rides on released breath, not pushed breath. The sigh is your voice with nothing in its way — every warmup tradition in the world is built on some version of it.',
+    tell:'The sigh feels like putting something down, and the sound comes out without any effort you can point to.' },
+  { id:'hum-home', level:1, skill:'breath', time:'3 min', title:'Find your home note', tuner:true,
+    brief:'Hum the note your voice falls on when you’re not trying — the “mmm” of agreement — and stay with it for a few slow breaths.',
+    steps:[
+      'Say “mm-hmm” like you’re agreeing with someone.',
+      'Catch the note the second “hmm” lands on and keep humming it.',
+      'Feel the buzz in your lips and nose — that’s your voice working efficiently. The tuner will tell you the note’s name, if you’re curious.'],
+    teaches:'Everyone has a note their voice rests on. Starting there — instead of on a note someone else picked — is why this feels easy, and ease is the baseline to protect as you climb.',
+    tell:'The hum buzzes on your lips and you could hold it all day.' },
+  { id:'one-breath-hum', level:1, skill:'breath', time:'4 min', title:'One breath, one note',
+    brief:'Breathe low, then hum your home note gently for the whole breath — not to the point of squeezing, just to its natural end.',
+    steps:[
+      'Hand on your belly; breathe in so the hand moves out.',
+      'Hum a comfortable note, quiet as a fridge.',
+      'When the breath runs low, stop — don’t squeeze out the last drop.'],
+    teaches:'Long notes are a breath skill, not a throat skill. The moment the breath runs out and you squeeze, the throat takes over — that’s the habit never to build.',
+    tell:'The note ends because you chose to end it, with breath still in the tank.' },
+
+  // ── L2 — finding a pitch ────────────────────────────────────────
+  { id:'first-bell', level:2, skill:'pitch', time:'5 min', title:'Match one bell', tone:['A3'],
+    brief:'Strike the bell, let it ring, then sing the same note back on “ah” — in whatever octave is comfortable.',
+    steps:[
+      'Play the bell and just listen, twice — hear it fully before you try.',
+      'Hum toward the note and let the tuner show where you landed.',
+      'Slide gently until it settles, then sing it once, clean, on “ah”.'],
+    teaches:'Matching pitch is a hearing skill your voice follows. Nobody is “tone deaf” at this distance — the ear finds the note first, and the sliding is how the voice learns the address.',
+    tell:'The needle rests near the middle — and, better, you can hear that it matches before you look.' },
+  { id:'three-bells', level:2, skill:'pitch', time:'6 min', title:'Three bells, one at a time', tone:['A3','C4','E4'],
+    brief:'Three different bells this time. Match each one in turn — listen, sing it back, check the name, move on.',
+    steps:[
+      'Play the phrase once, just to listen.',
+      'Then take the bells one at a time: ring one, sing it back. The tuner names what you sang.',
+      'If one won’t settle, slide up and down through it — the wobble is the practice.'],
+    teaches:'Each note you match lays down a reference point. Three points and your ear starts triangulating — the space between notes begins to have a shape.',
+    tell:'Each bell takes fewer slides to find than the one before.' },
+
+  // ── L3 — holding it steady ──────────────────────────────────────
+  { id:'hold-the-line', level:3, skill:'steady', time:'6 min', title:'Hold the line', tone:['A3'],
+    brief:'Match the bell, then hold the note dead steady for a slow count of eight — quiet, no wobble.',
+    steps:[
+      'Find the note first — don’t rush that part.',
+      'Sing it at half your speaking volume and hold, watching the needle drift.',
+      'Three rounds, with a real breath between each.'],
+    teaches:'A held note exposes everything: breath support, jaw tension, doubt. Quiet-and-steady is harder than loud-and-close — and it’s the foundation everything else stands on.',
+    tell:'The needle drifts less each round, and the note doesn’t sag as the breath gets low.' },
+  { id:'lands-clean', level:3, skill:'steady', time:'5 min', title:'Start it clean', tone:['C4'],
+    brief:'Sing the note five times, a second each — the game is landing ON it, not sliding up into it.',
+    steps:[
+      'Hear the bell; sing short “ah”s — one beat on, one beat off.',
+      'Aim to start on the pitch, not scoop up to it.',
+      'Watch the needle’s first flicker — that’s where you actually started.'],
+    teaches:'Scooping into notes is the most common habit in untrained singing. Landing clean means your ear pre-heard the note before the voice moved — audiation, the real skill under all of this.',
+    tell:'The needle’s first flicker is already near the middle.' },
+
+  // ── L4 — range: sirens & slides ─────────────────────────────────
+  { id:'siren-up', level:4, skill:'range', time:'5 min', title:'The gentle siren', tone:['A3','E4'],
+    brief:'Slide on “ng” from the low bell up to the high one and back down — a slow, quiet siren, no stops.',
+    steps:[
+      'Ring both bells so your ear holds the two ends.',
+      'On “ng” (the end of “sing”), slide low to high and back in one lazy arc.',
+      'Keep it small and soft at the top; if it cracks, go smaller and softer — never louder.'],
+    teaches:'Sirens stretch range without strain because there’s nothing to force — no target to hit loudly. The slide teaches the voice that high and low are one connected road, not separate rooms.',
+    tell:'The slide is smooth through the middle — no gap, no gear-change — even if it’s quiet.' },
+  { id:'settle-down', level:4, skill:'range', time:'5 min', title:'Land from above', tone:['E4','A3'],
+    brief:'Start on the high bell and glide down to settle exactly on the low one — an owl call that ends at a real address.',
+    steps:[
+      'Ring the high bell, then the low one — hear where you’re headed.',
+      'Start high on “oo” and let the slide sink until it settles on the low note.',
+      'Check the landing against the low bell; three landings.'],
+    teaches:'Coming down onto a note from above is how choirs tune — the descent releases the weight the voice picks up on the way up. Landing accurately out of a slide is pitch and range in one move.',
+    tell:'The glide stops on the note instead of near it.' },
+
+  // ── L5 — intervals: the space between ───────────────────────────
+  { id:'echo-two', level:5, skill:'interval', time:'6 min', title:'Echo two notes', tone:['A3','C4'],
+    brief:'Hear the two bells, then sing them back in order — the note, the step up, nothing in between.',
+    steps:[
+      'Play the pair a few times; sing along with the bells if it helps.',
+      'Sing the two notes back alone — no slide connecting them, two clean addresses.',
+      'Then flip it: sing the pair top-down too.'],
+    teaches:'An interval is the distance between notes, and distances are what melodies are made of. Once “that far apart” has a feeling, you can sing steps you’ve never rehearsed.',
+    tell:'You can jump the gap without sliding through it.' },
+  { id:'the-leap', level:5, skill:'interval', time:'6 min', title:'The wide leap', tone:['A3','E4'],
+    brief:'Same game, bigger jump — the low bell up to the high one, land it, and come back down.',
+    steps:[
+      'Listen until you can hear the top note in your head before you sing it.',
+      'Leap up — land, hold a beat, return to the start.',
+      'If the top splats, siren the gap once, then leap again.'],
+    teaches:'Big leaps force the pre-hearing: the voice can only land what the ear has already booked. The siren is your ladder up — the leap proves you no longer need it.',
+    tell:'The top note starts clean — no scoop, no crack — on most tries.' },
+
+  // ── L6 — phrases by ear ─────────────────────────────────────────
+  { id:'echo-three', level:6, skill:'phrase', time:'7 min', title:'Echo a three-note phrase', tone:['A3','C4','D4'],
+    brief:'The bells play a short phrase. Sing it back whole — shape, order, and landing included.',
+    steps:[
+      'Listen twice with your eyes closed.',
+      'Sing it back in one gesture — a small melody, not three separate notes.',
+      'Wrong somewhere? Find WHICH note drifted, fix just that one, then sing it whole again.'],
+    teaches:'This is Echo’s game, out loud: holding a phrase in the ear long enough to reproduce it. Naming which note went wrong is the skill — a global “that was off” can’t be practised; a specific one can.',
+    tell:'You can say which note you missed — and the next pass fixes exactly that one.' },
+  { id:'echo-four', level:6, skill:'phrase', time:'7 min', title:'Echo a longer phrase', tone:['E4','D4','C4','A3'],
+    brief:'Four notes now, coming down the hill. Hold the whole shape in your ear and sing it back.',
+    steps:[
+      'Listen; trace the shape in the air with a hand if it helps.',
+      'Sing it back whole. Then once more, softer.',
+      'When it’s right twice in a row, it’s yours.'],
+    teaches:'Phrase memory grows one note at a time — the same staircase as everything else here. The hand-trace works because pitch really is spatial: the gesture is the melody’s skeleton.',
+    tell:'Twice in a row, right, without re-hearing the bells in between.' },
+
+  // ── L7 — lines of a song ────────────────────────────────────────
+  { id:'one-true-line', level:7, skill:'line', time:'6 min', title:'One line you love', tuner:true,
+    brief:'Take one line from a song you love. Sing it slowly — half speed — and listen for where it drifts.',
+    steps:[
+      'Pick a line you’ve sung along to a hundred times.',
+      'Sing it alone, half speed, quiet — no recording backing you up.',
+      'Three passes; each time, catch one place it slips and touch that spot up.'],
+    teaches:'Alone and slowed down, a song hides nothing — the notes you were borrowing from the singer come due. Half speed gives your ear time to catch the drift while it happens instead of after.',
+    tell:'The third pass sounds like the line — not like someone remembering the line.' },
+  { id:'line-and-address', level:7, skill:'line', time:'6 min', title:'Pin the first note', tuner:true,
+    brief:'Same line — but now find its first note, check its name, and start there every single time.',
+    steps:[
+      'Sing the line, then hold its FIRST note; let the tuner name it, and remember the name.',
+      'Sing the line three times, starting from that checked note each time.',
+      'Notice how the whole line firms up when the first address is right.'],
+    teaches:'A phrase that starts on the right note mostly stays right — the first note is the anchor the rest hangs off. Singers who “start songs in the wrong key” skipped exactly this step.',
+    tell:'You can start the line on its note cold, then check — and the tuner agrees.' },
+
+  // ── L8 — a whole song ───────────────────────────────────────────
+  { id:'first-verse', level:8, skill:'song', time:'15 min', title:'A verse from memory',
+    brief:'Learn one verse of a song all the way through, and sing it from memory — words, notes, and breaths. Put the song in your songbook.',
+    steps:[
+      'Pick the song and add it to your songbook — it’s a project now.',
+      'Learn the verse line by line, the slow way you practised at level 7.',
+      'Sing the verse start to finish from memory, alone, at an easy volume.'],
+    teaches:'A verse is phrases plus breath planning: where you breathe decides which lines get enough air to land. And memory matters because reading splits your attention — singing from memory is when you first actually hear yourself.',
+    tell:'You get through the verse without restarting, and you know where the breaths go.' },
+  { id:'verse-and-chorus', level:8, skill:'song', time:'15 min', title:'Verse into chorus',
+    brief:'Take a song to the next landmark — verse and chorus, joined, from memory.',
+    steps:[
+      'Use a songbook song, or start a new one.',
+      'Practise the JOIN — the last line of the verse into the first of the chorus — as its own little phrase.',
+      'Sing the whole stretch through, twice, at an easy volume.'],
+    teaches:'The seams are where songs fall apart — a chorus usually jumps in energy and range, and the transition needs its own rehearsal, not just the parts on either side of it.',
+    tell:'The join stops feeling like a cliff edge.' },
+
+  // ── L9 — soft, loud, and open ───────────────────────────────────
+  { id:'secret-and-full', level:9, skill:'dynamics', time:'6 min', title:'Soft, then full',
+    brief:'One phrase you know well, sung twice: once like a secret, once full — same notes, different power.',
+    steps:[
+      'Sing the phrase as quietly as it can go while staying ON pitch — a real note, not a whisper.',
+      'Sing it again at a full, comfortable volume — no pushing.',
+      'Alternate a few times; keep the pitch identical across both.'],
+    teaches:'Dynamics are where singing turns into expression — and soft is the hard one: quiet exposes pitch and demands more breath control, not less. Loud borrows momentum; soft has nowhere to hide.',
+    tell:'The quiet version is just as in tune as the full one.' },
+  { id:'open-the-vowels', level:9, skill:'dynamics', time:'6 min', title:'Sing it on “ah”',
+    brief:'Sing a line on a single open “ah” — no words — then add the words back without closing anything down.',
+    steps:[
+      'Sing the line’s melody on “ah” only; notice how open it feels.',
+      'Sing it with the words, keeping that same open channel.',
+      'Alternate: “ah”, words, “ah”, words.'],
+    teaches:'Vowels carry the tone; consonants just interrupt it as briefly as possible. Most “my voice sounds thin” is vowels closing early — the ah-pass lets you hear the line at its most open, so you can hear what the words are costing.',
+    tell:'The worded version keeps most of the ring the “ah” version had.' },
+
+  // ── L10 — singing for someone ───────────────────────────────────
+  { id:'record-and-listen', level:10, skill:'perform', time:'12 min', title:'Sing it to a recorder',
+    brief:'Sing a whole song through and record it on your phone’s own recorder — then actually listen back, twice.',
+    steps:[
+      'One take, start to finish — no stopping for slips.',
+      'Listen once just reacting; the cringe is normal and it fades.',
+      'Listen again with a pencil: ONE thing to keep, ONE thing to work on.'],
+    teaches:'Everyone hates their recorded voice at first — you’ve only ever heard yourself through bone. Past that shock, a recording is the only honest mirror, and one-keep-one-fix per listen is how singers coach themselves.',
+    tell:'On the second listen the cringe has faded enough to hear one genuinely good moment.' },
+  { id:'sing-for-one', level:10, skill:'perform', time:'10 min', title:'Sing for one person',
+    brief:'Sing a whole song, live, for one real person you trust. Everything changes with a witness — that’s the rep.',
+    steps:[
+      'Choose the listener and the song; tell them you’re practising, not premiering.',
+      'Sing it all the way through — slips and all, no restarts.',
+      'Let them say something kind, and take it without arguing.'],
+    teaches:'Nerves rob breath first — the shaking-voice feeling is breath support collapsing under adrenaline, and the only fix is witnessed reps. One kind listener is the whole gym.',
+    tell:'You made it to the end without apologising mid-song.' },
+  { id:'their-request', level:10, skill:'perform', time:'a week', title:'Take a request',
+    brief:'Ask someone you care about to name a song. Learn it. Sing it for them.',
+    steps:[
+      'Ask for the request; no vetoes unless it’s truly out of reach — the stretch is the point.',
+      'Work it up the way the ladder taught you: lines, joins, dynamics.',
+      'Deliver it, live, for them.'],
+    teaches:'A request flips singing from self-improvement into a gift — the full circle of the practice. And learning a song you didn’t choose is the honest test of every tool on this ladder.',
+    tell:'They ask you to sing it again sometime.' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// Persisted as one small JSON blob in localStorage (right-sized for this; the
+// records are tiny flags plus short song titles, not long documents).
+const state = {
+  v: 1,
+  level: 1,
+  streak: 0,
+  cleared: {},     // { challengeId: bestOutcomeKey }
+  history: [],     // [{ id, outcome, ts }]
+  active: null,    // { id, ts } — an exercise committed to but not yet reported
+  recent: [],      // last few served ids, to keep "show another" moving
+  songbook: [],    // [{ title, ready, ts }] — songs being learned; ready = singable from memory
+};
+
+function load() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { raw = {}; }
+  if (!raw || typeof raw !== 'object') raw = {};
+  if (typeof raw.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(raw.level)));
+  if (typeof raw.streak === 'number') state.streak = raw.streak;
+  if (raw.cleared && typeof raw.cleared === 'object') state.cleared = raw.cleared;
+  if (Array.isArray(raw.history)) state.history = raw.history;
+  if (raw.active && raw.active.id) state.active = raw.active; else state.active = null;
+  if (Array.isArray(raw.recent)) state.recent = raw.recent;
+  if (Array.isArray(raw.songbook)) {
+    state.songbook = raw.songbook.filter(s => s && typeof s.title === 'string')
+      .map(s => ({ title: s.title, ready: !!s.ready, ts: typeof s.ts === 'number' ? s.ts : Date.now() }));
+  }
+}
+function save() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); }
+  catch (e) { /* quota / private mode — never break the flow */ }
+  if (window.HCSync) HCSync.queueBlobPush(SYNC_BLOB_KEY);   // no-op until sync is unlocked + armed
+}
+
+// ── Usage logging for the hub dashboard ──────────────────────────────────────
+let loggedThisLoad = false;   // one "practiced today" flag per page-load; markUsage is idempotent anyway
+function markUsage() {
+  if (loggedThisLoad) return;
+  if (window.HCUsage) HCUsage.mark('sing');   // shared usage log (hc-usage.js); syncs when enabled
+  loggedThisLoad = true;
+}
+
+// ── Derived helpers ──────────────────────────────────────────────────────────
+function byId(id) { return CHALLENGES.find(c => c.id === id); }
+function clearedIds() { return Object.keys(state.cleared); }
+function clearedCount() { return clearedIds().length; }
+function learnedSkills() {
+  const s = new Set();
+  clearedIds().forEach(id => { const c = byId(id); if (c) s.add(c.skill); });
+  return s;
+}
+
+// Pick the next challenge near the current rung. Prefer something uncleared at
+// the target level; widen by ±1, then to any uncleared, then (whole ladder
+// done) allow a replay. Avoid the just-served ids so "show another" moves on.
+function pickChallenge(excludeId) {
+  const target = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(state.level)));
+  const cleared = new Set(clearedIds());
+  const avoid = new Set([excludeId, ...state.recent.slice(-2)].filter(Boolean));
+
+  const tiers = [
+    c => c.level === target && !cleared.has(c.id),
+    c => Math.abs(c.level - target) <= 1 && !cleared.has(c.id),
+    c => !cleared.has(c.id),
+    () => true,                      // everything cleared — replay is fine
+  ];
+  for (const pred of tiers) {
+    let pool = CHALLENGES.filter(pred).filter(c => !avoid.has(c.id));
+    if (!pool.length) pool = CHALLENGES.filter(pred);   // relax the avoid set if it emptied us
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return CHALLENGES[0];
+}
+
+// The tool waiting a little further up — a gentle, non-spoiler teaser.
+function aheadSkill() {
+  const cleared = new Set(clearedIds());
+  const target = Math.round(state.level);
+  const remaining = CHALLENGES.filter(c => !cleared.has(c.id));
+  const next = remaining.filter(c => c.level >= target).sort((a,b) => a.level - b.level)[0]
+    || remaining.sort((a,b) => a.level - b.level)[0];
+  return next ? SKILL_LABELS[next.skill] : null;
+}
+
+// ── The 2-up / 1-down staircase ──────────────────────────────────────────────
+// Two clears in a row step the level up; one slipped exercise steps it down.
+// Converges on roughly a 71% success rate — the same psychophysics result the
+// suite's other ladders use to keep you at your learning edge (Levitt 1971).
+// Returns a description of what changed, for the result screen.
+function recordOutcome(outcomeKey) {
+  const oc = OUTCOMES[outcomeKey];
+  const ch = byId(state.active && state.active.id);
+  const result = { leveledUp: false, leveledDown: false, newSkill: null };
+
+  if (ch) {
+    const skillWasNew = oc.success && !learnedSkills().has(ch.skill);
+    if (oc.success) {
+      // record a clear (keep the strongest outcome seen for this exercise)
+      if (!state.cleared[ch.id] || outcomeKey === 'rang') state.cleared[ch.id] = outcomeKey;
+      if (skillWasNew) result.newSkill = SKILL_LABELS[ch.skill];
+    }
+    state.history.push({ id: ch.id, outcome: outcomeKey, ts: Date.now() });
+  }
+
+  if (oc.success) {
+    state.streak++;
+    if (state.streak >= 2) {
+      if (state.level < LVL_MAX) { state.level++; result.leveledUp = true; }
+      state.streak = 0;
+    }
+  } else {
+    if (state.level > LVL_MIN) { state.level--; result.leveledDown = true; }
+    state.streak = 0;
+  }
+
+  state.active = null;
+  save();
+  return result;
+}
+
+// ── Audio — reference bells (the suite's signature strike, borrowed from Echo)
+// Built lazily inside the first user gesture so iOS Safari will speak. If
+// WebAudio is missing, the exercises still run — your ear carries the day.
+let audioCtx = null;
+let masterGain = null;
+let audioBroken = !(window.AudioContext || window.webkitAudioContext);
+let bellTimers = [];
+
+function ensureAudio() {
+  if (audioBroken) return null;
+  if (!audioCtx) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(audioCtx.destination);
+    } catch (e) { audioBroken = true; return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(function () {});
+  return audioCtx;
+}
+
+// One strike: a sine fundamental plus two quiet inharmonic partials, each with
+// its own exponential decay — a bell that blooms and lets go, never a drone.
+const PARTIALS = [
+  { ratio: 1,     level: 1.0,   decay: 1.4 },
+  { ratio: 2.756, level: 0.2,   decay: 0.5 },    // ≈ −14 dB
+  { ratio: 5.404, level: 0.079, decay: 0.3 },    // ≈ −22 dB
+];
+function strikeBell(freq) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const strike = ctx.createGain();       // per-strike gain — headroom for overlapping tails
+  strike.gain.value = 0.85;
+  strike.connect(masterGain);
+  PARTIALS.forEach(function (p) {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq * p.ratio;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(p.level, t0 + 0.005);            // 5ms attack — no click
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.005 + p.decay);
+    osc.connect(g); g.connect(strike);
+    osc.start(t0);
+    osc.stop(t0 + 0.005 + p.decay + 0.08);
+    osc.onended = function () {
+      osc.disconnect(); g.disconnect();
+      if (p.ratio === 1) strike.disconnect();   // the fundamental rings longest
+    };
+  });
+}
+function cancelBells() { bellTimers.forEach(clearTimeout); bellTimers = []; }
+function playReference(noteNames) {
+  cancelBells();
+  (noteNames || []).forEach(function (name, i) {
+    const f = NOTE_FREQ[name];
+    if (!f) return;
+    if (i === 0) strikeBell(f);
+    else bellTimers.push(setTimeout(function () { strikeBell(f); }, i * 650));
+  });
+}
+
+// ── Tuner — live pitch from the microphone, on-device, never recorded ────────
+// Autocorrelation (the classic ACF2+ shape) over an analyser's time-domain
+// buffer. The audio is analysed frame-by-frame and thrown away: nothing is
+// recorded, stored, or sent anywhere. The tuner is an instrument, not a judge —
+// nothing it detects is written to state or moves the ladder.
+const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+let tunerOn = false;
+let tunerStream = null, tunerSource = null, tunerAnalyser = null;
+let tunerRaf = 0, tunerSkip = false;
+let tunerBuf = null;
+let recentPitches = [];
+
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) { const v = buf[i]; rms += v * v; }
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.012) return -1;                      // too quiet — silence, not a note
+
+  // trim the buffer to its loud middle so the edges don't smear the lag search
+  let r1 = 0, r2 = SIZE - 1;
+  const thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+  buf = buf.slice(r1, r2);
+  SIZE = buf.length;
+
+  const c = new Array(SIZE).fill(0);
+  for (let i = 0; i < SIZE; i++)
+    for (let j = 0; j < SIZE - i; j++)
+      c[i] = c[i] + buf[j] * buf[j + i];
+
+  let d = 0; while (c[d] > c[d + 1]) d++;
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < SIZE; i++) {
+    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  }
+  let T0 = maxpos;
+  if (T0 <= 0) return -1;
+  // parabolic interpolation around the peak for sub-sample precision
+  const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+  if (x1 !== undefined && x3 !== undefined) {
+    const a = (x1 + x3 - 2 * x2) / 2, b = (x3 - x1) / 2;
+    if (a) T0 = T0 - b / (2 * a);
+  }
+  return sampleRate / T0;
+}
+
+function median(arr) {
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+// Distance in cents from f to the target's pitch CLASS — folded to ±600¢ so
+// any comfortable octave counts as the same note.
+function centsToPitchClass(f, targetF) {
+  let c = 1200 * Math.log2(f / targetF);
+  c = ((c % 1200) + 1200) % 1200;      // [0, 1200)
+  if (c > 600) c -= 1200;              // (−600, 600]
+  return c;
+}
+function describeNote(f) {
+  const midi = 69 + 12 * Math.log2(f / 440);
+  const nearest = Math.round(midi);
+  return {
+    name: NOTE_NAMES[((nearest % 12) + 12) % 12],
+    octave: Math.floor(nearest / 12) - 1,
+    cents: (midi - nearest) * 100,
+  };
+}
+
+const meterEl        = document.getElementById('meter');
+const meterNoteEl    = document.getElementById('meter-note');
+const meterNeedleEl  = document.getElementById('meter-needle');
+const meterCaptionEl = document.getElementById('meter-caption');
+const tunerBtn       = document.getElementById('tuner-btn');
+
+function tunerTargetFreq() {
+  return (served && Array.isArray(served.tone) && served.tone.length === 1)
+    ? NOTE_FREQ[served.tone[0]] : null;
+}
+
+function renderMeterIdle(caption) {
+  meterEl.classList.add('idle');
+  meterEl.classList.remove('lit');
+  meterNeedleEl.style.left = '50%';
+  meterCaptionEl.textContent = caption || 'listening…';
+}
+function renderMeter(freq) {
+  const target = tunerTargetFreq();
+  meterEl.classList.remove('idle');
+  if (target) {
+    const cents = centsToPitchClass(freq, target);
+    const clamped = Math.max(-150, Math.min(150, cents));
+    meterNeedleEl.style.left = (50 + (clamped / 150) * 42) + '%';
+    meterNoteEl.textContent = served.tone[0].replace(/\d+$/, '');
+    const inTune = Math.abs(cents) <= 40;
+    meterEl.classList.toggle('lit', inTune);
+    meterCaptionEl.textContent = inTune ? 'on it'
+      : Math.abs(Math.round(cents)) + '¢ ' + (cents < 0 ? 'below' : 'above');
+  } else {
+    const n = describeNote(freq);
+    const clamped = Math.max(-100, Math.min(100, n.cents));
+    meterNeedleEl.style.left = (50 + (clamped / 150) * 42) + '%';
+    meterNoteEl.textContent = n.name + n.octave;
+    meterEl.classList.toggle('lit', Math.abs(n.cents) <= 25);
+    meterCaptionEl.textContent = 'what it hears';
+  }
+}
+
+function tunerLoop() {
+  if (!tunerOn) return;
+  tunerRaf = requestAnimationFrame(tunerLoop);
+  tunerSkip = !tunerSkip;               // the O(n²) autocorrelation runs at half frame-rate
+  if (tunerSkip) return;
+  tunerAnalyser.getFloatTimeDomainData(tunerBuf);
+  const f = autoCorrelate(tunerBuf, audioCtx.sampleRate);
+  if (f > 60 && f < 1200) {
+    recentPitches.push(f);
+    if (recentPitches.length > 5) recentPitches.shift();
+    renderMeter(median(recentPitches));
+  } else {
+    recentPitches = [];
+    renderMeterIdle();
+  }
+}
+
+async function startTuner() {
+  if (tunerOn) return true;
+  const ctx = ensureAudio();
+  if (!ctx || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    meterEl.classList.remove('hidden');
+    renderMeterIdle('no microphone here — your ear is the meter today');
+    return false;
+  }
+  try {
+    // Voice-processing filters distort pitch; ask for the raw signal.
+    tunerStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch (e) {
+    meterEl.classList.remove('hidden');
+    renderMeterIdle('no microphone — your ear is the meter today');
+    return false;
+  }
+  tunerSource = ctx.createMediaStreamSource(tunerStream);
+  tunerAnalyser = ctx.createAnalyser();
+  tunerAnalyser.fftSize = 2048;
+  tunerBuf = new Float32Array(tunerAnalyser.fftSize);
+  tunerSource.connect(tunerAnalyser);    // analyser only — never routed to output, never recorded
+  tunerOn = true;
+  recentPitches = [];
+  tunerBtn.textContent = 'tuner: on';
+  tunerBtn.classList.add('on');
+  tunerBtn.setAttribute('aria-pressed', 'true');
+  meterEl.classList.remove('hidden');
+  renderMeterIdle();
+  tunerRaf = requestAnimationFrame(tunerLoop);
+  return true;
+}
+function stopTuner() {
+  if (tunerRaf) { cancelAnimationFrame(tunerRaf); tunerRaf = 0; }
+  if (tunerSource) { try { tunerSource.disconnect(); } catch (e) {} tunerSource = null; }
+  if (tunerStream) { tunerStream.getTracks().forEach(t => t.stop()); tunerStream = null; }
+  tunerAnalyser = null; tunerBuf = null;
+  tunerOn = false;
+  recentPitches = [];
+  tunerBtn.textContent = 'tuner: off';
+  tunerBtn.classList.remove('on');
+  tunerBtn.setAttribute('aria-pressed', 'false');
+  meterEl.classList.add('hidden');
+  renderMeterIdle();
+}
+function toggleTuner() { if (tunerOn) stopTuner(); else startTuner(); }
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const practiceView = document.getElementById('practice-view');
+const songbookView = document.getElementById('songbook-view');
+const progressView = document.getElementById('progress-view');
+const homePanel      = document.getElementById('home-panel');
+const warmupPanel    = document.getElementById('warmup-panel');
+const challengePanel = document.getElementById('challenge-panel');
+const tryingPanel    = document.getElementById('trying-panel');
+const resultPanel    = document.getElementById('result-panel');
+const importFile     = document.getElementById('import-file');
+
+let served = null;            // the challenge currently shown on the challenge panel
+let warmedThisLoad = false;   // the warmup gate opens once per visit — structural care, not tracked or scored
+
+// ── Rendering: home ────────────────────────────────────────────────────────────
+function renderLadder() {
+  const ladder = document.getElementById('ladder');
+  ladder.innerHTML = '';
+  for (let i = 1; i <= LVL_MAX; i++) {
+    const r = document.createElement('div');
+    r.className = 'rung' + (i < state.level ? ' climbed' : i === state.level ? ' current' : '');
+    r.style.height = (16 + i * 3) + 'px';     // gently rising rungs — a little hill to climb
+    ladder.appendChild(r);
+  }
+}
+function renderHome() {
+  renderLadder();
+  document.getElementById('home-level').textContent = state.level;
+  document.getElementById('home-theme').textContent = levelTheme(state.level);
+  const done = clearedCount(), skills = learnedSkills().size;
+  document.getElementById('home-stats').textContent = done
+    ? `${done} ${done === 1 ? 'exercise' : 'exercises'} sung · ${skills} ${skills === 1 ? 'tool' : 'tools'} in hand`
+    : 'nothing sung yet';
+  const ahead = aheadSkill();
+  const aheadEl = document.getElementById('home-ahead');
+  aheadEl.innerHTML = ahead ? `Ahead on the ladder · <b>${ahead}</b>` : 'You’ve worked the whole ladder — nicely done.';
+
+  // If an exercise is mid-attempt, the home button resumes it.
+  const btn = document.getElementById('new-challenge-btn');
+  if (state.active) {
+    const ac = byId(state.active.id);
+    btn.textContent = 'RESUME EXERCISE';
+    document.getElementById('home-hint').textContent = ac ? `“${ac.title}” is waiting for your verdict.` : '';
+  } else {
+    btn.textContent = clearedCount() ? 'NEXT EXERCISE' : 'NEW EXERCISE';
+    document.getElementById('home-hint').textContent = '';
+  }
+}
+
+// ── Rendering: challenge ───────────────────────────────────────────────────────
+function showChallenge(ch) {
+  served = ch;
+  document.getElementById('ch-skill').textContent = SKILL_LABELS[ch.skill] || ch.skill;
+  document.getElementById('ch-time').textContent  = ch.time === 'a week' ? 'over a week' : '~ ' + ch.time;
+  document.getElementById('ch-title').textContent = ch.title;
+  document.getElementById('ch-brief').textContent = ch.brief;
+  const steps = ch.steps || [];
+  const stepsEl = document.getElementById('ch-steps');
+  stepsEl.innerHTML = '';
+  steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsEl.appendChild(li); });
+  document.getElementById('ch-steps-block').classList.toggle('hidden', steps.length === 0);
+  document.getElementById('ch-teaches').textContent = ch.teaches;
+  document.getElementById('ch-tell').textContent  = ch.tell;
+
+  // the instruments — bells when the exercise has reference tones, tuner when it listens
+  const hasTones = Array.isArray(ch.tone) && ch.tone.length > 0;
+  const hasTuner = hasTones || !!ch.tuner;
+  document.getElementById('ch-tools').classList.toggle('hidden', !hasTuner);
+  const hearBtn = document.getElementById('hear-btn');
+  hearBtn.classList.toggle('hidden', !hasTones);
+  if (hasTones) hearBtn.textContent = ch.tone.length === 1 ? 'hear the note' : 'hear the phrase';
+  if (tunerOn) { recentPitches = []; renderMeterIdle(); }   // fresh target on a fresh card
+
+  // "too easy" has nowhere to climb at the top of the ladder — hide it there
+  document.getElementById('too-easy-btn').classList.toggle('hidden', state.level >= LVL_MAX);
+  swapPanel(challengePanel);
+}
+
+// ── Rendering: trying / report ─────────────────────────────────────────────────
+function renderOutcomes() {
+  const wrap = document.getElementById('outcomes');
+  wrap.innerHTML = '';
+  Object.keys(OUTCOMES).forEach(key => {
+    const oc = OUTCOMES[key];
+    const b = document.createElement('button');
+    b.className = 'outcome-btn';
+    b.style.setProperty('--oc', oc.color);
+    b.innerHTML = `<span class="outcome-swatch"></span><span>${oc.label}</span><span class="outcome-sub">${oc.sub}</span>`;
+    b.addEventListener('click', () => reportOutcome(key));
+    wrap.appendChild(b);
+  });
+}
+function showTrying(ch) {
+  document.getElementById('try-title').textContent = ch.title;
+  document.getElementById('try-tell').textContent  = ch.tell;
+  renderOutcomes();
+  swapPanel(tryingPanel);
+}
+
+// ── Rendering: result ──────────────────────────────────────────────────────────
+function showResult(outcomeKey, res) {
+  const succ = OUTCOMES[outcomeKey].success;
+  let line, sub = '';
+  if (res.leveledUp) {
+    line = `Two in a row.`;
+    sub = `You’re stepping up to <b>level ${state.level}</b> — ${levelTheme(state.level)}.`;
+  } else if (succ && state.streak === 1) {
+    line = `Nicely sung.`;
+    sub = `One more clear at this level and you’ll climb a rung.`;
+  } else if (succ) {
+    line = `That’s a clear.`;
+    sub = `Staying at <b>level ${state.level}</b> for now — there’s more to work here.`;
+  } else if (res.leveledDown) {
+    line = `That’s how ears are built.`;
+    sub = `Easing back to <b>level ${state.level}</b> to let the fundamentals set before climbing again. Every singer has days the notes won’t sit — the reaching is the practice.`;
+  } else {
+    line = `No worries at all.`;
+    sub = `Staying at <b>level ${state.level}</b> — come back to it whenever you’re ready.`;
+  }
+  if (res.newSkill) sub += ` And <b>${res.newSkill}</b> is now a tool in your hands.`;
+  document.getElementById('result-line').textContent = line;
+  document.getElementById('result-sub').innerHTML = sub;
+  swapPanel(resultPanel);
+}
+
+// ── Panel + view switching ──────────────────────────────────────────────────────
+function swapPanel(panel) {
+  [homePanel, warmupPanel, challengePanel, tryingPanel, resultPanel].forEach(p => p.classList.add('hidden'));
+  panel.classList.remove('hidden');
+  // leaving the exercise card releases the microphone and quiets the bells
+  if (panel !== challengePanel) { stopTuner(); cancelBells(); }
+  // re-trigger the entrance animation
+  panel.style.animation = 'none'; void panel.offsetWidth; panel.style.animation = '';
+}
+function switchView(v) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  practiceView.classList.toggle('hidden', v !== 'practice');
+  songbookView.classList.toggle('hidden', v !== 'songbook');
+  progressView.classList.toggle('hidden', v !== 'progress');
+  if (v !== 'practice') { stopTuner(); cancelBells(); }
+  if (v === 'practice') {
+    // returning to Practice always lands on home (or resumes an active exercise)
+    if (state.active) { const ac = byId(state.active.id); if (ac) { showTrying(ac); return; } }
+    renderHome(); swapPanel(homePanel);
+  } else if (v === 'songbook') {
+    renderSongbook();
+  } else {
+    renderProgress();
+  }
+}
+
+// ── Flow actions ────────────────────────────────────────────────────────────────
+function newChallenge() {
+  if (state.active) { const ac = byId(state.active.id); if (ac) return showTrying(ac); }
+  if (!warmedThisLoad) { swapPanel(warmupPanel); return; }
+  showChallenge(pickChallenge());
+}
+function warmedUp() {                               // both warmup buttons — the gate opens either way, unshamed
+  warmedThisLoad = true;
+  showChallenge(pickChallenge());
+}
+function skipChallenge() {                          // "show another" — neutral reshuffle, same rung
+  if (served) state.recent.push(served.id);
+  state.recent = state.recent.slice(-4);
+  save();
+  showChallenge(pickChallenge(served && served.id));
+}
+function tooEasy() {                                // "too easy ↑" — the tool is beneath you; climb a rung
+  if (state.level < LVL_MAX) { state.level++; state.streak = 0; }  // self-calibrate the ladder upward; fresh footing
+  if (served) { state.recent.push(served.id); state.recent = state.recent.slice(-4); }
+  save();
+  showChallenge(pickChallenge(served && served.id));               // now targets the higher level
+}
+function sangIt() {                               // pressed after singing it — go record the result
+  if (!served) return;
+  markUsage();                                  // you practiced today — log it
+  state.active = { id: served.id, ts: Date.now() };
+  state.recent.push(served.id); state.recent = state.recent.slice(-4);
+  save();
+  showTrying(served);
+}
+// Back to the exercise card from the record-result screen (works whether served
+// is set from this session or resolved from a resumed active exercise).
+function backToChallenge() {
+  const ch = (state.active && byId(state.active.id)) || served;
+  if (ch) showChallenge(ch);
+}
+function reportOutcome(outcomeKey) {
+  if (!OUTCOMES[outcomeKey]) throw new Error('Unknown outcome "' + outcomeKey + '"');
+  if (!state.active) throw new Error('No exercise committed — nothing to report on.');
+  const res = recordOutcome(outcomeKey);
+  showResult(outcomeKey, res);
+  return res;
+}
+function leaveTrying() {
+  state.active = null; save();
+  renderHome(); swapPanel(homePanel);
+}
+
+// ── Progress view ─────────────────────────────────────────────────────────────
+function dayKey(ts) { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function dayLabel(ts) {
+  const now = Date.now();
+  if (dayKey(ts) === dayKey(now)) return 'Today';
+  if (dayKey(ts) === dayKey(now - 86400000)) return 'Yesterday';
+  return new Date(ts).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+function renderProgress() {
+  document.getElementById('p-level').textContent  = state.level;
+  document.getElementById('p-done').textContent   = clearedCount();
+  document.getElementById('p-skills').textContent = learnedSkills().size;
+
+  // tools, in ladder order, learned ones lit
+  const learned = learnedSkills();
+  const grid = document.getElementById('skills-grid');
+  grid.innerHTML = '';
+  const allSkills = [];
+  CHALLENGES.forEach(c => { if (!allSkills.includes(c.skill)) allSkills.push(c.skill); });
+  allSkills.forEach(key => {
+    const n = clearedIds().filter(id => { const c = byId(id); return c && c.skill === key; }).length;
+    const chip = document.createElement('span');
+    chip.className = 'skill-chip' + (learned.has(key) ? ' learned' : '');
+    chip.innerHTML = (SKILL_LABELS[key] || key) + (n ? ` <span class="n">${n}</span>` : '');
+    grid.appendChild(chip);
+  });
+
+  // history, newest first, grouped by day
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  list.innerHTML = '';
+  if (!state.history.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  let lastDay = null, group = null;
+  [...state.history].reverse().forEach(h => {
+    const ch = byId(h.id); if (!ch) return;
+    const oc = OUTCOMES[h.outcome] || OUTCOMES.found;
+    const k = dayKey(h.ts);
+    if (k !== lastDay) {
+      lastDay = k;
+      group = document.createElement('div'); group.className = 'hist-day';
+      const head = document.createElement('div'); head.className = 'hist-day-h';
+      head.textContent = dayLabel(h.ts); group.appendChild(head);
+      list.appendChild(group);
+    }
+    const row = document.createElement('div'); row.className = 'hist-row';
+    row.innerHTML =
+      `<span class="hist-dot" style="background:${oc.color}"></span>` +
+      `<span class="hist-title">${ch.title}</span>` +
+      `<span class="hist-outcome">${oc.label}</span>`;
+    group.appendChild(row);
+  });
+}
+
+// ── Songbook (songs being learned) ──────────────────────────────────────────────
+function addSong(raw) {
+  const title = (raw || '').trim();
+  if (!title) return false;
+  // fold true duplicates; otherwise keep newest on top
+  if (state.songbook.some(s => s.title.toLowerCase() === title.toLowerCase())) return false;
+  state.songbook.unshift({ title, ready: false, ts: Date.now() });
+  save();
+  return true;
+}
+function toggleSongReady(ts) {
+  const s = state.songbook.find(x => x.ts === ts);
+  if (s) { s.ready = !s.ready; save(); renderSongbook(); }
+}
+function removeSong(ts) {
+  state.songbook = state.songbook.filter(x => x.ts !== ts);
+  save();
+  renderSongbook();
+}
+function renderSongbook() {
+  const listEl = document.getElementById('sb-list');
+  const emptyEl = document.getElementById('sb-empty');
+  const countEl = document.getElementById('sb-count');
+  listEl.innerHTML = '';
+  if (!state.songbook.length) {
+    emptyEl.classList.remove('hidden');
+    countEl.textContent = '';
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  const ready = state.songbook.filter(s => s.ready).length;
+  countEl.textContent = state.songbook.length === 1
+    ? '1 song'
+    : `${state.songbook.length} songs${ready ? ` · ${ready} you can sing through` : ''}`;
+
+  state.songbook.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'sb-row' + (s.ready ? ' ready' : '');
+    const star = document.createElement('button');
+    star.type = 'button'; star.className = 'sb-star';
+    star.textContent = s.ready ? '★' : '☆';
+    star.setAttribute('aria-label', s.ready ? 'Unmark as singable through' : 'Mark as singable all the way through');
+    star.setAttribute('aria-pressed', s.ready ? 'true' : 'false');
+    star.addEventListener('click', () => toggleSongReady(s.ts));
+    const text = document.createElement('div');
+    text.className = 'sb-text'; text.textContent = s.title;
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'sb-remove'; rm.textContent = '×';
+    rm.setAttribute('aria-label', 'Remove song');
+    rm.addEventListener('click', () => removeSong(s.ts));
+    row.append(star, text, rm);
+    listEl.appendChild(row);
+  });
+}
+
+// ── Export / import (your data is yours) ────────────────────────────────────────
+function exportData() {
+  const payload = { app: 'sing', schema: 1, exported: Date.now(), state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = url;
+  a.download = `sing-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(file) {
+  try {
+    const parsed = JSON.parse(await file.text());
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object') throw new Error('not a Sing export');
+    if (typeof incoming.level === 'number') state.level = Math.min(LVL_MAX, Math.max(LVL_MIN, Math.round(incoming.level)));
+    if (typeof incoming.streak === 'number') state.streak = incoming.streak;
+    if (incoming.cleared && typeof incoming.cleared === 'object') state.cleared = incoming.cleared;
+    if (Array.isArray(incoming.history)) state.history = incoming.history;
+    state.active = null;   // don't resume a half-attempt from an import
+    if (Array.isArray(incoming.recent)) state.recent = incoming.recent;
+    if (Array.isArray(incoming.songbook)) {
+      state.songbook = incoming.songbook.filter(s => s && typeof s.title === 'string')
+        .map(s => ({ title: s.title, ready: !!s.ready, ts: typeof s.ts === 'number' ? s.ts : Date.now() }));
+    }
+    save();
+    switchView('progress');
+    alert('Imported your Sing progress.');
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+document.getElementById('new-challenge-btn').addEventListener('click', newChallenge);
+document.getElementById('warmed-up-btn').addEventListener('click', warmedUp);
+document.getElementById('already-warm-btn').addEventListener('click', warmedUp);
+document.getElementById('skip-btn').addEventListener('click', skipChallenge);
+document.getElementById('too-easy-btn').addEventListener('click', tooEasy);
+document.getElementById('sang-it-btn').addEventListener('click', sangIt);
+document.getElementById('back-to-challenge-btn').addEventListener('click', backToChallenge);
+document.getElementById('leave-btn').addEventListener('click', leaveTrying);
+document.getElementById('next-challenge-btn').addEventListener('click', newChallenge);
+document.getElementById('done-btn').addEventListener('click', () => { renderHome(); swapPanel(homePanel); });
+document.getElementById('hear-btn').addEventListener('click', () => { if (served && served.tone) playReference(served.tone); });
+tunerBtn.addEventListener('click', toggleTuner);
+// A backgrounded tab should never hold the microphone.
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopTuner(); });
+window.addEventListener('pagehide', stopTuner);
+// Corner data menu — open/close, close on outside-click or Esc.
+const menuEl = document.getElementById('menu');
+const menuBtn = document.getElementById('menu-btn');
+const menuPanel = document.getElementById('menu-panel');
+function setMenu(open) {
+  menuPanel.classList.toggle('hidden', !open);
+  menuEl.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+menuBtn.addEventListener('click', () => setMenu(menuPanel.classList.contains('hidden')));
+document.addEventListener('click', e => { if (!menuEl.contains(e.target)) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+
+document.getElementById('export-btn').addEventListener('click', () => { setMenu(false); exportData(); });
+document.getElementById('import-btn').addEventListener('click', () => { setMenu(false); importFile.click(); });
+importFile.addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
+document.getElementById('sb-add').addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.getElementById('sb-input');
+  addSong(input.value);   // dedupe + empty handled inside
+  input.value = '';
+  input.focus();
+  renderSongbook();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('version-label').textContent = VERSION;
+load();
+switchView('practice');   // lands on home, or resumes a mid-attempt exercise
+
+// ── Cross-device sync (opt-in, end-to-end encrypted; see hc-sync.js) ─────────
+// One localStorage blob (the ladder + progress + songbook). Sign-in / unlock
+// live at the hub; this app only registers its store, shows status, and pushes
+// on save. Nothing transmits until sync is unlocked and the initial pull arms.
+if (window.HCSync) {
+  const SUPABASE_URL      = 'https://eztapprkcnwoebnfdebb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
+  HCSync.registerStore({
+    key: SYNC_BLOB_KEY, kind: 'blob',
+    read:  () => localStorage.getItem(STATE_KEY) || JSON.stringify(state),
+    write: (str) => {                      // remote-apply path — deliberately NOT through save()
+      try { localStorage.setItem(STATE_KEY, str); } catch (e) { /* quota */ }
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'practice');
+    },
+  });
+  if (window.HCSyncChip) HCSyncChip.mount({ position: 'bottom-left' });
+  HCSync.init({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, appId: 'sing' });
+}
+
+// ── Agent interface (window.HC — one symmetric surface; see hc-agent.js) ──────
+if (window.HC) HC.register({
+  app: 'sing',
+  version: VERSION,
+  title: 'Sing',
+  description: 'Learn-to-sing practice: a 10-level ladder of small vocal exercises climbed by self-reported outcomes, with reference bells and a live microphone tuner as in-exercise instruments (analysed on-device, never recorded), plus a songbook of songs being learned.',
+  stores: [{
+    key: STATE_KEY,
+    kind: 'localStorage',
+    description: 'Ladder progress, attempt history, and the songbook (titles of songs the person is learning). The tuner writes nothing here — microphone audio is analysed live and discarded.',
+    sensitivity: 'practice',
+    schema: "{v, level 1-10, streak, cleared{challengeId→'rang'|'found'}, history[{id,outcome,ts}], active{id,ts}|null, recent[ids], songbook[{title,ready,ts}]}",
+    syncKey: SYNC_BLOB_KEY,
+    afterWrite: () => {
+      load();
+      const active = document.querySelector('.mode-btn.active');
+      switchView(active ? active.dataset.view : 'practice');
+    },
+  }],
+  actions: {
+    newChallenge: {
+      description: 'Serve an exercise at the current level (or resume one already committed to). On the first serve of a visit this opens the warmup gate instead — invoke warmedUp once the person has actually warmed up.',
+      params: {},
+      handler: () => {
+        newChallenge();
+        if (state.active && byId(state.active.id)) return { resumed: state.active.id };
+        if (!warmedThisLoad) return { warmup: true, next: 'invoke warmedUp once the person has warmed up' };
+        return { served: served.id };
+      },
+    },
+    warmedUp: {
+      description: 'Pass the once-per-visit warmup gate and serve the first exercise — only when the person says they have warmed up (or are already warm). Same path as both warmup buttons.',
+      params: {},
+      handler: () => {
+        if (warmedThisLoad && served) return { served: served.id, alreadyWarm: true };
+        warmedUp();
+        return { served: served.id };
+      },
+    },
+    skipChallenge: {
+      description: 'Show another exercise at the same rung. Requires one already served.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No exercise served — call newChallenge first.');
+        skipChallenge();
+        return { served: served.id };
+      },
+    },
+    tooEasy: {
+      description: 'Self-advance a rung — only when the person says the served exercise is beneath them. Requires one served; no-ops at the top of the ladder.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No exercise served — call newChallenge first.');
+        tooEasy();
+        return { level: state.level, served: served.id };
+      },
+    },
+    sangIt: {
+      description: 'Commit to the served exercise as sung — sets the active exercise and marks today as practiced, exactly as the button does.',
+      params: {},
+      handler: () => {
+        if (!served) throw new Error('No exercise served — call newChallenge first.');
+        sangIt();
+        return { active: state.active.id };
+      },
+    },
+    reportOutcome: {
+      description: "Record the outcome the person reports for the active exercise (never invent one). 'rang' and 'found' count as clears for the 2-up/1-down ladder; 'slipped' is the down-step — a rep, not a failure.",
+      params: {
+        outcome: "string — 'rang'|'found'|'slipped', required",
+      },
+      handler: (p) => {
+        const res = reportOutcome(p.outcome);
+        return { level: state.level, leveledUp: res.leveledUp, leveledDown: res.leveledDown, newSkill: res.newSkill };
+      },
+    },
+    leaveTrying: {
+      description: 'Leave the active exercise without recording an outcome.',
+      params: {},
+      handler: () => { leaveTrying(); return { ok: true }; },
+    },
+    playReference: {
+      description: "Strike the served exercise's reference bells (or any named notes from the pentatonic set A3/C4/D4/E4/G4) — same bells the hear-it button plays. Audio out only; nothing recorded or stored.",
+      params: { notes: "string[] — note names, optional; defaults to the served exercise's tones" },
+      handler: (p) => {
+        const notes = Array.isArray(p.notes) && p.notes.length ? p.notes : (served && served.tone);
+        if (!notes || !notes.length) throw new Error('No notes to play — serve an exercise with tones or pass notes.');
+        const bad = notes.filter(n => !NOTE_FREQ[n]);
+        if (bad.length) throw new Error('Unknown note(s): ' + bad.join(', ') + '. Available: ' + Object.keys(NOTE_FREQ).join(', '));
+        playReference(notes);
+        return { played: notes };
+      },
+    },
+    startTuner: {
+      description: 'Turn the microphone tuner on (asks the browser for mic permission; the person will see the prompt). Live analysis only — never recorded, stored, or sent anywhere. Same path as the tuner button.',
+      params: {},
+      handler: () => startTuner().then(ok => ({ on: ok })),
+    },
+    stopTuner: {
+      description: 'Turn the microphone tuner off and release the microphone.',
+      params: {},
+      handler: () => { stopTuner(); return { on: false }; },
+    },
+    addSong: {
+      description: 'Add a song the person is learning to the songbook (same case-insensitive dedupe as the composer).',
+      params: { title: 'string — the song, required, ≤120 chars' },
+      handler: (p) => {
+        const title = (p.title || '').trim().slice(0, 120);
+        if (!title) throw new Error('title is required.');
+        const added = addSong(title);
+        renderSongbook();
+        return added ? { ok: true } : { ok: false, reason: 'duplicate' };
+      },
+    },
+    toggleSongReady: {
+      description: 'Star or unstar a songbook song as one the person can sing all the way through from memory — only what they report.',
+      params: { ts: "number — the song's ts identifier, required" },
+      handler: (p) => {
+        const ts = Number(p.ts);
+        const s = state.songbook.find(x => x.ts === ts);
+        if (!s) throw new Error('No songbook entry with ts ' + p.ts);
+        toggleSongReady(ts);
+        return { ts, ready: s.ready };
+      },
+    },
+    deleteSong: {
+      description: 'Delete a song from the songbook.',
+      params: { ts: "number — the song's ts identifier, required" },
+      handler: (p) => {
+        const ts = Number(p.ts);
+        if (!state.songbook.some(x => x.ts === ts)) return { ok: false, reason: 'not found' };
+        removeSong(ts);
+        return { ok: true };
+      },
+    },
+  },
+  notes: '2-up/1-down staircase (Levitt 1971, ~71%): two self-reported clears in a row climb a rung, one slipped exercise steps down. Outcomes are only ever what the person reports — the tuner is an instrument, not a judge, and nothing it detects is stored or moves the ladder. Microphone audio is analysed frame-by-frame on-device and discarded. A once-per-visit warmup gate precedes the first exercise (care, not tracking — nothing about warmups is recorded). No points, badges, or streak pressure by design.',
+});
+</script>
+
+<!-- ── PWA: register the service worker for offline use ──────── -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* offline is best-effort */ });
+  });
+}
+</script>
+</body>
+</html>

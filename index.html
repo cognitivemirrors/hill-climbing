@@ -120,6 +120,7 @@
     .card.foresee  { --accent: hsl(58,68%,64%);  --accent-soft: hsla(58,62%,60%,0.45);  --accent-glow: hsla(58,68%,50%,0.14); }
     .card.climb    { --accent: hsl(230,65%,72%); --accent-soft: hsla(230,60%,68%,0.45); --accent-glow: hsla(230,65%,58%,0.16); }
     .card.train    { --accent: hsl(20,72%,66%);  --accent-soft: hsla(20,68%,62%,0.45);  --accent-glow: hsla(20,72%,54%,0.16); }
+    .card.sing     { --accent: hsl(315,64%,70%); --accent-soft: hsla(315,58%,64%,0.45); --accent-glow: hsla(315,64%,56%,0.16); }
     .card.remind   { --accent: hsl(250,58%,74%); --accent-soft: hsla(250,54%,70%,0.45); --accent-glow: hsla(250,58%,62%,0.16); }
     .card.anime    { --accent: hsl(288,74%,72%); --accent-soft: hsla(288,68%,66%,0.45); --accent-glow: hsla(288,74%,58%,0.18); }
     .card.companion{ --accent: hsl(172,48%,60%); --accent-soft: hsla(172,44%,58%,0.45); --accent-glow: hsla(172,50%,44%,0.16); }
@@ -170,6 +171,7 @@
     .dash-row.foresee  { --accent: hsl(58,68%,64%); }
     .dash-row.climb    { --accent: hsl(230,65%,72%); }
     .dash-row.train    { --accent: hsl(20,72%,66%); }
+    .dash-row.sing     { --accent: hsl(315,64%,70%); }
     .dash-streak {
       margin-top: 9px; display: flex; align-items: baseline;
       justify-content: center; gap: 9px;
@@ -224,6 +226,7 @@
     .ns-go.climb    { --accent: hsl(230,65%,72%); }
     .ns-go.remind   { --accent: hsl(250,58%,74%); }
     .ns-go.train    { --accent: hsl(20,72%,66%); }
+    .ns-go.sing     { --accent: hsl(315,64%,70%); }
     .ns-alt {
       display: none; font-family: var(--font-ui); font-size: 0.62rem;
       letter-spacing: 0.2em; text-transform: uppercase; color: var(--faint);
@@ -606,6 +609,18 @@
       <p>Log your workouts, one set at a time.</p>
     </a>
 
+    <a class="card sing" href="sing.html">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M31 10v22"/>
+          <ellipse cx="25.5" cy="34" rx="5.5" ry="4.4"/>
+          <path d="M31 10c4.5 1.6 7.5 4.8 8 9"/>
+        </svg>
+      </span>
+      <h2>Sing</h2>
+      <p>Learn to sing — a note, a phrase, a song.</p>
+    </a>
+
     <a class="card remind" href="remind.html">
       <span class="glyph" aria-hidden="true">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -748,6 +763,11 @@
       <span class="dash-label">Train</span>
       <span class="dash-strip" data-strip="train" aria-hidden="true"></span>
       <span class="dash-count" data-count="train">·</span>
+    </div>
+    <div class="dash-row sing">
+      <span class="dash-label">Sing</span>
+      <span class="dash-strip" data-strip="sing" aria-hidden="true"></span>
+      <span class="dash-count" data-count="sing">·</span>
     </div>
     <div class="dash-streak">
       <span class="streak-num" id="streak-num">0</span>
@@ -948,7 +968,7 @@
     const USAGE_KEY = 'hill-climbing-usage';
     const WEEK_START = 1;        // Monday — the one place to change the week boundary
     const STREAK_MIN_DAYS = 1;   // ≥N active days makes a week count — the one streak knob
-    const APPS = ['meditate', 'breathe', 'reflect', 'nourish', 'levity', 'foresee', 'climb', 'train'];
+    const APPS = ['meditate', 'breathe', 'reflect', 'nourish', 'levity', 'foresee', 'climb', 'train', 'sing'];
 
     // Canonical local-time day key — MUST match the one written by meditate.html
     // and breathe.html. Never reuse those apps' internal todayKey/dayKey helpers
@@ -1044,7 +1064,7 @@
     function weekIsActive(weekKeys, sets) {
       let n = 0;
       for (const k of weekKeys) {
-        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.levity.has(k) || sets.foresee.has(k) || sets.climb.has(k) || sets.train.has(k)) n++;
+        if (sets.meditate.has(k) || sets.breathe.has(k) || sets.reflect.has(k) || sets.nourish.has(k) || sets.levity.has(k) || sets.foresee.has(k) || sets.climb.has(k) || sets.train.has(k) || sets.sing.has(k)) n++;
       }
       return n >= STREAK_MIN_DAYS;
     }
@@ -1106,6 +1126,7 @@
         foresee:  logDaySet(log, 'foresee'),
         climb:    logDaySet(log, 'climb'),
         train:    logDaySet(log, 'train'),
+        sing:     logDaySet(log, 'sing'),
       };
       render(sets, log);
       renderNextStep(sets);
@@ -1113,7 +1134,7 @@
     function refresh() { loadUsage().then(paint); }
 
     // ── Next step — a quiet, deterministic suggestion ────────────────────────
-    // Answers "what should I do right now?" so thirteen cards don't become a
+    // Answers "what should I do right now?" so seventeen cards don't become a
     // choice problem. Design constraints (CONSTRAINTS C2/C6/§5):
     //   · read-only over on-device state the apps already keep — nothing new
     //     is stored;
@@ -1129,14 +1150,15 @@
       foresee:  'Make one small call about tomorrow, and say how sure you are.',
       climb:    'Pick up a hill and take one small step.',
       train:    'Move your body, even briefly.',
+      sing:     'Warm up gently and sing one small phrase.',
     };
     // Which invitations fit the hour, in order. Same hour → same order.
     function nsInviteOrder(h) {
       if (h < 5)  return ['reflect', 'meditate'];
       if (h < 11) return ['breathe', 'meditate', 'reflect', 'foresee', 'train'];
       if (h < 14) return ['climb', 'train', 'nourish', 'meditate', 'reflect'];
-      if (h < 17) return ['climb', 'train', 'meditate', 'levity', 'nourish'];
-      if (h < 21) return ['nourish', 'reflect', 'foresee', 'breathe', 'levity'];
+      if (h < 17) return ['climb', 'train', 'meditate', 'sing', 'levity', 'nourish'];
+      if (h < 21) return ['nourish', 'reflect', 'foresee', 'sing', 'breathe', 'levity'];
       return ['reflect', 'meditate', 'breathe'];
     }
     function nsReadJSON(key) {
@@ -1279,7 +1301,7 @@
     const NS_SCHEMA = {
       type: 'object',
       properties: {
-        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'levity', 'foresee', 'climb', 'train', 'rest'] },
+        app:  { type: 'string', enum: ['meditate', 'breathe', 'reflect', 'nourish', 'levity', 'foresee', 'climb', 'train', 'sing', 'rest'] },
         text: { type: 'string' },
       },
       required: ['app', 'text'],
@@ -1287,7 +1309,7 @@
     };
     const NS_SYSTEM = [
       'You are the companion from Hill Climbing — a small suite of contemplative practice apps',
-      '(Meditate, Breathe, Reflect journal, Nourish cooking & tasting, Levity comedy, Foresee calibration, Climb goals, Train workouts).',
+      '(Meditate, Breathe, Reflect journal, Nourish cooking & tasting, Levity comedy, Foresee calibration, Climb goals, Train workouts, Sing voice practice).',
       'The person has just arrived at the hub. Suggest exactly ONE next step, in 1–2 short, warm sentences.',
       'Rules, which reflect the suite’s binding constraints:',
       '- Rest is a first-class answer. Late at night, or when today already held practice, "enough is enough" or rest (app: "rest") is often the best suggestion.',
@@ -1308,7 +1330,7 @@
       const now = new Date();
       const lines = ['Local time: ' + now.toDateString() + ', ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0')];
       const today = hcDayKey(now);
-      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish (cooking & tasting)', levity: 'Levity', foresee: 'Foresee (calibration)', climb: 'Climb', train: 'Train' };
+      const names = { meditate: 'Meditate', breathe: 'Breathe', reflect: 'Reflect (journal)', nourish: 'Nourish (cooking & tasting)', levity: 'Levity', foresee: 'Foresee (calibration)', climb: 'Climb', train: 'Train', sing: 'Sing (voice)' };
       const last14 = [];
       for (let i = 0; i < 14; i++) { const d = new Date(now); d.setDate(now.getDate() - i); last14.push(hcDayKey(d)); }
       lines.push('Practice in the last 14 days (day counts; "today" marked):');
@@ -1617,6 +1639,7 @@
         { title: 'Foresee', href: 'foresee.html' },
         { title: 'Climb', href: 'climb.html' },
         { title: 'Train', href: 'train.html' },
+        { title: 'Sing', href: 'sing.html' },
         { title: 'Remind', href: 'remind.html' },
         { title: 'Echo', href: 'echo.html' },
         { title: 'Garden', href: 'garden.html' },
