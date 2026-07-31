@@ -90,7 +90,7 @@
 </head>
 <body>
 <a class="home" href="/index.html" title="Home">◇</a>
-<div class="corner" id="version-label">v0.2 · kin</div>
+<div class="corner" id="version-label">v0.3 · kin</div>
 <button id="menu-btn" title="Menu">⋯</button>
 
 <main class="wrap" id="root"></main>
@@ -109,7 +109,7 @@
    HC surface exposes only the state mutations — the same human/agent split as the
    rest of the suite. All app data is treated as fictional seed data. */
 
-const VERSION       = 'v0.2 · kin';
+const VERSION       = 'v0.3 · kin';
 const STATE_KEY     = 'hill-climbing-kin';
 const SYNC_BLOB_KEY = 'ls:hill-climbing-kin';
 const MODEL         = 'claude-opus-4-8';
@@ -122,12 +122,9 @@ const SUPABASE_ANON_KEY = 'sb_publishable_x4iSO5FsdsHutEkYf764Uw_iQeGWMR7';
 const SEED_STORES = [
   ['hill-climbing-climb',      'Goals & follow-through'],
   ['hill-climbing-foresee',    'Predictions & calibration'],
-  ['hill-climbing-levity',     'Comedy & voice'],
   ['hill-climbing-nourish',    'Cooking'],
-  ['hill-climbing-savor',      'Tasting'],
   ['hill-climbing-train',      'Workouts'],
   ['hill-climbing-companion',  'Companion memory'],
-  ['hill-climbing-foresee',    'Calibration'],
 ];
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -228,8 +225,6 @@ function summarizeBlob(key, label){
       s = goals.slice(0,12).map(t=>'• '+t).join('\n') + `\n(${tasks.length} steps, ${done} done)`;
     } else if(key==='hill-climbing-foresee' && Array.isArray(v.predictions)){
       s = v.predictions.slice(-14).map(p=>`• ${p.text} — ${p.conf}%${p.status==='resolved'?(p.outcome?' ✓':' ✗'):''}`).join('\n');
-    } else if(key==='hill-climbing-levity' && Array.isArray(v.notebook)){
-      s = v.notebook.slice(0,16).map(n=>'• '+(n.text||'')).join('\n');
     } else if(key==='hill-climbing-companion' && v.memory && v.memory.summary){
       s = v.memory.summary.slice(0,1500);
     } else if(key==='hill-climbing-nourish'){
@@ -237,8 +232,6 @@ function summarizeBlob(key, label){
       s = `cooking level ${lvl||1}`;
     } else if(key==='hill-climbing-train' && Array.isArray(v.exercises)){
       s = v.exercises.slice(0,12).map(e=>'• '+e.name).join('\n');
-    } else if(key==='hill-climbing-savor' && v.watched){
-      s = `${Object.keys(v.watched).length} tasting episodes explored`;
     } else {
       s = JSON.stringify(v).slice(0,300);
     }
