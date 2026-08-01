@@ -1,7 +1,11 @@
 # Hill Climbing — Governance
 
-**Status:** Design draft, revised after a four-lens adversarial review (governance theory, power
-distribution, technical feasibility, gameability). A multi-level governance structure for the
+**Status:** Spec without a running implementation. The `govern.html` app that implemented this
+model (v0.1–v0.2: rules, the append-only ledger, the asynchronous magistrate, the token-budget
+layer) was **removed in the app-slimming pass** (founder-directed; see BACKLOG / KNOWN_RISKS L51).
+This document is kept as the specification for the layer's return. Originally a design draft,
+revised after a four-lens adversarial review (governance theory, power distribution, technical
+feasibility, gameability). A multi-level governance structure for the
 public-data art project (`STATEMENT.md`): rules live as natural language at every level; an AI
 **compiles** them into a per-context policy and an AI **audits** action against it — not as a
 synchronous gate on the commit path, but as an asynchronous magistrate writing public verdicts

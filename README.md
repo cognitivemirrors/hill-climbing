@@ -1,6 +1,6 @@
 # Hill Climbing
 
-Twelve small practices — plus two quiet games — grown into **Governance, the Game**, a public-data art project (see `STATEMENT.md`). A single static site (installable as a PWA), no build step, no backend of our own, no account required. A few clearly-marked features can reach the network **only if you turn them on** (see [State & data](#state--data)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
+Eight small practices — plus two quiet games — grown into **Governance, the Game**, a public-data art project (see `STATEMENT.md`). A single static site (installable as a PWA), no build step, no backend of our own, no account required. A few clearly-marked features can reach the network **only if you turn them on** (see [State & data](#state--data)). The whole suite is operable by you *and* by an LLM agent acting on your behalf, symmetrically (see [Interoperability](#interoperability-humans--llm-agents)).
 
 A landing **hub** (`index.html`) links to the practices:
 
@@ -9,12 +9,10 @@ A landing **hub** (`index.html`) links to the practices:
 | **Meditate** | `meditate.html` | A quiet timed sit: a countdown bookended by a bell, over an ambient sound bed. |
 | **Breathe** | `breathe.html` | Guided breathwork (coherence, physiological sigh, box, 4-7-8) plus a nervous-system "training loop": stress, then practice returning to calm. |
 | **Reflect** | `reflect.html` | A journal — free-text entries with optional mood / satisfaction ratings and photos. Stored in IndexedDB. |
-| **Nourish** | `nourish.html` | Cook **and** taste, in one app of two tabs. *Cook:* climb a 10-level ladder of real cooking challenges (General + Sushi tracks) — a 2-up / 1-down staircase adapts difficulty; you cook and self-report; an optional "chef" mode can write a recipe from your pantry. *Taste:* a ten-episode season on the palate, plus guest lessons you can write and share as files. (The old **Savor** app folded in here; the standalone `savor.html` page was deleted — the Taste season lives at `nourish.html#taste`, and the old bare `#cN` deep-links resolve inside Nourish.) |
-| **Levity** | `levity.html` | Learn to be funny by climbing a 10-level comedy-craft ladder, with a notebook for your bits. |
+| **Nourish** | `nourish.html` | Learn to cook: climb a 10-level ladder of real cooking challenges (General + Sushi tracks) — a 2-up / 1-down staircase adapts difficulty; you cook and self-report; an optional "chef" mode can write a recipe from your pantry. (The former Taste tab — the ten-episode Savor season — was removed in the app-slimming pass.) |
 | **Foresee** | `foresee.html` | Calibration training — one-line predictions about your own life with stated confidence, resolved against reality and Brier-scored into the ladder. |
 | **Climb** | `climb.html` | A goals-and-steps tracker with an honest, on-device history of your own follow-through. No due dates, points, or streaks by design. |
 | **Train** | `train.html` | A workout logger — exercises and sets with quiet progressive-overload defaults. |
-| **Sing** | `sing.html` | Learn to sing by climbing a 10-level ladder of small vocal exercises — breath, pitch-matching, phrases by ear, whole songs, performing — with reference bells and an optional live microphone tuner (heard on-device, never recorded), plus a songbook of songs you're learning. |
 | **Echo** | `echo.html` | A listening game: five stones voice a growing bell phrase you tap back. No fail state; one quiet record. |
 | **Garden** | `garden.html` | A zen stone-garden Sokoban — twelve levels, unlimited undo, no clock. |
 | **Council** | `council.html` | An LLM "board of directors" you bring a decision to — four directors and a Chair (now a mode of Companion; the old URL still lands there). Uses your own Anthropic API key. |
@@ -27,7 +25,7 @@ The hub also shows a quiet weekly-usage dashboard (which practices you touched e
 
 Open the hub URL in a modern browser and pick a practice. Each app links back to the hub via the home icon, top-left. Install to your home screen (PWA) for a full-screen, offline experience.
 
-Most apps need nothing but the page: **Meditate**, **Breathe**, **Nourish**, **Levity**, **Foresee**, **Climb**, and **Train** all run without a camera; **Reflect** is just writing. **Anime** needs a camera. **Sing**'s optional tuner asks for the microphone — heard live for pitch on-device, never recorded or sent. The AI apps (**Council**, **Companion**, and Nourish's optional chef mode) need your own Anthropic API key, which you paste once and it's stored locally.
+Most apps need nothing but the page: **Meditate**, **Breathe**, **Nourish**, **Foresee**, **Climb**, and **Train** all run without a camera; **Reflect** is just writing. **Anime** needs a camera. The AI apps (**Council**, **Companion**, and Nourish's optional chef mode) need your own Anthropic API key, which you paste once and it's stored locally.
 
 ## Devices
 
@@ -51,7 +49,7 @@ Every page defines **`window.HC`** (from `hc-agent.js`) — one programmatic sur
 
 ## Where this is heading
 
-The suite is growing into **Governance, the Game** — a public-data art project in which the practices become a world's rooms and verbs, and the data people donate is the world's seed material (see `STATEMENT.md`). The first slices are built: **`kin.html`** spawns a character from your own history that then diverges into its own person, and **`govern.html`** is the governance layer over those characters' families — an append-only ledger, an asynchronous magistrate, and a token budget with a coded **subsistence floor** no vote can strip. Both are grounded on the `window.HC` layer described above, so a character can act with the same parity a human already has, and both are documented in `KIN.md` and `GOVERNANCE.md`.
+The suite is growing into **Governance, the Game** — a public-data art project in which the practices become a world's rooms and verbs, and the data people donate is the world's seed material (see `STATEMENT.md`). The first built slice is **`kin.html`**, which spawns a character from your own history that then diverges into its own person — grounded on the `window.HC` layer described above, so a character can act with the same parity a human already has (documented in `KIN.md`). A first playable governance layer (`govern.html`) was built and then removed in the app-slimming pass; its model — the append-only ledger, the asynchronous magistrate, the token budget with its coded **subsistence floor** — remains specified in `GOVERNANCE.md` for when the layer returns.
 
 The larger, still-drafted arc — a private, two-person world where each person has an agent-character that goes on adventures with the other's, turn-based first — lives in `WORLD_ARCHITECTURE.md` (the shape and why) and `WORLD_ROADMAP.md` (the phased plan), pending founder ratification.
 
@@ -67,7 +65,7 @@ The larger, still-drafted arc — a private, two-person world where each person 
 | `WORLD_ARCHITECTURE.md` | Draft direction for a possible private, two-person digital world built on the practice suite — the shape and why. Not shipped; pending founder ratification. |
 | `WORLD_ROADMAP.md` | Companion to `WORLD_ARCHITECTURE.md` — the phased plan for building it, if ratified. |
 | `KIN.md` | The character-lineage model behind `kin.html` — copy-on-spawn-then-diverge, family/given names, the deferred family backlog. |
-| `GOVERNANCE.md` | The governance model behind `govern.html` — rules, the append-only ledger, the asynchronous magistrate, and the token budget with its coded subsistence floor. |
+| `GOVERNANCE.md` | The governance-game model — rules, the append-only ledger, the asynchronous magistrate, and the token budget with its coded subsistence floor. (The `govern.html` app that implemented it was removed in the app-slimming pass; the spec is kept for when the layer returns.) |
 | `CLAUDE.md` | Agent handoff for AI assistants working on this project. |
 
 ## Versioning
@@ -76,7 +74,7 @@ Each app carries its own in-product version label (e.g. `v1.80` in Meditate, `v0
 
 ## Care and safety
 
-Care and safety are the foundation of the work, not a disclaimer bolted onto it. In *Governance, the Game* they are load-bearing and coded: the governance layer's floor is literally **care for the vulnerable**, and each family's **subsistence floor** — the tokens no vote can strip — is that care made material (see `GOVERNANCE.md` and `STATEMENT.md`).
+Care and safety are the foundation of the work, not a disclaimer bolted onto it. In *Governance, the Game* they are load-bearing: the governance layer's specified floor is literally **care for the vulnerable**, and each family's **subsistence floor** — the tokens no vote can strip — is that care made material (see `GOVERNANCE.md` and `STATEMENT.md`; the app implementing them was removed in the app-slimming pass, the spec holds for its return).
 
 Concretely, in the apps: the bring-your-own-key features send what you give them to Anthropic on **your own** key (and Companion's searches to its search providers) — each one named in [State & data](#state--data) — and there is **no analytics, telemetry, or third-party tracking** anywhere in the suite.
 

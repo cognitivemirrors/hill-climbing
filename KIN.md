@@ -38,7 +38,7 @@ practice for Phase 2.)
 ## The family backlog *(deferred — the clean second layer)*
 
 There are things a character **cannot do** — the embodied, real-time, perceptual practices only a
-body can perform: meditate (a real sit), breathe, taste (Nourish's Taste tab), hear the phrase
+body can perform: meditate (a real sit), breathe, hear the phrase
 (Echo), actually cook. When a character wants one, it **files a request to a shared family
 backlog** (via a
 confirm-first client tool, the same pattern as Companion's `add_request` — on-device, no new

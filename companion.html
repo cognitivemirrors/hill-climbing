@@ -1139,7 +1139,7 @@ async function readActivity() {
     } catch (_) { log = null; }
   }
   if (!log) { try { log = JSON.parse(localStorage.getItem('hill-climbing-usage') || '{}') || {}; } catch (_) { log = {}; } }
-  const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', levity:'Levity', climb:'Climb', train:'Train', anime:'Anime' };
+  const NAMES = { meditate:'Meditate', breathe:'Breathe', reflect:'Reflect (journal)', nourish:'Nourish', climb:'Climb', train:'Train', anime:'Anime' };
   const today = new Date();
   const windowKeys = new Set();
   for (let i = 0; i < ACTIVITY_DAYS; i++) { const d = new Date(today); d.setDate(today.getDate() - i); windowKeys.add(hcDayKey(d)); }
